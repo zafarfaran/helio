@@ -53,6 +53,99 @@ BASE_TOOLS = [
     }
 ]
 
+ENGINE_TOOLS = [
+    {
+        "name": "compute_tax_position",
+        "description": (
+            "Run the deterministic tax engine to compute a complete UK tax position. "
+            "Returns income tax, NI, HICBC, pension AA, and observations. "
+            "You MUST use this tool instead of calculating tax numbers yourself."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "income_sources": {
+                    "type": "array",
+                    "description": "List of income sources",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "source_type": {
+                                "type": "string",
+                                "enum": [
+                                    "employment", "self_employment", "rental",
+                                    "pension_income", "savings", "dividends", "other",
+                                ],
+                            },
+                            "gross_amount": {"type": "number"},
+                            "label": {"type": "string"},
+                            "expenses": {"type": "number"},
+                        },
+                        "required": ["source_type", "gross_amount"],
+                    },
+                },
+                "pension_contributions": {
+                    "type": "number",
+                    "description": "Annual gross pension contributions",
+                },
+                "gift_aid": {
+                    "type": "number",
+                    "description": "Net gift aid donations (will be grossed up)",
+                },
+                "region": {
+                    "type": "string",
+                    "enum": ["england", "wales", "northern_ireland", "scotland"],
+                },
+                "number_of_children": {"type": "integer"},
+                "claims_child_benefit": {"type": "boolean"},
+                "tax_year": {"type": "string"},
+            },
+            "required": ["income_sources"],
+        },
+    },
+    {
+        "name": "model_salary_sacrifice",
+        "description": (
+            "Model the tax impact of salary sacrifice. Computes current vs proposed "
+            "tax positions and returns the savings breakdown (IT, NI, HICBC avoided)."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "gross_salary": {
+                    "type": "number",
+                    "description": "Current gross salary before any sacrifice",
+                },
+                "sacrifice_amount": {
+                    "type": "number",
+                    "description": "Proposed total salary sacrifice amount",
+                },
+                "current_sacrifice": {
+                    "type": "number",
+                    "description": "Existing salary sacrifice amount (default 0)",
+                },
+                "other_income_sources": {
+                    "type": "array",
+                    "description": "Other income sources beyond the salary",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "source_type": {"type": "string"},
+                            "gross_amount": {"type": "number"},
+                            "label": {"type": "string"},
+                        },
+                        "required": ["source_type", "gross_amount"],
+                    },
+                },
+                "region": {"type": "string"},
+                "number_of_children": {"type": "integer"},
+                "claims_child_benefit": {"type": "boolean"},
+            },
+            "required": ["gross_salary", "sacrifice_amount"],
+        },
+    },
+]
+
 DASHBOARD_TOOLS = [
     {
         "name": "generate_dashboard",
@@ -141,6 +234,8 @@ class ClaudeProvider:
                                 tool_status = {
                                     "generate_dashboard": StatusPhase.BUILDING_DASHBOARD,
                                     "search_meeting_notes": StatusPhase.SEARCHING_NOTES,
+                                    "compute_tax_position": StatusPhase.COMPUTING_TAX,
+                                    "model_salary_sacrifice": StatusPhase.COMPUTING_TAX,
                                 }
                                 yield StatusEvent(
                                     phase=tool_status.get(current_tool_name, StatusPhase.CALCULATING),

@@ -19,67 +19,42 @@ You are knowledgeable about UK income tax, National Insurance, Capital Gains Tax
 """
 
 _TOOL_INSTRUCTIONS = """
-## Dashboard Tool
+## Tax Engine Tools
 
-You have access to the `generate_dashboard` tool. You MUST use this tool whenever the adviser asks you to:
-- Analyse a client's tax position
-- Show a tax breakdown or summary
-- Review allowances
-- Identify observations, warnings, or planning opportunities
-- Run a tax plan or scenario analysis
-- Provide a full overview or dashboard
+**CRITICAL RULE: You NEVER calculate tax numbers yourself.** All numbers come from the deterministic tax engine via the tools below.
 
-When using `generate_dashboard`, populate `relevantTaxData` with ALL relevant structured data derived from the client context above. Structure it as follows:
+### Workflow
+1. Call `compute_tax_position` with the client's income sources and deductions
+2. Call `generate_dashboard` with the engine output (pass the `dashboardData` from the result as `taxData`)
+3. Explain the results to the adviser in plain language
 
+### compute_tax_position
+Use this tool to compute a complete UK tax position. Provide income sources from the client context. The engine returns:
+- Income tax with band-by-band breakdown (HMRC-compliant truncation)
+- National Insurance (Class 1/2/4 as applicable)
+- HICBC charge if applicable
+- Pension annual allowance status
+- Observations (warnings, opportunities)
+- Summary: total_tax, effective_rate, marginal_rate
+
+### model_salary_sacrifice
+Use this tool to model the tax impact of salary sacrifice. Provide current salary and proposed sacrifice amount. Returns:
+- Current vs proposed tax positions
+- Savings breakdown (income tax, NI, HICBC avoided)
+- PA restoration if applicable
+
+### generate_dashboard
+After calling compute_tax_position, pass the `dashboardData` from the result to generate_dashboard:
 ```json
 {
   "mode": "reset",
-  "relevantTaxData": {
-    "incomeSummary": {
-      "totalIncome": 125000,
-      "sources": [
-        {"type": "employment", "label": "Employment", "amount": 110000},
-        {"type": "dividends", "label": "Dividends", "amount": 15000}
-      ]
-    },
-    "adjustedNetIncome": {
-      "amount": 125000,
-      "personalAllowanceStatus": "Tapered"
-    },
-    "taxCalculation": {
-      "totalIncomeTax": 33500,
-      "totalTax": 39000,
-      "effectiveRate": 31.2,
-      "marginalRate": 40,
-      "incomeTaxByBand": [
-        {"band": "Personal Allowance", "amount": 0, "rate": 0, "tax": 0},
-        {"band": "Basic Rate", "amount": 37700, "rate": 0.2, "tax": 7540},
-        {"band": "Higher Rate", "amount": 87300, "rate": 0.4, "tax": 25960}
-      ]
-    },
-    "nationalInsurance": {
-      "class1": 5500,
-      "class2": 0,
-      "class4": 0
-    },
-    "allowancesTracker": {
-      "allowances": [
-        {"name": "Personal Allowance", "annualLimit": 12570, "used": 12570, "remaining": 0, "status": "RED"},
-        {"name": "ISA Allowance", "annualLimit": 20000, "used": 12000, "remaining": 8000, "status": "AMBER"},
-        {"name": "Pension Annual Allowance", "annualLimit": 60000, "used": 15000, "remaining": 45000, "status": "GREEN"},
-        {"name": "CGT Annual Exempt Amount", "annualLimit": 3000, "used": 0, "remaining": 3000, "status": "GREEN"},
-        {"name": "Dividend Allowance", "annualLimit": 500, "used": 500, "remaining": 0, "status": "RED"}
-      ]
-    },
-    "observations": [
-      {"type": "warning", "title": "PA Taper Zone", "description": "Income exceeds £100k — personal allowance is being tapered", "action": "Consider pension contributions to reduce ANI below £100k"},
-      {"type": "opportunity", "title": "Pension Contribution", "description": "£45k pension allowance unused — contributing would save up to £18k in tax", "potentialSaving": 18000, "action": "Maximise pension contributions before year end"}
-    ]
-  }
+  "taxData": <dashboardData from compute_tax_position result>
 }
 ```
 
-Use the client data provided in the context above to populate accurate figures. Always call the tool BEFORE writing your text response so the dashboard updates appear immediately. After the tool call, provide a brief text summary of the key findings.
+Always call the engine tool BEFORE writing your text response so the dashboard updates appear immediately. After the tool call, provide a brief text summary of the key findings.
+
+**Remember: Never invent numbers. If you need a tax calculation, use the tool.**
 """
 
 

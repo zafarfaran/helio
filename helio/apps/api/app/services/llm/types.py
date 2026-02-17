@@ -9,6 +9,7 @@ class StatusPhase(StrEnum):
     ANALYZING_INCOME = "analyzing_income"
     CHECKING_ALLOWANCES = "checking_allowances"
     CALCULATING = "calculating"
+    COMPUTING_TAX = "computing_tax"
     BUILDING_DASHBOARD = "building_dashboard"
     SEARCHING_NOTES = "searching_notes"
     GENERATING_RESPONSE = "generating_response"
@@ -20,6 +21,7 @@ STATUS_MESSAGES: dict[StatusPhase, str] = {
     StatusPhase.ANALYZING_INCOME: "Analysing income sources...",
     StatusPhase.CHECKING_ALLOWANCES: "Checking allowance status...",
     StatusPhase.CALCULATING: "Running tax calculations...",
+    StatusPhase.COMPUTING_TAX: "Computing tax position...",
     StatusPhase.BUILDING_DASHBOARD: "Building dashboard...",
     StatusPhase.SEARCHING_NOTES: "Searching meeting notes...",
     StatusPhase.GENERATING_RESPONSE: "Generating response...",
