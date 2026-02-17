@@ -12,6 +12,9 @@ from app.tax.types import (
     ObservationItem,
     PAStatus,
     PensionAAResult,
+    SavingsBreakdown,
+    SavingsBreakdownItem,
+    TaxImpactItem,
 )
 
 
@@ -31,6 +34,9 @@ def detect_observations(
     # PA taper zone
     if ani.pa_status == PAStatus.TAPERED:
         excess = ani.adjusted_net_income - 100_000
+        pa_saving = ani.personal_allowance_lost * 0.40
+        ni_saving = excess * 0.02 if excess > 0 else 0
+        total_annual = pa_saving + ni_saving
         obs.append(ObservationItem(
             id="pa-taper-zone",
             title="Personal Allowance Taper Zone",
@@ -41,15 +47,37 @@ def detect_observations(
             ),
             severity="warning",
             category="income_tax",
-            potential_saving=ani.personal_allowance_lost * 0.40,
+            potential_saving=total_annual,
             action=(
                 f"Consider increasing pension contributions by £{excess:,.0f} "
                 f"to reduce ANI below £100,000 and restore full PA."
+            ),
+            savings_breakdown=SavingsBreakdown(
+                current_state=[
+                    SavingsBreakdownItem("Adjusted Net Income", f"£{ani.adjusted_net_income:,.0f}"),
+                    SavingsBreakdownItem("Personal Allowance", f"£{ani.personal_allowance:,.0f} (tapered)"),
+                    SavingsBreakdownItem("PA lost", f"£{ani.personal_allowance_lost:,.0f}"),
+                ],
+                recommended_action=[
+                    SavingsBreakdownItem("Increase pension by", f"£{excess:,.0f}"),
+                    SavingsBreakdownItem("ANI drops to", "£100,000"),
+                    SavingsBreakdownItem("PA restored", "£12,570 (full)"),
+                ],
+                tax_impact=[
+                    TaxImpactItem("Income tax saved (60% band)", pa_saving, pa_saving / 12),
+                    TaxImpactItem("NI saved", ni_saving, ni_saving / 12),
+                ],
+                total_annual=total_annual,
+                total_monthly=total_annual / 12,
+                cost_note=f"Net take-home reduces but pension pot grows by £{excess:,.0f} more.",
+                model_prompt=f"Model salary sacrifice increase of £{excess:,.0f} to restore my personal allowance",
             ),
         ))
 
     # PA fully lost
     if ani.pa_status == PAStatus.LOST:
+        excess_over_restore = ani.adjusted_net_income - 125_140
+        pa_saving = 12_570 * 0.40
         obs.append(ObservationItem(
             id="pa-lost",
             title="Personal Allowance Fully Lost",
@@ -59,6 +87,30 @@ def detect_observations(
             ),
             severity="warning",
             category="income_tax",
+            potential_saving=pa_saving,
+            action=(
+                f"Increase pension contributions by £{excess_over_restore:,.0f} "
+                f"to reduce ANI to £125,140 and begin restoring PA."
+            ),
+            savings_breakdown=SavingsBreakdown(
+                current_state=[
+                    SavingsBreakdownItem("Adjusted Net Income", f"£{ani.adjusted_net_income:,.0f}"),
+                    SavingsBreakdownItem("Personal Allowance", "£0 (fully lost)"),
+                    SavingsBreakdownItem("Excess above £125,140", f"£{excess_over_restore:,.0f}"),
+                ],
+                recommended_action=[
+                    SavingsBreakdownItem("Increase pension by", f"£{excess_over_restore:,.0f}"),
+                    SavingsBreakdownItem("ANI drops to", "£125,140"),
+                    SavingsBreakdownItem("PA restoration begins", "Up to £12,570"),
+                ],
+                tax_impact=[
+                    TaxImpactItem("Income tax saved (PA restoration)", pa_saving, pa_saving / 12),
+                ],
+                total_annual=pa_saving,
+                total_monthly=pa_saving / 12,
+                cost_note=f"Sacrifice £{excess_over_restore:,.0f} more to start restoring PA. Full restoration requires ANI ≤ £100,000.",
+                model_prompt=f"Model salary sacrifice increase of £{excess_over_restore:,.0f} to restore my personal allowance",
+            ),
         ))
 
     # HICBC
@@ -78,11 +130,30 @@ def detect_observations(
                 "Salary sacrifice could reduce ANI below £60,000 threshold "
                 "and eliminate the HICBC charge."
             ),
+            savings_breakdown=SavingsBreakdown(
+                current_state=[
+                    SavingsBreakdownItem("Adjusted Net Income", f"£{ani.adjusted_net_income:,.0f}"),
+                    SavingsBreakdownItem("Child Benefit annual", f"£{hicbc.child_benefit_annual:,.2f}"),
+                    SavingsBreakdownItem("Clawback", f"{hicbc.clawback_percentage:.0f}%"),
+                    SavingsBreakdownItem("HICBC charge", f"£{hicbc.hicbc_charge:,.2f}"),
+                ],
+                recommended_action=[
+                    SavingsBreakdownItem("Reduce ANI below", "£60,000"),
+                    SavingsBreakdownItem("HICBC charge becomes", "£0"),
+                    SavingsBreakdownItem("Benefit retained", f"£{hicbc.child_benefit_annual:,.2f}/yr"),
+                ],
+                tax_impact=[
+                    TaxImpactItem("HICBC charge avoided", hicbc.hicbc_charge, hicbc.hicbc_charge / 12),
+                ],
+                total_annual=hicbc.hicbc_charge,
+                total_monthly=hicbc.hicbc_charge / 12,
+                cost_note="Reduce ANI via pension sacrifice or other deductions to eliminate the charge entirely.",
+                model_prompt="Model salary sacrifice to reduce ANI below £60,000 to avoid HICBC",
+            ),
         ))
 
     # Pension headroom
     if pension_aa and pension_aa.remaining > 0:
-        # Estimate saving at marginal rate
         marginal_rate = _estimate_marginal_rate(ani, income_tax)
         potential = pension_aa.remaining * marginal_rate
         obs.append(ObservationItem(
@@ -99,6 +170,23 @@ def detect_observations(
                 f"Additional pension contributions could save up to "
                 f"£{potential:,.0f} in tax at your {marginal_rate:.0%} marginal rate."
             ),
+            savings_breakdown=SavingsBreakdown(
+                current_state=[
+                    SavingsBreakdownItem("Pension AA remaining", f"£{pension_aa.remaining:,.0f}"),
+                    SavingsBreakdownItem("Current contributions", f"£{pension_contributions:,.0f}"),
+                    SavingsBreakdownItem("Marginal tax rate", f"{marginal_rate:.0%}"),
+                ],
+                recommended_action=[
+                    SavingsBreakdownItem("Max additional contribution", f"£{pension_aa.remaining:,.0f}"),
+                    SavingsBreakdownItem("Tax relief at marginal rate", f"{marginal_rate:.0%}"),
+                ],
+                tax_impact=[
+                    TaxImpactItem("Tax relief on contributions", potential, potential / 12),
+                ],
+                total_annual=potential,
+                total_monthly=potential / 12,
+                model_prompt=f"Model increasing pension contributions by £{pension_aa.remaining:,.0f}",
+            ) if potential > 0 else None,
         ))
 
     # Approaching AA limit
