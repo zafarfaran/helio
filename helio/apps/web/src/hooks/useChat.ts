@@ -83,6 +83,7 @@ export function useChat(clientId: string, taxPlanMode: boolean = false) {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [dashboardData, setDashboardData] = useState<any>(null);
   const [isDashboardGenerating, setIsDashboardGenerating] = useState(false);
+  const [scenarios, setScenarios] = useState<any[]>([]);
   const abortRef = useRef<AbortController | null>(null);
   const dashboardTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -196,6 +197,21 @@ export function useChat(clientId: string, taxPlanMode: boolean = false) {
                     )
                   );
                 }
+                // Capture salary sacrifice result as a scenario
+                if (data.tool === "model_salary_sacrifice" && data.result?.success) {
+                  const result = data.result;
+                  const newScenario = {
+                    id: crypto.randomUUID(),
+                    name: `Sacrifice £${Number(result.proposed?.sacrifice || 0).toLocaleString()}`,
+                    description: `Model salary sacrifice at £${Number(result.proposed?.sacrifice || 0).toLocaleString()}`,
+                    current: result.current,
+                    proposed: result.proposed,
+                    savings: result.savings,
+                    pa_change: result.pa_change,
+                    extra_into_pension: result.extra_into_pension,
+                  };
+                  setScenarios((prev) => [...prev, newScenario]);
+                }
                 // Extract dashboard data from tool_result (fallback)
                 if (data.tool === "generate_dashboard" && data.result?.dashboardData) {
                   setDashboardData(data.result.dashboardData);
@@ -307,6 +323,7 @@ export function useChat(clientId: string, taxPlanMode: boolean = false) {
     conversationId,
     dashboardData,
     isDashboardGenerating,
+    scenarios,
     sendMessage,
     stopStreaming,
     loadMessages,

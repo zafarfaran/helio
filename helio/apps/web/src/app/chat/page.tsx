@@ -333,6 +333,7 @@ export default function ChatPage() {
     conversationId,
     dashboardData,
     isDashboardGenerating,
+    scenarios: scenariosList,
     sendMessage,
     stopStreaming,
     loadMessages,
@@ -347,7 +348,6 @@ export default function ChatPage() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historySearch, setHistorySearch] = useState("");
   const [activeTab, setActiveTab] = useState<"overview" | "allowances" | "scenarios" | "observations">("overview");
-  const [scenarios, setScenarios] = useState<ScenarioData[]>([]);
   const [activeScenarioId, setActiveScenarioId] = useState<string | null>(null);
   const [isListening, setIsListening] = useState(false);
   const [inputFocused, setInputFocused] = useState(false);
@@ -355,6 +355,13 @@ export default function ChatPage() {
   const clientMenuRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Auto-select the latest scenario when a new one arrives
+  useEffect(() => {
+    if (scenariosList.length > 0) {
+      setActiveScenarioId(scenariosList[scenariosList.length - 1].id);
+    }
+  }, [scenariosList.length]);
 
   /* ── Load clients on mount ── */
   useEffect(() => {
@@ -1344,7 +1351,7 @@ export default function ChatPage() {
                             </div>
                           )}
                           {activeTab === "allowances" && <AllowancesPanel allowances={allowancesData} isGenerating={isDashboardGenerating} />}
-                          {activeTab === "scenarios" && <ScenariosPanel scenarios={scenarios} activeScenarioId={activeScenarioId} onSelectScenario={setActiveScenarioId} onQuickModel={handleModelScenario} isGenerating={isDashboardGenerating} />}
+                          {activeTab === "scenarios" && <ScenariosPanel scenarios={scenariosList} activeScenarioId={activeScenarioId} onSelectScenario={setActiveScenarioId} onQuickModel={handleModelScenario} isGenerating={isDashboardGenerating} />}
                           {activeTab === "observations" && <ObservationsPanel observations={observations} isGenerating={isDashboardGenerating} onModelScenario={handleModelScenario} />}
                         </motion.div>
                       </AnimatePresence>
