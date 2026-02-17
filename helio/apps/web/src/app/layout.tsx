@@ -19,6 +19,9 @@ export const metadata: Metadata = {
   title: "Helio — Tax Intelligence for Financial Advisers",
   description:
     "Real-time tax planning and analysis for UK financial advisers. Powered by AI.",
+  icons: {
+    icon: "/favicon.svg",
+  },
 };
 
 export default function RootLayout({

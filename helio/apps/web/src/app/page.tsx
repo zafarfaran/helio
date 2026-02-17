@@ -3,6 +3,7 @@
 import Link from "next/link";
 import {
   motion,
+  AnimatePresence,
   useScroll,
   useTransform,
   useInView,
@@ -13,14 +14,10 @@ import { useRef, useState, useEffect, useCallback } from "react";
 import {
   FadeUp,
   FadeIn,
-  SlideIn,
   StaggerChildren,
   staggerItem,
-  ParallaxLayer,
   AnimatedCounter,
   TiltCard,
-  ScaleOnScroll,
-  FloatingElement,
   MagneticButton,
   RevealMask,
 } from "@/components/motion";
@@ -89,7 +86,7 @@ function Navbar() {
 }
 
 /* ═══════════════════════════════════════════════════
-   HERO
+   HERO — asymmetric editorial layout
    ═══════════════════════════════════════════════════ */
 
 function Hero() {
@@ -98,83 +95,267 @@ function Hero() {
     target: sectionRef,
     offset: ["start start", "end start"],
   });
-  const bgY = useTransform(scrollYProgress, [0, 1], [0, 120]);
-  const opacity = useTransform(scrollYProgress, [0, 0.8], [1, 0]);
+  const contentY = useTransform(scrollYProgress, [0, 1], [0, 80]);
+  const previewY = useTransform(scrollYProgress, [0, 1], [0, 40]);
+  const bgOpacity = useTransform(scrollYProgress, [0, 0.7], [1, 0]);
+
+  /* Mouse-following ambient glow */
+  const mouseX = useMotionValue(0.5);
+  const mouseY = useMotionValue(0.3);
+  const smoothX = useSpring(mouseX, { stiffness: 40, damping: 30 });
+  const smoothY = useSpring(mouseY, { stiffness: 40, damping: 30 });
+
+  const handleMouseMove = useCallback(
+    (e: React.MouseEvent) => {
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+      mouseX.set((e.clientX - rect.left) / rect.width);
+      mouseY.set((e.clientY - rect.top) / rect.height);
+    },
+    [mouseX, mouseY]
+  );
+
+  /* Headline characters for stagger animation */
+  const line1 = "Tax planning,";
+  const line2 = "reimagined.";
 
   return (
-    <section ref={sectionRef} className="relative pt-32 pb-20 md:pt-44 md:pb-32 overflow-hidden">
-      {/* Animated gradient orbs */}
-      <motion.div style={{ y: bgY }} className="absolute inset-0 pointer-events-none">
-        <div className="absolute inset-0 bg-dots opacity-40" />
-        <FloatingElement amplitude={12} duration={5} className="absolute top-20 left-[15%]">
-          <div className="orb w-[400px] h-[400px] bg-brand-300 dark:bg-brand-600" />
-        </FloatingElement>
-        <FloatingElement amplitude={10} duration={6} delay={1} className="absolute top-40 right-[10%]">
-          <div className="orb w-[300px] h-[300px] bg-violet-300 dark:bg-violet-700" />
-        </FloatingElement>
-        <FloatingElement amplitude={8} duration={7} delay={2} className="absolute bottom-20 left-[40%]">
-          <div className="orb w-[250px] h-[250px] bg-sky-200 dark:bg-sky-800" />
-        </FloatingElement>
+    <section
+      ref={sectionRef}
+      onMouseMove={handleMouseMove}
+      className="relative min-h-[100vh] flex items-center overflow-hidden"
+    >
+      {/* ── Ambient glow that follows cursor ── */}
+      <motion.div
+        className="absolute inset-0 pointer-events-none"
+        style={{ opacity: bgOpacity }}
+      >
+        <motion.div
+          className="absolute w-[700px] h-[700px] rounded-full pointer-events-none"
+          style={{
+            left: useTransform(smoothX, (v) => `${v * 100 - 35}%`),
+            top: useTransform(smoothY, (v) => `${v * 100 - 35}%`),
+            background:
+              "radial-gradient(circle, rgba(92,124,250,0.08) 0%, rgba(92,124,250,0.02) 40%, transparent 70%)",
+          }}
+        />
+        {/* Subtle dot pattern */}
+        <div className="absolute inset-0 bg-dots opacity-30" />
+        {/* Fixed accent orb (top-right) */}
+        <div className="absolute -top-32 -right-32 w-[500px] h-[500px] rounded-full bg-brand-200/20 dark:bg-brand-800/10 blur-[120px]" />
+        {/* Fixed accent orb (bottom-left) */}
+        <div className="absolute -bottom-40 -left-20 w-[400px] h-[400px] rounded-full bg-violet-200/15 dark:bg-violet-900/10 blur-[100px]" />
       </motion.div>
 
-      <motion.div style={{ opacity }} className="relative max-w-7xl mx-auto px-6 md:px-12">
-        <div className="max-w-3xl mx-auto text-center">
-          {/* Pill badge */}
-          <FadeUp>
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full border border-slate-200 dark:border-zinc-700 bg-white/60 dark:bg-zinc-900/60 backdrop-blur-sm text-[12px] font-light tracking-wide text-slate-500 dark:text-zinc-400 mb-8">
-              <span className="w-1.5 h-1.5 rounded-full bg-brand-500 animate-pulse-soft" />
-              Built for UK financial advisers
-            </div>
-          </FadeUp>
+      {/* ── Main content grid ── */}
+      <div className="relative w-full max-w-7xl mx-auto px-6 md:px-12 pt-28 pb-16 md:pt-36 md:pb-24">
+        <div className="grid md:grid-cols-12 gap-8 md:gap-6 items-center">
+          {/* ── Left: Text content ── */}
+          <motion.div
+            style={{ y: contentY }}
+            className="md:col-span-6 lg:col-span-5"
+          >
+            {/* Status badge */}
+            <motion.div
+              initial={{ opacity: 0, x: -16 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+              className="mb-8"
+            >
+              <div className="inline-flex items-center gap-2.5 px-3 py-1.5 rounded-full border border-slate-200/80 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-sm">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                </span>
+                <span className="text-[11px] font-light tracking-wide text-slate-500 dark:text-zinc-400">
+                  Built for UK financial advisers
+                </span>
+              </div>
+            </motion.div>
 
-          {/* Headline */}
-          <FadeUp delay={0.1}>
-            <h1 className="text-4xl sm:text-5xl md:text-[3.75rem] font-extralight tracking-tight text-slate-900 dark:text-white leading-[1.08]">
-              Tax planning,{" "}
-              <span className="font-normal bg-gradient-to-r from-brand-500 to-violet-500 bg-clip-text text-transparent">
-                reimagined
+            {/* Headline — character-by-character reveal + sweep */}
+            <h1 className="mb-7">
+              {/* Line 1: "Tax planning," — CSS-driven character stagger */}
+              <span className="block text-[2.75rem] sm:text-[3.5rem] md:text-[3.75rem] lg:text-[4.25rem] tracking-tight leading-[1.05] font-extralight text-slate-900 dark:text-white">
+                {line1.split("").map((char, i) => (
+                  <span
+                    key={i}
+                    className="inline-block animate-char-rise will-change-transform"
+                    style={{ animationDelay: `${200 + i * 35}ms` }}
+                  >
+                    {char === " " ? "\u00A0" : char}
+                  </span>
+                ))}
+              </span>
+
+              {/* Line 2: "reimagined." — CSS clip-path sweep reveal with shimmer */}
+              <span className="block relative text-[2.75rem] sm:text-[3.5rem] md:text-[3.75rem] lg:text-[4.25rem] tracking-tight leading-[1.05]">
+                <span className="invisible font-normal">{line2}</span>
+                <span
+                  className="absolute inset-0 font-normal bg-gradient-to-r from-brand-500 via-brand-400 to-violet-500 bg-clip-text text-transparent animate-text-reveal will-change-[clip-path]"
+                >
+                  {line2}
+                </span>
+                <span className="absolute top-0 bottom-0 w-[3px] rounded-full bg-brand-400 shadow-[0_0_16px_4px_rgba(92,124,250,0.4)] animate-sweep-bar will-change-[left,opacity]" />
               </span>
             </h1>
-          </FadeUp>
 
-          {/* Subtitle */}
-          <FadeUp delay={0.2}>
-            <p className="mt-6 text-base md:text-lg font-light text-slate-500 dark:text-zinc-400 max-w-xl mx-auto leading-relaxed">
+            {/* Animated accent line */}
+            <motion.div
+              initial={{ scaleX: 0 }}
+              animate={{ scaleX: 1 }}
+              transition={{
+                duration: 0.8,
+                delay: 0.5,
+                ease: [0.16, 1, 0.3, 1],
+              }}
+              className="w-16 h-px bg-gradient-to-r from-brand-500 to-transparent origin-left mb-7"
+            />
+
+            {/* Subtitle */}
+            <motion.p
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.7, delay: 0.45, ease: [0.16, 1, 0.3, 1] }}
+              className="text-[15px] md:text-base font-light text-slate-500 dark:text-zinc-400 leading-relaxed max-w-md"
+            >
               Helio analyses your client&apos;s tax position in real-time,
               identifies planning opportunities, and helps you deliver better
               outcomes — powered by AI.
-            </p>
-          </FadeUp>
+            </motion.p>
 
-          {/* CTAs */}
-          <FadeUp delay={0.3}>
-            <div className="mt-10 flex items-center justify-center gap-4">
+            {/* CTAs */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.7, delay: 0.6, ease: [0.16, 1, 0.3, 1] }}
+              className="mt-10 flex items-center gap-4"
+            >
               <MagneticButton>
                 <Link
                   href="/chat"
-                  className="group inline-flex items-center gap-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-normal px-6 py-3 rounded-lg transition-all shadow-lg shadow-brand-500/20 hover:shadow-xl hover:shadow-brand-500/30"
+                  className="group relative inline-flex items-center gap-2.5 bg-slate-900 dark:bg-white text-white dark:text-zinc-900 text-[13px] font-normal px-6 py-3 rounded-lg transition-all hover:bg-slate-800 dark:hover:bg-zinc-100 overflow-hidden"
                 >
-                  Start free trial
-                  <IconArrowRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" />
+                  {/* Subtle shimmer on hover */}
+                  <span className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 bg-gradient-to-r from-transparent via-white/10 dark:via-black/10 to-transparent" />
+                  <span className="relative">Start free trial</span>
+                  <IconArrowRight className="relative w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" />
                 </Link>
               </MagneticButton>
               <a
-                href="#features"
-                className="text-sm font-light text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white transition-colors px-4 py-3"
+                href="#how-it-works"
+                className="text-[13px] font-light text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white transition-colors px-3 py-3"
               >
                 See how it works
               </a>
-            </div>
-          </FadeUp>
+            </motion.div>
+
+            {/* Micro social proof */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.6, delay: 0.85 }}
+              className="mt-12 flex items-center gap-3"
+            >
+              {/* Stacked avatars */}
+              <div className="flex -space-x-2">
+                {["JR", "SM", "AT", "KL"].map((initials, i) => (
+                  <div
+                    key={i}
+                    className="w-7 h-7 rounded-full border-2 border-white dark:border-zinc-950 bg-slate-200 dark:bg-zinc-700 flex items-center justify-center text-[8px] font-medium text-slate-500 dark:text-zinc-400"
+                  >
+                    {initials}
+                  </div>
+                ))}
+              </div>
+              <span className="text-[11px] font-light text-slate-400 dark:text-zinc-500">
+                Trusted by 120+ advisers
+              </span>
+            </motion.div>
+          </motion.div>
+
+          {/* ── Right: Product preview — floating with perspective ── */}
+          <motion.div
+            style={{ y: previewY }}
+            className="md:col-span-6 lg:col-span-7 md:pl-4"
+          >
+            <motion.div
+              initial={{ opacity: 0, x: 40, rotateY: -4 }}
+              animate={{ opacity: 1, x: 0, rotateY: 0 }}
+              transition={{
+                duration: 1,
+                delay: 0.3,
+                ease: [0.16, 1, 0.3, 1],
+              }}
+              style={{ transformPerspective: 1200 }}
+            >
+              <TiltCard tiltDegree={2.5} className="rounded-xl border border-slate-200/60 dark:border-zinc-800/80 bg-white dark:bg-zinc-900 shadow-2xl shadow-slate-300/25 dark:shadow-black/50 overflow-hidden">
+                {/* Window chrome */}
+                <div className="flex items-center gap-1.5 px-4 py-2.5 border-b border-slate-100 dark:border-zinc-800 bg-slate-50/50 dark:bg-zinc-900">
+                  <div className="w-2 h-2 rounded-full bg-slate-300 dark:bg-zinc-700" />
+                  <div className="w-2 h-2 rounded-full bg-slate-300 dark:bg-zinc-700" />
+                  <div className="w-2 h-2 rounded-full bg-slate-300 dark:bg-zinc-700" />
+                  <span className="ml-3 text-[10px] font-light text-slate-400 dark:text-zinc-600">
+                    helio.tax/dashboard
+                  </span>
+                </div>
+                <ProductPreview />
+              </TiltCard>
+
+              {/* Floating accent card — overlapping bottom-left */}
+              <motion.div
+                initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                transition={{ duration: 0.6, delay: 0.9, ease: [0.16, 1, 0.3, 1] }}
+                className="absolute -bottom-4 -left-4 md:-left-8 z-10"
+              >
+                <div className="flex items-center gap-3 bg-white dark:bg-zinc-900 rounded-lg border border-slate-200/80 dark:border-zinc-800 shadow-lg shadow-slate-200/40 dark:shadow-black/40 px-4 py-3">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 flex items-center justify-center">
+                    <svg viewBox="0 0 16 16" className="w-4 h-4 text-emerald-500">
+                      <polyline
+                        points="2 10 6 6 10 9 14 3"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  </div>
+                  <div>
+                    <div className="text-[11px] font-medium text-slate-900 dark:text-white">£16,800 saved</div>
+                    <div className="text-[9px] font-light text-emerald-600 dark:text-emerald-400">Pension optimisation</div>
+                  </div>
+                </div>
+              </motion.div>
+            </motion.div>
+          </motion.div>
         </div>
 
-        {/* Product mockup with parallax + tilt */}
-        <FadeUp delay={0.5} className="mt-20 md:mt-28 max-w-5xl mx-auto">
-          <TiltCard tiltDegree={3} className="rounded-xl border border-slate-200/80 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-2xl shadow-slate-300/30 dark:shadow-black/40 overflow-hidden glow-accent">
-            <ProductPreview />
-          </TiltCard>
-        </FadeUp>
-      </motion.div>
+        {/* ── Scroll indicator ── */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 1.2, duration: 0.6 }}
+          className="hidden md:flex flex-col items-center gap-2 absolute bottom-8 left-1/2 -translate-x-1/2"
+        >
+          <motion.div
+            animate={{ y: [0, 6, 0] }}
+            transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}
+          >
+            <svg viewBox="0 0 16 24" className="w-4 h-6 text-slate-300 dark:text-zinc-700">
+              <rect x="1" y="1" width="14" height="22" rx="7" fill="none" stroke="currentColor" strokeWidth="1.5" />
+              <motion.circle
+                cx="8"
+                cy="8"
+                r="2"
+                fill="currentColor"
+                animate={{ cy: [7, 14, 7] }}
+                transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}
+              />
+            </svg>
+          </motion.div>
+        </motion.div>
+      </div>
     </section>
   );
 }
@@ -703,332 +884,812 @@ function FeatureVisual({ activeId }: { activeId: string }) {
 }
 
 /* ═══════════════════════════════════════════════════
-   HOW IT WORKS — live animated workflow
+   HOW IT WORKS — interactive product walkthrough
    ═══════════════════════════════════════════════════ */
+
+const WORKFLOW_STEPS = [
+  {
+    id: "connect",
+    num: "01",
+    label: "Connect",
+    icon: <IconUpload className="w-4 h-4" />,
+    heading: "Import your client data",
+    sub: "Pull in data from your practice management system, or enter it directly. Helio maps everything automatically.",
+  },
+  {
+    id: "analyse",
+    num: "02",
+    label: "Analyse",
+    icon: <IconMessage className="w-4 h-4" />,
+    heading: "Ask in plain English",
+    sub: "No complex queries. Just ask what you need to know about your client\u2019s tax position, and Helio responds instantly.",
+  },
+  {
+    id: "act",
+    num: "03",
+    label: "Act",
+    icon: <IconTarget className="w-4 h-4" />,
+    heading: "Get actionable recommendations",
+    sub: "Ranked planning opportunities with projected savings. Present to your client with confidence.",
+  },
+];
+
+const STEP_DURATIONS = [5000, 16000, 5000]; // Connect, Analyse (typing + AI stream + follow-up), Act
 
 function HowItWorks() {
   const sectionRef = useRef(null);
   const isInView = useInView(sectionRef, { once: false, margin: "-100px" });
-
-  // Cycle through active step: 0 → 1 → 2 → 0 ...
-  const [activeStep, setActiveStep] = useState(-1);
+  const [activeStep, setActiveStep] = useState(0);
+  const [cycleKey, setCycleKey] = useState(0);
+  const [currentDuration, setCurrentDuration] = useState(STEP_DURATIONS[0]);
+  const timerRef = useRef<ReturnType<typeof setTimeout>>();
 
   useEffect(() => {
     if (!isInView) {
-      setActiveStep(-1);
+      if (timerRef.current) clearTimeout(timerRef.current);
       return;
     }
-    // Start cycling once in view
     setActiveStep(0);
-    const interval = setInterval(() => {
-      setActiveStep((prev) => (prev + 1) % 3);
-    }, 2800);
-    return () => clearInterval(interval);
+    setCurrentDuration(STEP_DURATIONS[0]);
+    setCycleKey((k) => k + 1);
+
+    let step = 0;
+    const advance = () => {
+      const next = (step + 1) % 3;
+      if (next === 0) setCycleKey((k) => k + 1);
+      step = next;
+      setActiveStep(next);
+      setCurrentDuration(STEP_DURATIONS[next]);
+      timerRef.current = setTimeout(advance, STEP_DURATIONS[next]);
+    };
+    timerRef.current = setTimeout(advance, STEP_DURATIONS[0]);
+
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
   }, [isInView]);
 
-  const steps = [
-    {
-      num: "01",
-      icon: <IconUpload className="w-5 h-5" />,
-      title: "Connect",
-      description:
-        "Import client data from your existing systems, or enter it directly.",
-    },
-    {
-      num: "02",
-      icon: <IconMessage className="w-5 h-5" />,
-      title: "Ask",
-      description:
-        "Ask questions in natural language about your client's tax position.",
-    },
-    {
-      num: "03",
-      icon: <IconTarget className="w-5 h-5" />,
-      title: "Act",
-      description:
-        "Get ranked observations and actionable recommendations.",
-    },
-  ];
+  const step = WORKFLOW_STEPS[activeStep];
 
   return (
     <section
       ref={sectionRef}
       id="how-it-works"
-      className="relative py-24 md:py-32 bg-slate-50/60 dark:bg-zinc-950/50 overflow-hidden"
+      className="relative py-24 md:py-36 overflow-hidden bg-slate-50/60 dark:bg-zinc-950/50"
     >
-      <ParallaxLayer speed={0.1} className="absolute inset-0 pointer-events-none">
-        <div className="absolute inset-0 bg-grid" />
-      </ParallaxLayer>
+      {/* Subtle grid background */}
+      <div className="absolute inset-0 bg-grid pointer-events-none" />
 
       <div className="relative max-w-7xl mx-auto px-6 md:px-12">
-        <div className="max-w-2xl mx-auto text-center mb-16">
-          <FadeUp>
-            <p className="text-[12px] font-medium uppercase tracking-[0.15em] text-brand-500 mb-4">
-              Workflow
-            </p>
-          </FadeUp>
-          <FadeUp delay={0.1}>
-            <h2 className="text-3xl md:text-4xl font-extralight tracking-tight text-slate-900 dark:text-white">
-              Three steps to{" "}
-              <span className="font-normal">better outcomes</span>
-            </h2>
-          </FadeUp>
-        </div>
+        {/* Section header */}
+        <FadeUp className="max-w-2xl mb-14 md:mb-16">
+          <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-brand-500 mb-4">
+            How it works
+          </p>
+          <h2 className="text-3xl md:text-4xl font-extralight tracking-tight text-slate-900 dark:text-white">
+            Three steps to{" "}
+            <span className="font-normal">better outcomes</span>
+          </h2>
+        </FadeUp>
 
-        {/* Step cards with connecting animated pipeline */}
-        <div className="max-w-4xl mx-auto">
-          <div className="grid md:grid-cols-3 gap-6 md:gap-0 relative">
-            {/* ── Connecting lines + traveling pulse (desktop) ── */}
-            {[0, 1].map((lineIdx) => (
-              <div
-                key={lineIdx}
-                className="hidden md:block absolute top-[52px] h-px overflow-hidden"
-                style={{
-                  left: `${33.33 * (lineIdx + 1) - 6}%`,
-                  width: "12%",
-                }}
-              >
-                {/* Track line */}
-                <div className="absolute inset-0 bg-slate-200 dark:bg-zinc-700" />
-                {/* Traveling pulse */}
-                <motion.div
-                  className="absolute top-1/2 -translate-y-1/2 w-8 h-[3px] rounded-full bg-brand-500"
-                  initial={{ left: "-20%", opacity: 0 }}
-                  animate={
-                    activeStep === lineIdx
-                      ? {
-                          left: ["0%", "100%"],
-                          opacity: [0, 1, 1, 0],
-                        }
-                      : { left: "-20%", opacity: 0 }
-                  }
-                  transition={{
-                    duration: 0.8,
-                    ease: "easeInOut",
-                  }}
-                  style={{
-                    boxShadow: "0 0 12px 2px rgba(92,124,250,0.5)",
-                  }}
-                />
-              </div>
-            ))}
+        {/* ── Step indicators + progress + description ── */}
+        <FadeUp delay={0.1} className="max-w-2xl mx-auto mb-12">
+          {/* Step circles with inline progress track */}
+          <div className="relative flex items-center justify-between">
+            {/* Track background */}
+            <div className="absolute top-[19px] left-[40px] right-[40px] h-[3px] rounded-full bg-slate-200 dark:bg-zinc-800" />
+            {/* Animated fill — spans from first circle to current active circle */}
+            <motion.div
+              className="absolute top-[19px] left-[40px] h-[3px] rounded-full bg-brand-500 origin-left"
+              animate={{
+                width:
+                  activeStep === 0
+                    ? "0%"
+                    : activeStep === 1
+                      ? "calc(50% - 40px)"
+                      : "calc(100% - 80px)",
+              }}
+              transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+            />
+            {/* Per-step fill that animates within the current segment */}
+            <motion.div
+              key={`seg-${cycleKey}-${activeStep}`}
+              className="absolute top-[19px] h-[3px] rounded-full bg-brand-400/50 origin-left"
+              style={{
+                left:
+                  activeStep === 0
+                    ? "40px"
+                    : activeStep === 1
+                      ? "calc(50%)"
+                      : "calc(100% - 40px)",
+              }}
+              initial={{ width: 0 }}
+              animate={{
+                width: activeStep < 2 ? "calc(50% - 40px)" : 0,
+              }}
+              transition={{ duration: currentDuration / 1000, ease: "linear" }}
+            />
 
-            {steps.map((step, i) => {
+            {WORKFLOW_STEPS.map((s, i) => {
               const isActive = activeStep === i;
               const isPast = activeStep > i;
-
               return (
-                <FadeUp key={i} delay={i * 0.15} className="relative flex flex-col items-center text-center px-4">
-                  {/* Step number */}
-                  <div className="text-lg font-mono font-extralight text-brand-400/40 dark:text-brand-600/30 mb-3">
-                    {step.num}
-                  </div>
-
-                  {/* Icon circle with active ring */}
-                  <div className="relative mb-5">
-                    <motion.div
-                      animate={{
-                        scale: isActive ? 1.12 : 1,
-                        borderColor: isActive
-                          ? "var(--accent)"
-                          : isPast
-                            ? "var(--accent)"
-                            : undefined,
-                      }}
-                      transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-                      className="w-12 h-12 rounded-xl border-2 border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 flex items-center justify-center transition-colors"
-                    >
-                      <span
-                        className={`transition-colors duration-300 ${
-                          isActive || isPast
-                            ? "text-brand-500 dark:text-brand-400"
-                            : "text-slate-400 dark:text-zinc-500"
-                        }`}
-                      >
-                        {step.icon}
-                      </span>
-                    </motion.div>
-                    {/* Active glow ring */}
-                    {isActive && (
-                      <motion.div
-                        layoutId="step-glow"
-                        className="absolute -inset-1.5 rounded-2xl border-2 border-brand-400/40 dark:border-brand-500/30"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        transition={{ duration: 0.3 }}
-                        style={{
-                          boxShadow: "0 0 20px -4px rgba(92,124,250,0.25)",
-                        }}
-                      />
+                <button
+                  key={s.id}
+                  onClick={() => {
+                    setActiveStep(i);
+                    setCurrentDuration(STEP_DURATIONS[i]);
+                    setCycleKey((k) => k + 1);
+                  }}
+                  className="relative z-10 flex flex-col items-center gap-2.5 group"
+                >
+                  <div
+                    className={`w-[38px] h-[38px] rounded-full flex items-center justify-center border-2 transition-all duration-400 ${
+                      isActive
+                        ? "bg-brand-500 border-brand-500 text-white shadow-lg shadow-brand-500/20"
+                        : isPast
+                          ? "bg-brand-500 border-brand-500 text-white"
+                          : "bg-white dark:bg-zinc-900 border-slate-200 dark:border-zinc-700 text-slate-400 dark:text-zinc-500 group-hover:border-slate-300 dark:group-hover:border-zinc-600"
+                    }`}
+                  >
+                    {isPast ? (
+                      <svg viewBox="0 0 16 16" className="w-4 h-4">
+                        <polyline points="4 8 7 11 12 5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    ) : (
+                      <span className="text-[12px] font-mono font-medium">{s.num}</span>
                     )}
                   </div>
-
-                  <h3 className="text-base font-medium text-slate-900 dark:text-white tracking-tight mb-2">
-                    {step.title}
-                  </h3>
-                  <p className="text-sm font-light text-slate-500 dark:text-zinc-400 leading-relaxed mb-5 max-w-[240px]">
-                    {step.description}
-                  </p>
-
-                  {/* ── Live micro-animation per step ── */}
-                  <div className="w-full max-w-[220px] h-[100px] rounded-lg border border-slate-200/60 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-hidden">
-                    {i === 0 && <StepConnectAnim active={isActive} />}
-                    {i === 1 && <StepAskAnim active={isActive} />}
-                    {i === 2 && <StepActAnim active={isActive} />}
-                  </div>
-                </FadeUp>
+                  <span
+                    className={`text-[12px] font-medium tracking-tight transition-colors duration-300 ${
+                      isActive
+                        ? "text-slate-900 dark:text-white"
+                        : isPast
+                          ? "text-slate-600 dark:text-zinc-400"
+                          : "text-slate-400 dark:text-zinc-600"
+                    }`}
+                  >
+                    {s.label}
+                  </span>
+                </button>
               );
             })}
           </div>
-        </div>
+
+          {/* Step description text */}
+          <div className="mt-6 text-center min-h-[48px]">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={step.id}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+              >
+                <h3 className="text-[15px] font-medium text-slate-900 dark:text-white tracking-tight">
+                  {step.heading}
+                </h3>
+                <p className="text-[13px] font-light text-slate-500 dark:text-zinc-400 mt-1 leading-relaxed">
+                  {step.sub}
+                </p>
+              </motion.div>
+            </AnimatePresence>
+          </div>
+        </FadeUp>
+
+        {/* ── Demo panel — full width ── */}
+        <FadeUp delay={0.15}>
+          <div className="max-w-5xl mx-auto">
+            <div className="rounded-xl border border-slate-200/80 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-xl shadow-slate-200/30 dark:shadow-black/30 overflow-hidden">
+              {/* Window chrome */}
+              <div className="flex items-center gap-3 px-5 md:px-6 py-2.5 border-b border-slate-100 dark:border-zinc-800 bg-slate-50/50 dark:bg-zinc-900/80">
+                <div className="flex gap-1.5">
+                  <div className="w-2 h-2 rounded-full bg-slate-300 dark:bg-zinc-700" />
+                  <div className="w-2 h-2 rounded-full bg-slate-300 dark:bg-zinc-700" />
+                  <div className="w-2 h-2 rounded-full bg-slate-300 dark:bg-zinc-700" />
+                </div>
+                <span className="text-[10px] font-light text-slate-400 dark:text-zinc-600">
+                  helio.tax
+                </span>
+              </div>
+
+              {/* Demo content */}
+              <div className="h-[380px] md:h-[440px] relative overflow-hidden">
+                <AnimatePresence mode="wait">
+                  {activeStep === 0 && <WorkflowConnect key="connect" />}
+                  {activeStep === 1 && <WorkflowAnalyse key="analyse" />}
+                  {activeStep === 2 && <WorkflowAct key="act" />}
+                </AnimatePresence>
+              </div>
+            </div>
+          </div>
+        </FadeUp>
       </div>
     </section>
   );
 }
 
-/* ── Step 1: Connect — animated data rows importing ── */
+/* ── Step 1: Connect — client data importing ── */
 
-function StepConnectAnim({ active }: { active: boolean }) {
-  const rows = [
-    { label: "Employment", val: "£145,000" },
-    { label: "Dividends", val: "£32,500" },
-    { label: "Rental", val: "£18,000" },
+function WorkflowConnect() {
+  const fields = [
+    { label: "Employment income", value: "\u00a3145,000", icon: "briefcase" },
+    { label: "Dividend income", value: "\u00a332,500", icon: "chart" },
+    { label: "Rental income", value: "\u00a318,000", icon: "home" },
+    { label: "Pension contributions", value: "\u00a318,000", icon: "shield" },
   ];
 
   return (
-    <div className="p-3 space-y-2">
-      {rows.map((row, i) => (
+    <motion.div
+      initial={{ opacity: 0, x: 30 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: -20 }}
+      transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
+      className="absolute inset-0 p-6 md:p-8"
+    >
+      {/* Client header */}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1, duration: 0.5 }}
+        className="flex items-center gap-4 mb-7"
+      >
+        <div className="w-11 h-11 rounded-full bg-brand-50 dark:bg-brand-950/30 border border-brand-200/50 dark:border-brand-800/30 flex items-center justify-center text-brand-600 dark:text-brand-400 text-sm font-medium">
+          SM
+        </div>
+        <div className="flex-1">
+          <div className="text-[14px] font-medium text-slate-900 dark:text-white">
+            Sarah Mitchell
+          </div>
+          <div className="text-[11px] font-light text-slate-400 dark:text-zinc-500">
+            Client since 2019 &middot; Annual review
+          </div>
+        </div>
         <motion.div
-          key={i}
-          initial={{ opacity: 0, x: -12 }}
-          animate={
-            active
-              ? { opacity: 1, x: 0 }
-              : { opacity: 0.3, x: 0 }
-          }
-          transition={{
-            delay: active ? i * 0.2 : 0,
-            duration: 0.4,
-            ease: [0.16, 1, 0.3, 1],
-          }}
-          className="flex items-center justify-between"
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.6, duration: 0.3 }}
+          className="flex items-center gap-1.5 text-[11px] font-light text-emerald-600 dark:text-emerald-400"
         >
-          <span className="text-[10px] font-light text-slate-500 dark:text-zinc-400">
-            {row.label}
+          <span className="relative flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
           </span>
-          <span className="text-[10px] font-mono font-light text-slate-800 dark:text-zinc-200">
-            {row.val}
+          Connected
+        </motion.div>
+      </motion.div>
+
+      {/* Data fields */}
+      <div className="grid grid-cols-2 gap-3">
+        {fields.map((field, i) => (
+          <motion.div
+            key={i}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{
+              delay: 0.2 + i * 0.1,
+              duration: 0.5,
+              ease: [0.16, 1, 0.3, 1],
+            }}
+            className="rounded-lg border border-slate-100 dark:border-zinc-800 bg-slate-50/50 dark:bg-zinc-800/30 p-3.5"
+          >
+            <div className="text-[10px] font-light text-slate-400 dark:text-zinc-500 mb-1">
+              {field.label}
+            </div>
+            <div className="text-[15px] font-mono font-light text-slate-900 dark:text-white tracking-tight">
+              {field.value}
+            </div>
+          </motion.div>
+        ))}
+      </div>
+
+      {/* Import progress bar */}
+      <div className="mt-6">
+        <motion.div
+          className="h-1 rounded-full bg-slate-100 dark:bg-zinc-800 overflow-hidden"
+        >
+          <motion.div
+            initial={{ width: "0%" }}
+            animate={{ width: "100%" }}
+            transition={{ delay: 0.3, duration: 1.2, ease: [0.16, 1, 0.3, 1] }}
+            className="h-full rounded-full bg-emerald-500"
+          />
+        </motion.div>
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 1.5, duration: 0.4 }}
+          className="flex items-center gap-1.5 mt-2.5"
+        >
+          <svg viewBox="0 0 16 16" className="w-3.5 h-3.5 text-emerald-500">
+            <circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" strokeWidth="1.5" />
+            <polyline points="5 8 7 10 11 6" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          <span className="text-[11px] font-light text-emerald-600 dark:text-emerald-400">
+            4 data sources imported successfully
           </span>
         </motion.div>
-      ))}
-      <motion.div
-        initial={{ scaleX: 0 }}
-        animate={active ? { scaleX: 1 } : { scaleX: 0 }}
-        transition={{ delay: 0.6, duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-        className="h-0.5 bg-emerald-400 rounded-full origin-left mt-1"
-      />
-    </div>
+      </div>
+    </motion.div>
   );
 }
 
-/* ── Step 2: Ask — typing chat animation ── */
+/* ── Step 2: Analyse — chat interaction ── */
 
-function StepAskAnim({ active }: { active: boolean }) {
-  const fullText = "Tax saving opportunities?";
+function WorkflowAnalyse() {
+  const QUESTION = "What are Sarah\u2019s best tax saving opportunities this year?";
+  const AI_RESPONSE =
+    "I\u2019ve identified 3 planning opportunities for Sarah. The highest-impact is using her unused pension annual allowance \u2014 a \u00a342,000 contribution could save up to \u00a316,800 in tax.";
+  const FOLLOW_UP = "How would salary sacrifice affect her HICBC?";
+  const FOLLOW_UP_RESPONSE =
+    "Great question. If Sarah redirects \u00a34,730 via salary sacrifice, her adjusted net income drops below \u00a360,000 \u2014 eliminating the HICBC charge entirely. That\u2019s an extra \u00a3860 saved per year.";
+
   const [charCount, setCharCount] = useState(0);
+  const [sent, setSent] = useState(false);
+  const [thinking, setThinking] = useState(false);
+  const [aiWordCount, setAiWordCount] = useState(0);
+  const [chipsVisible, setChipsVisible] = useState(false);
+
+  // Follow-up states
+  const [followUpCharCount, setFollowUpCharCount] = useState(0);
+  const [followUpSent, setFollowUpSent] = useState(false);
+  const [followUpThinking, setFollowUpThinking] = useState(false);
+  const [followUpWordCount, setFollowUpWordCount] = useState(0);
+
+  const aiWords = AI_RESPONSE.split(" ");
+  const followUpWords = FOLLOW_UP_RESPONSE.split(" ");
 
   useEffect(() => {
-    if (!active) {
-      setCharCount(0);
-      return;
-    }
+    let cancelled = false;
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    const intervals: ReturnType<typeof setInterval>[] = [];
+
+    // Phase 1: type the question
     let i = 0;
-    const interval = setInterval(() => {
+    const typeInterval = setInterval(() => {
+      if (cancelled) return;
       i++;
       setCharCount(i);
-      if (i >= fullText.length) clearInterval(interval);
-    }, 60);
-    return () => clearInterval(interval);
-  }, [active]);
+      if (i >= QUESTION.length) {
+        clearInterval(typeInterval);
+        // Phase 2: pause then send
+        timers.push(
+          setTimeout(() => {
+            if (cancelled) return;
+            setSent(true);
+            // Phase 3: thinking dots
+            setThinking(true);
+            timers.push(
+              setTimeout(() => {
+                if (cancelled) return;
+                setThinking(false);
+                // Phase 4: type AI response word by word
+                let w = 0;
+                const wordInterval = setInterval(() => {
+                  if (cancelled) return;
+                  w++;
+                  setAiWordCount(w);
+                  if (w >= aiWords.length) {
+                    clearInterval(wordInterval);
+                    // Phase 5: chips
+                    timers.push(
+                      setTimeout(() => {
+                        if (cancelled) return;
+                        setChipsVisible(true);
+                        // Phase 6: follow-up question typing after a pause
+                        timers.push(
+                          setTimeout(() => {
+                            if (cancelled) return;
+                            let f = 0;
+                            const followTypeInterval = setInterval(() => {
+                              if (cancelled) return;
+                              f++;
+                              setFollowUpCharCount(f);
+                              if (f >= FOLLOW_UP.length) {
+                                clearInterval(followTypeInterval);
+                                // Phase 7: send follow-up
+                                timers.push(
+                                  setTimeout(() => {
+                                    if (cancelled) return;
+                                    setFollowUpSent(true);
+                                    setFollowUpThinking(true);
+                                    // Phase 8: AI follow-up response
+                                    timers.push(
+                                      setTimeout(() => {
+                                        if (cancelled) return;
+                                        setFollowUpThinking(false);
+                                        let fw = 0;
+                                        const followWordInterval = setInterval(() => {
+                                          if (cancelled) return;
+                                          fw++;
+                                          setFollowUpWordCount(fw);
+                                          if (fw >= followUpWords.length) {
+                                            clearInterval(followWordInterval);
+                                          }
+                                        }, 55);
+                                        intervals.push(followWordInterval);
+                                      }, 800)
+                                    );
+                                  }, 350)
+                                );
+                              }
+                            }, 40);
+                            intervals.push(followTypeInterval);
+                          }, 800)
+                        );
+                      }, 400)
+                    );
+                  }
+                }, 60);
+                intervals.push(wordInterval);
+              }, 1000)
+            );
+          }, 400)
+        );
+      }
+    }, 45);
+    intervals.push(typeInterval);
+
+    return () => {
+      cancelled = true;
+      intervals.forEach(clearInterval);
+      timers.forEach(clearTimeout);
+    };
+  }, [aiWords.length, followUpWords.length]);
+
+  /* Render AI text with highlights applied to the visible portion */
+  const renderAiText = (words: string[], wordCount: number, highlights: { text: string; cls: string }[]) => {
+    const visible = words.slice(0, wordCount).join(" ");
+    const done = wordCount >= words.length;
+
+    const parts: React.ReactNode[] = [];
+    let remaining = visible;
+
+    let key = 0;
+    for (const hl of highlights) {
+      const idx = remaining.indexOf(hl.text);
+      if (idx >= 0) {
+        if (idx > 0) parts.push(<span key={key++}>{remaining.slice(0, idx)}</span>);
+        parts.push(
+          <span key={key++} className={hl.cls}>
+            {hl.text}
+          </span>
+        );
+        remaining = remaining.slice(idx + hl.text.length);
+      }
+    }
+    if (remaining) parts.push(<span key={key++}>{remaining}</span>);
+
+    return (
+      <>
+        {parts}
+        {!done && (
+          <motion.span
+            animate={{ opacity: [1, 0] }}
+            transition={{ duration: 0.4, repeat: Infinity }}
+            className="inline-block w-[2px] h-[13px] bg-slate-400 dark:bg-zinc-500 ml-0.5 align-middle"
+          />
+        )}
+      </>
+    );
+  };
+
+  const firstHighlights = [
+    { text: "3 planning opportunities", cls: "font-medium text-slate-900 dark:text-white" },
+    { text: "\u00a316,800", cls: "font-medium text-emerald-600 dark:text-emerald-400" },
+  ];
+
+  const followUpHighlights = [
+    { text: "\u00a360,000", cls: "font-medium text-slate-900 dark:text-white" },
+    { text: "\u00a3860 saved", cls: "font-medium text-emerald-600 dark:text-emerald-400" },
+  ];
+
+  // Determine which phase we're in for the input bar visibility
+  const showFollowUpInput = chipsVisible && !followUpSent && followUpCharCount >= 0;
 
   return (
-    <div className="p-3 flex flex-col justify-between h-full">
-      {/* AI response placeholder */}
-      <div className="space-y-1.5">
-        <div className="h-1.5 w-[70%] rounded-full bg-slate-100 dark:bg-zinc-800" />
-        <div className="h-1.5 w-[55%] rounded-full bg-slate-100 dark:bg-zinc-800" />
-      </div>
-
-      {/* User typing */}
-      <div className="flex items-end gap-1.5 mt-auto">
-        <div className="flex-1 rounded-md bg-brand-500 px-2 py-1.5">
-          <span className="text-[10px] font-light text-white">
-            {fullText.slice(0, charCount)}
-            {active && charCount < fullText.length && (
+    <motion.div
+      initial={{ opacity: 0, x: 30 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: -20 }}
+      transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
+      className="absolute inset-0 p-6 md:p-8 flex flex-col overflow-y-auto"
+    >
+      {/* Input bar with typing, then sent bubble */}
+      {!sent ? (
+        <div className="mt-auto">
+          <div className="flex items-end gap-2">
+            <div className="flex-1 rounded-xl border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800/50 px-4 py-3 min-h-[44px]">
+              <span className="text-[13px] font-light text-slate-800 dark:text-zinc-200">
+                {QUESTION.slice(0, charCount)}
+              </span>
               <motion.span
                 animate={{ opacity: [1, 0] }}
                 transition={{ duration: 0.5, repeat: Infinity }}
-                className="inline-block w-px h-2.5 bg-white/70 ml-px align-middle"
+                className="inline-block w-[2px] h-[14px] bg-brand-500 ml-0.5 align-middle"
               />
-            )}
-          </span>
+            </div>
+            <button
+              className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 transition-all duration-300 ${
+                charCount >= QUESTION.length
+                  ? "bg-brand-500 text-white scale-100"
+                  : "bg-slate-100 dark:bg-zinc-800 text-slate-300 dark:text-zinc-600 scale-95"
+              }`}
+            >
+              <IconArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
-      </div>
-    </div>
+      ) : (
+        <div className="flex flex-col flex-1 min-h-0">
+          {/* Messages container */}
+          <div className="flex-1 space-y-3 overflow-y-auto">
+            {/* First sent message bubble */}
+            <motion.div
+              initial={{ opacity: 0, y: 10, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+              className="ml-auto max-w-[75%]"
+            >
+              <div className="bg-brand-500 text-white rounded-2xl rounded-br-sm px-4 py-2.5">
+                <span className="text-[12px] font-light leading-relaxed">
+                  {QUESTION}
+                </span>
+              </div>
+            </motion.div>
+
+            {/* First AI response area */}
+            <div className="max-w-[88%]">
+              {thinking && !followUpThinking ? (
+                <motion.div
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3 }}
+                  className="bg-slate-50 dark:bg-zinc-800 rounded-2xl rounded-bl-sm px-4 py-3 inline-flex items-center gap-1"
+                >
+                  {[0, 1, 2].map((d) => (
+                    <motion.span
+                      key={d}
+                      animate={{ opacity: [0.3, 1, 0.3] }}
+                      transition={{ duration: 1, repeat: Infinity, delay: d * 0.2 }}
+                      className="w-1.5 h-1.5 rounded-full bg-slate-400 dark:bg-zinc-500"
+                    />
+                  ))}
+                </motion.div>
+              ) : aiWordCount > 0 ? (
+                <motion.div
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <div className="bg-slate-50 dark:bg-zinc-800 rounded-2xl rounded-bl-sm px-4 py-3">
+                    <p className="text-[12px] font-light text-slate-700 dark:text-zinc-300 leading-relaxed">
+                      {renderAiText(aiWords, aiWordCount, firstHighlights)}
+                    </p>
+
+                    {chipsVisible && (
+                      <div className="flex flex-wrap gap-1.5 mt-3">
+                        {[
+                          { label: "Pension", saving: "\u00a316,800", color: "emerald" },
+                          { label: "ISA", saving: "\u00a31,520", color: "sky" },
+                          { label: "HICBC", saving: "\u00a3860", color: "amber" },
+                        ].map((chip, i) => (
+                          <motion.div
+                            key={i}
+                            initial={{ opacity: 0, scale: 0.9 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            transition={{ delay: i * 0.08, duration: 0.25 }}
+                            className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-light border ${
+                              chip.color === "emerald"
+                                ? "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200/60 dark:border-emerald-800/30 text-emerald-700 dark:text-emerald-400"
+                                : chip.color === "amber"
+                                  ? "bg-amber-50 dark:bg-amber-950/20 border-amber-200/60 dark:border-amber-800/30 text-amber-700 dark:text-amber-400"
+                                  : "bg-sky-50 dark:bg-sky-950/20 border-sky-200/60 dark:border-sky-800/30 text-sky-700 dark:text-sky-400"
+                            }`}
+                          >
+                            <span>{chip.label}</span>
+                            <span className="font-mono font-medium">{chip.saving}</span>
+                          </motion.div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+              ) : null}
+            </div>
+
+            {/* Follow-up sent message bubble */}
+            {followUpSent && (
+              <motion.div
+                initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+                className="ml-auto max-w-[75%]"
+              >
+                <div className="bg-brand-500 text-white rounded-2xl rounded-br-sm px-4 py-2.5">
+                  <span className="text-[12px] font-light leading-relaxed">
+                    {FOLLOW_UP}
+                  </span>
+                </div>
+              </motion.div>
+            )}
+
+            {/* Follow-up AI response area */}
+            {followUpSent && (
+              <div className="max-w-[88%]">
+                {followUpThinking ? (
+                  <motion.div
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3 }}
+                    className="bg-slate-50 dark:bg-zinc-800 rounded-2xl rounded-bl-sm px-4 py-3 inline-flex items-center gap-1"
+                  >
+                    {[0, 1, 2].map((d) => (
+                      <motion.span
+                        key={d}
+                        animate={{ opacity: [0.3, 1, 0.3] }}
+                        transition={{ duration: 1, repeat: Infinity, delay: d * 0.2 }}
+                        className="w-1.5 h-1.5 rounded-full bg-slate-400 dark:bg-zinc-500"
+                      />
+                    ))}
+                  </motion.div>
+                ) : followUpWordCount > 0 ? (
+                  <motion.div
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3 }}
+                  >
+                    <div className="bg-slate-50 dark:bg-zinc-800 rounded-2xl rounded-bl-sm px-4 py-3">
+                      <p className="text-[12px] font-light text-slate-700 dark:text-zinc-300 leading-relaxed">
+                        {renderAiText(followUpWords, followUpWordCount, followUpHighlights)}
+                      </p>
+                    </div>
+                  </motion.div>
+                ) : null}
+              </div>
+            )}
+          </div>
+
+          {/* Follow-up input bar (shows after chips, before follow-up is sent) */}
+          {showFollowUpInput && !followUpSent && followUpCharCount > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3 }}
+              className="mt-3 pt-3 border-t border-slate-100 dark:border-zinc-800"
+            >
+              <div className="flex items-end gap-2">
+                <div className="flex-1 rounded-xl border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800/50 px-4 py-2.5 min-h-[40px]">
+                  <span className="text-[12px] font-light text-slate-800 dark:text-zinc-200">
+                    {FOLLOW_UP.slice(0, followUpCharCount)}
+                  </span>
+                  <motion.span
+                    animate={{ opacity: [1, 0] }}
+                    transition={{ duration: 0.5, repeat: Infinity }}
+                    className="inline-block w-[2px] h-[13px] bg-brand-500 ml-0.5 align-middle"
+                  />
+                </div>
+                <button
+                  className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 transition-all duration-300 ${
+                    followUpCharCount >= FOLLOW_UP.length
+                      ? "bg-brand-500 text-white scale-100"
+                      : "bg-slate-100 dark:bg-zinc-800 text-slate-300 dark:text-zinc-600 scale-95"
+                  }`}
+                >
+                  <IconArrowRight className="w-3 h-3" />
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </div>
+      )}
+    </motion.div>
   );
 }
 
-/* ── Step 3: Act — results appearing with checks ── */
+/* ── Step 3: Act — recommendations dashboard ── */
 
-function StepActAnim({ active }: { active: boolean }) {
-  const items = [
-    { text: "Pension: save £16.8k", color: "text-emerald-500" },
-    { text: "ISA: shelter dividends", color: "text-emerald-500" },
-    { text: "HICBC: eliminate charge", color: "text-amber-500" },
+function WorkflowAct() {
+  const recs = [
+    {
+      title: "Maximise pension contribution",
+      desc: "Use \u00a342,000 unused annual allowance via salary sacrifice",
+      saving: "\u00a316,800",
+      priority: "high" as const,
+    },
+    {
+      title: "Reallocate to ISA",
+      desc: "Shelter dividend-generating assets to reduce higher-rate tax",
+      saving: "\u00a31,520",
+      priority: "medium" as const,
+    },
+    {
+      title: "Eliminate HICBC charge",
+      desc: "Salary sacrifice brings income below \u00a360,000 threshold",
+      saving: "\u00a3860",
+      priority: "medium" as const,
+    },
   ];
 
   return (
-    <div className="p-3 space-y-2">
-      {items.map((item, i) => (
-        <motion.div
-          key={i}
-          initial={{ opacity: 0, y: 6 }}
-          animate={active ? { opacity: 1, y: 0 } : { opacity: 0.2, y: 0 }}
-          transition={{
-            delay: active ? i * 0.25 : 0,
-            duration: 0.4,
-            ease: [0.16, 1, 0.3, 1],
-          }}
-          className="flex items-center gap-1.5"
-        >
-          <motion.svg
-            viewBox="0 0 16 16"
-            className={`w-3 h-3 flex-shrink-0 ${item.color}`}
-            initial={{ scale: 0 }}
-            animate={active ? { scale: 1 } : { scale: 0 }}
+    <motion.div
+      initial={{ opacity: 0, x: 30 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: -20 }}
+      transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
+      className="absolute inset-0 p-6 md:p-8"
+    >
+      <div className="flex items-center justify-between mb-5">
+        <div className="text-[10px] font-medium uppercase tracking-[0.12em] text-slate-400 dark:text-zinc-500">
+          Recommendations
+        </div>
+        <div className="text-[10px] font-light text-slate-400 dark:text-zinc-600">
+          3 opportunities found
+        </div>
+      </div>
+
+      {/* Recommendation cards */}
+      <div className="space-y-2.5">
+        {recs.map((rec, i) => (
+          <motion.div
+            key={i}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
             transition={{
-              delay: active ? i * 0.25 + 0.15 : 0,
-              duration: 0.3,
+              delay: 0.15 + i * 0.12,
+              duration: 0.5,
               ease: [0.16, 1, 0.3, 1],
             }}
+            className="flex items-center gap-4 rounded-lg border border-slate-100 dark:border-zinc-800 bg-slate-50/30 dark:bg-zinc-800/20 p-4 group"
           >
-            <circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" strokeWidth="1.5" />
-            <polyline
-              points="5 8 7 10 11 6"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
+            {/* Priority dot */}
+            <div
+              className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                rec.priority === "high"
+                  ? "bg-emerald-500"
+                  : "bg-amber-400"
+              }`}
             />
-          </motion.svg>
-          <span className="text-[10px] font-light text-slate-600 dark:text-zinc-300">
-            {item.text}
-          </span>
-        </motion.div>
-      ))}
-    </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-[13px] font-medium text-slate-800 dark:text-zinc-200 tracking-tight">
+                {rec.title}
+              </div>
+              <div className="text-[11px] font-light text-slate-400 dark:text-zinc-500 mt-0.5 truncate">
+                {rec.desc}
+              </div>
+            </div>
+            <div className="text-right flex-shrink-0">
+              <div className="text-[14px] font-mono font-medium text-emerald-600 dark:text-emerald-400 tracking-tight">
+                {rec.saving}
+              </div>
+              <div className="text-[9px] font-light text-slate-400 dark:text-zinc-600">
+                /year
+              </div>
+            </div>
+          </motion.div>
+        ))}
+      </div>
+
+      {/* Total savings highlight */}
+      <motion.div
+        initial={{ opacity: 0, y: 10, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ delay: 0.65, duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+        className="mt-5 rounded-xl bg-slate-50 dark:bg-zinc-800/50 border border-slate-200/60 dark:border-zinc-700/50 p-5 flex items-center justify-between"
+      >
+        <div>
+          <div className="text-[13px] font-medium text-slate-800 dark:text-zinc-200">
+            Total annual saving
+          </div>
+          <div className="text-[11px] font-light text-slate-500 dark:text-zinc-500 mt-0.5">
+            Combined impact of all recommendations
+          </div>
+        </div>
+        <div className="text-2xl font-mono font-medium text-emerald-600 dark:text-emerald-400 tracking-tight">
+          &pound;19,180
+        </div>
+      </motion.div>
+    </motion.div>
   );
 }
 

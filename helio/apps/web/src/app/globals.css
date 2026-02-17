@@ -60,6 +60,47 @@
   }
 }
 
+/* ── Hero headline animations (GPU-composited) ── */
+
+@keyframes char-rise {
+  from {
+    opacity: 0;
+    transform: translateY(40px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes text-reveal {
+  from { clip-path: inset(0 100% 0 0); }
+  to   { clip-path: inset(0 0% 0 0); }
+}
+
+@keyframes sweep-bar {
+  0%   { left: 0%; opacity: 0; }
+  5%   { opacity: 1; }
+  90%  { opacity: 1; }
+  100% { left: 105%; opacity: 0; }
+}
+
+.animate-char-rise {
+  opacity: 0;
+  animation: char-rise 0.55s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-text-reveal {
+  clip-path: inset(0 100% 0 0);
+  animation: text-reveal 0.9s cubic-bezier(0.16, 1, 0.3, 1) 0.75s forwards;
+}
+
+.animate-sweep-bar {
+  left: 0%;
+  opacity: 0;
+  animation: sweep-bar 0.9s cubic-bezier(0.16, 1, 0.3, 1) 0.75s forwards;
+}
+
 /* ── Animations ── */
 
 @keyframes fade-up {
@@ -256,6 +297,52 @@
   10% { opacity: 1; }
   90% { opacity: 1; }
   100% { left: 100%; opacity: 0; }
+}
+
+/* ── Waveform bars (GPU-composited, replaces 37 JS animation loops) ── */
+
+@keyframes wave-bar {
+  0%, 100% { transform: scaleY(0.3); }
+  50% { transform: scaleY(1); }
+}
+
+.wave-bar {
+  will-change: transform;
+  transform-origin: bottom;
+  animation: wave-bar var(--wave-dur, 0.8s) ease-in-out var(--wave-del, 0s) infinite;
+}
+
+@keyframes wave-bar-ambient {
+  0%, 100% { transform: scaleY(0.35); }
+  50% { transform: scaleY(1); }
+}
+
+.wave-bar-ambient {
+  will-change: transform;
+  transform-origin: center;
+  animation: wave-bar-ambient var(--wave-dur, 1.8s) ease-in-out var(--wave-del, 0s) infinite;
+}
+
+/* ── Mic pulse ring (GPU-composited) ── */
+
+@keyframes mic-pulse {
+  0% { transform: scale(1); opacity: 0.6; }
+  100% { transform: scale(1.35); opacity: 0; }
+}
+
+.mic-pulse-ring {
+  animation: mic-pulse 1.2s ease-out infinite;
+}
+
+/* ── Listening label pulse ── */
+
+@keyframes listen-pulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+.listen-pulse {
+  animation: listen-pulse 1.5s ease-in-out infinite;
 }
 
 /* ── Theme transition ── */
