@@ -61,9 +61,13 @@ interface Insight {
 }
 
 interface Observation {
+  id?: string;
   severity: "critical" | "warning" | "opportunity" | "info";
   title: string;
   detail: string;
+  category?: string;
+  potentialSaving?: number | null;
+  action?: string | null;
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -450,9 +454,13 @@ export default function ChatPage() {
   const observations: Observation[] = useMemo(() => {
     if (!dashboardData?.observations) return [];
     return dashboardData.observations.map((obs: any) => ({
+      id: obs.id || undefined,
       severity: (obs.type || obs.severity || "info") as "critical" | "warning" | "opportunity" | "info",
       title: obs.title,
       detail: obs.description || obs.detail || obs.action || "",
+      category: obs.category || undefined,
+      potentialSaving: obs.potentialSaving ?? obs.potential_saving ?? null,
+      action: obs.action || null,
     }));
   }, [dashboardData]);
 
@@ -525,6 +533,7 @@ export default function ChatPage() {
   const totalTax = dashboardData?.taxCalculation?.totalTax ?? dashboardData?.taxCalculation?.totalIncomeTax ?? null;
   const effectiveRate = dashboardData?.taxCalculation?.effectiveRate ?? null;
   const marginalRate = dashboardData?.taxCalculation?.marginalRate ?? null;
+  const taxableIncome = dashboardData?.adjustedNetIncome?.amount ?? null;
   const netIncome = totalIncome != null && totalTax != null ? totalIncome - totalTax : null;
 
   /* ── Client display info ── */
@@ -1020,12 +1029,12 @@ export default function ChatPage() {
           {panelOpen && (
             <motion.aside
               initial={{ width: 0, opacity: 0 }}
-              animate={{ width: 420, opacity: 1 }}
+              animate={{ width: 520, opacity: 1 }}
               exit={{ width: 0, opacity: 0 }}
               transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
               className="flex-shrink-0 overflow-hidden border-l border-slate-200/70 dark:border-zinc-800/70 bg-white dark:bg-zinc-950"
             >
-              <div className="w-[420px] h-full flex flex-col relative">
+              <div className="w-[520px] h-full flex flex-col relative">
                 {/* Panel header */}
                 <div className="flex-shrink-0 px-5 pt-5 pb-4 relative z-10">
                   <div className="flex items-center justify-between mb-4">
@@ -1060,11 +1069,13 @@ export default function ChatPage() {
                   </div>
 
                   {/* Stat cards */}
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-3 gap-2">
                     <MiniStat icon={<IconCalculator className="w-3.5 h-3.5" />} label="Gross income" value={totalIncome != null ? `\u00A3${totalIncome.toLocaleString()}` : "\u2014"} />
                     <MiniStat icon={<IconPieChart className="w-3.5 h-3.5" />} label="Tax liability" value={totalTax != null ? `\u00A3${totalTax.toLocaleString()}` : "\u2014"} accent />
-                    <MiniStat icon={<IconChart className="w-3.5 h-3.5" />} label="Effective rate" value={effectiveRate != null ? `${effectiveRate}%` : "\u2014"} />
                     <MiniStat icon={<IconWallet className="w-3.5 h-3.5" />} label="Net income" value={netIncome != null ? `\u00A3${netIncome.toLocaleString()}` : "\u2014"} />
+                    <MiniStat icon={<IconTrendingUp className="w-3.5 h-3.5" />} label="Taxable income" value={taxableIncome != null ? `\u00A3${taxableIncome.toLocaleString()}` : "\u2014"} />
+                    <MiniStat icon={<IconChart className="w-3.5 h-3.5" />} label="Effective rate" value={effectiveRate != null ? `${effectiveRate}%` : "\u2014"} />
+                    <MiniStat icon={<IconLightbulb className="w-3.5 h-3.5" />} label="Marginal rate" value={marginalRate != null ? `${marginalRate}%` : "\u2014"} warn={marginalRate != null && marginalRate >= 60} />
                   </div>
                 </div>
 
@@ -1260,7 +1271,12 @@ export default function ChatPage() {
                           exit={{ opacity: 0, y: -6 }}
                           transition={{ duration: 0.2 }}
                         >
-                          {activeTab === "overview" && <TaxBreakdown items={taxBreakdownItems} totalTax={totalTax} isGenerating={isDashboardGenerating} />}
+                          {activeTab === "overview" && (
+                            <div className="space-y-5">
+                              <TaxBreakdown items={taxBreakdownItems} totalTax={totalTax} isGenerating={isDashboardGenerating} />
+                              {observations.length > 0 && <ObservationPreview observations={observations} onViewAll={() => setActiveTab("observations")} />}
+                            </div>
+                          )}
                           {activeTab === "allowances" && <AllowancesPanel allowances={allowancesData} isGenerating={isDashboardGenerating} />}
                           {activeTab === "observations" && <ObservationsPanel observations={observations} isGenerating={isDashboardGenerating} />}
                         </motion.div>
@@ -1542,22 +1558,24 @@ const ChatMessage = memo(function ChatMessage({ message }: { message: Message })
 
 /* ── Mini stat (panel) ── */
 
-const MiniStat = memo(function MiniStat({ icon, label, value, accent }: { icon: React.ReactNode; label: string; value: string; accent?: boolean }) {
+const MiniStat = memo(function MiniStat({ icon, label, value, accent, warn }: { icon: React.ReactNode; label: string; value: string; accent?: boolean; warn?: boolean }) {
   return (
-    <div className="group relative rounded-xl border border-slate-200/40 dark:border-zinc-800/30 bg-white/50 dark:bg-zinc-900/30 backdrop-blur-sm p-3 overflow-hidden hover:border-brand-200/40 dark:hover:border-brand-700/30 transition-all duration-200">
+    <div className="group relative rounded-xl border border-slate-200/40 dark:border-zinc-800/30 bg-white/50 dark:bg-zinc-900/30 backdrop-blur-sm p-2.5 overflow-hidden hover:border-brand-200/40 dark:hover:border-brand-700/30 transition-all duration-200">
       {/* Gradient left accent */}
-      <div className={`absolute left-0 top-2.5 bottom-2.5 w-[2px] rounded-full ${
+      <div className={`absolute left-0 top-2 bottom-2 w-[2px] rounded-full ${
         accent
           ? "bg-gradient-to-b from-red-400 to-rose-500"
-          : "bg-gradient-to-b from-brand-400/60 to-violet-400/60"
+          : warn
+            ? "bg-gradient-to-b from-amber-400 to-orange-400"
+            : "bg-gradient-to-b from-brand-400/60 to-violet-400/60"
       }`} />
       <div className="pl-2">
-        <div className="flex items-center gap-1.5 mb-1.5">
+        <div className="flex items-center gap-1.5 mb-1">
           <span className="text-slate-400 dark:text-zinc-500">{icon}</span>
-          <span className="text-[10px] font-light text-slate-400 dark:text-zinc-500">{label}</span>
+          <span className="text-[9px] font-light text-slate-400 dark:text-zinc-500">{label}</span>
         </div>
-        <div className={`text-lg font-light font-mono tracking-tight tabular-nums ${
-          accent ? "text-red-600 dark:text-red-400" : "text-slate-900 dark:text-white"
+        <div className={`text-[15px] font-light font-mono tracking-tight tabular-nums ${
+          accent ? "text-red-600 dark:text-red-400" : warn ? "text-amber-600 dark:text-amber-400" : "text-slate-900 dark:text-white"
         }`}>
           {value}
         </div>
@@ -1649,6 +1667,63 @@ function TaxBreakdown({ items, totalTax, isGenerating }: { items: { label: strin
   );
 }
 
+/* ─── Observation Preview (shown in overview tab) ─── */
+
+function ObservationPreview({ observations, onViewAll }: { observations: Observation[]; onViewAll: () => void }) {
+  const topObs = observations.slice(0, 3);
+  const totalSavings = observations.reduce((sum, o) => sum + (o.potentialSaving || 0), 0);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.3, duration: 0.4 }}
+    >
+      {/* Section header */}
+      <div className="flex items-center justify-between mb-2.5">
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] uppercase tracking-widest font-medium text-slate-400 dark:text-zinc-500">Key Findings</span>
+          <span className="text-[9px] font-mono font-medium text-slate-300 dark:text-zinc-600 bg-slate-100/60 dark:bg-zinc-800/40 px-1.5 py-0.5 rounded">{observations.length}</span>
+        </div>
+        <button
+          onClick={onViewAll}
+          className="text-[9px] font-medium text-brand-500 hover:text-brand-600 dark:text-brand-400 dark:hover:text-brand-300 flex items-center gap-1 transition-colors"
+        >
+          View all <IconArrowRight className="w-2.5 h-2.5" />
+        </button>
+      </div>
+
+      {/* Compact observation rows */}
+      <div className="rounded-xl border border-slate-200/40 dark:border-zinc-800/30 bg-white/50 dark:bg-zinc-900/30 backdrop-blur-sm overflow-hidden divide-y divide-slate-100/60 dark:divide-zinc-800/30">
+        {topObs.map((obs, i) => {
+          const config = severityConfig[obs.severity] || severityConfig.info;
+          return (
+            <div key={obs.id || i} className="flex items-center gap-2.5 px-3.5 py-2.5 hover:bg-slate-50/50 dark:hover:bg-zinc-800/20 transition-colors">
+              <span className={`flex-shrink-0 w-1.5 h-1.5 rounded-full ${config.dot}`} />
+              <p className="flex-1 text-[11px] font-normal text-slate-700 dark:text-zinc-300 truncate">{obs.title}</p>
+              {obs.potentialSaving != null && obs.potentialSaving > 0 && (
+                <span className="flex-shrink-0 text-[10px] font-mono font-medium text-emerald-600 dark:text-emerald-400 tabular-nums">
+                  {`\u00A3${obs.potentialSaving.toLocaleString()}`}
+                </span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Total savings footer */}
+      {totalSavings > 0 && (
+        <div className="flex items-center justify-end gap-1.5 mt-2 pr-1">
+          <span className="text-[9px] font-light text-slate-400 dark:text-zinc-500">Potential savings:</span>
+          <span className="text-[11px] font-mono font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums">
+            {`\u00A3${totalSavings.toLocaleString()}`}/yr
+          </span>
+        </div>
+      )}
+    </motion.div>
+  );
+}
+
 /* ─── Allowances ─── */
 
 function AllowancesPanel({ allowances, isGenerating }: { allowances: { label: string; used: number; total: number }[]; isGenerating?: boolean }) {
@@ -1721,6 +1796,22 @@ function AllowancesPanel({ allowances, isGenerating }: { allowances: { label: st
   );
 }
 
+/* ─── Category config ─── */
+
+const categoryLabels: Record<string, string> = {
+  income_tax: "Income Tax",
+  child_benefit: "Child Benefit",
+  pension: "Pension",
+  savings: "Savings & Investments",
+};
+
+const categoryIcons: Record<string, (cls: string) => React.ReactNode> = {
+  income_tax: (cls) => <IconCalculator className={cls} />,
+  child_benefit: (cls) => <IconWallet className={cls} />,
+  pension: (cls) => <IconShield className={cls} />,
+  savings: (cls) => <IconChart className={cls} />,
+};
+
 /* ─── Observations ─── */
 
 function ObservationsPanel({ observations, isGenerating }: { observations: Observation[]; isGenerating?: boolean }) {
@@ -1739,45 +1830,144 @@ function ObservationsPanel({ observations, isGenerating }: { observations: Obser
     );
   }
 
+  const totalSavings = observations.reduce((sum, o) => sum + (o.potentialSaving || 0), 0);
+  const warnings = observations.filter((o) => o.severity === "critical" || o.severity === "warning");
+  const opportunities = observations.filter((o) => o.severity === "opportunity" || o.severity === "info");
+
   return (
-    <div className="space-y-2.5">
-      {observations.map((obs, i) => {
-        const config = severityConfig[obs.severity] || severityConfig.info;
-        return (
-          <motion.div
-            key={i}
-            initial={{ opacity: 0, x: -8 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: i * 0.06, duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-            className="group relative rounded-xl border border-slate-200/40 dark:border-zinc-800/30 bg-white/50 dark:bg-zinc-900/30 backdrop-blur-sm p-3.5 hover:border-brand-200/40 dark:hover:border-brand-700/30 transition-all duration-200 overflow-hidden"
-          >
-            {/* Severity gradient accent bar */}
-            <div className={`absolute left-0 top-3 bottom-3 w-[3px] rounded-full bg-gradient-to-b ${config.accent}`} />
-
-            <div className="flex items-start gap-2.5 pl-3">
-              {/* Severity icon */}
-              <span className={`flex-shrink-0 w-6 h-6 rounded-lg ${config.iconBg} flex items-center justify-center mt-0.5`}>
-                {obs.severity === "opportunity" ? (
-                  <IconCheck className={`w-3 h-3 ${config.text}`} />
-                ) : (
-                  <IconAlertCircle className={`w-3 h-3 ${config.text}`} />
-                )}
+    <div className="space-y-4">
+      {/* ── Summary header ── */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+        className="rounded-xl border border-slate-200/40 dark:border-zinc-800/30 bg-white/50 dark:bg-zinc-900/30 backdrop-blur-sm p-4 overflow-hidden"
+      >
+        <div className="grid grid-cols-3 gap-3">
+          <div className="text-center">
+            <p className="text-[20px] font-mono font-medium text-slate-900 dark:text-white tabular-nums">{observations.length}</p>
+            <p className="text-[9px] font-light text-slate-400 dark:text-zinc-500 mt-0.5">Findings</p>
+          </div>
+          <div className="text-center border-x border-slate-200/30 dark:border-zinc-800/20">
+            <p className="text-[20px] font-mono font-medium text-amber-600 dark:text-amber-400 tabular-nums">{warnings.length}</p>
+            <p className="text-[9px] font-light text-slate-400 dark:text-zinc-500 mt-0.5">Warnings</p>
+          </div>
+          <div className="text-center">
+            <p className="text-[20px] font-mono font-medium text-emerald-600 dark:text-emerald-400 tabular-nums">{opportunities.length}</p>
+            <p className="text-[9px] font-light text-slate-400 dark:text-zinc-500 mt-0.5">Opportunities</p>
+          </div>
+        </div>
+        {totalSavings > 0 && (
+          <div className="mt-3 pt-3 border-t border-slate-200/30 dark:border-zinc-800/20">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-medium text-slate-500 dark:text-zinc-400">Total potential savings</span>
+              <span className="text-[15px] font-mono font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums">
+                {`\u00A3${totalSavings.toLocaleString()}`}/yr
               </span>
-
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-0.5">
-                  <p className="text-[12px] font-normal text-slate-700 dark:text-zinc-200 flex-1">{obs.title}</p>
-                  <span className={`flex-shrink-0 text-[8px] uppercase tracking-widest font-medium px-1.5 py-0.5 rounded-md ${config.iconBg} ${config.text}`}>
-                    {obs.severity}
-                  </span>
-                </div>
-                <p className="text-[11px] font-light text-slate-500 dark:text-zinc-400 leading-relaxed">{obs.detail}</p>
-              </div>
             </div>
-          </motion.div>
-        );
-      })}
+          </div>
+        )}
+      </motion.div>
+
+      {/* ── Warning findings ── */}
+      {warnings.length > 0 && (
+        <div>
+          <p className="text-[9px] uppercase tracking-widest font-medium text-slate-400 dark:text-zinc-600 mb-2 pl-1">Warnings & Actions</p>
+          <div className="space-y-2">
+            {warnings.map((obs, i) => (
+              <ObservationCard key={obs.id || i} obs={obs} index={i} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Opportunities ── */}
+      {opportunities.length > 0 && (
+        <div>
+          <p className="text-[9px] uppercase tracking-widest font-medium text-slate-400 dark:text-zinc-600 mb-2 pl-1">Opportunities</p>
+          <div className="space-y-2">
+            {opportunities.map((obs, i) => (
+              <ObservationCard key={obs.id || `opp-${i}`} obs={obs} index={i} />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
+  );
+}
+
+/* ─── Single Observation Card ─── */
+
+function ObservationCard({ obs, index }: { obs: Observation; index: number }) {
+  const config = severityConfig[obs.severity] || severityConfig.info;
+  const catLabel = obs.category ? categoryLabels[obs.category] || obs.category : null;
+  const CatIcon = obs.category ? categoryIcons[obs.category] : null;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: -8 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ delay: index * 0.06, duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+      className="group relative rounded-xl border border-slate-200/40 dark:border-zinc-800/30 bg-white/50 dark:bg-zinc-900/30 backdrop-blur-sm overflow-hidden hover:border-brand-200/40 dark:hover:border-brand-700/30 transition-all duration-200"
+    >
+      {/* Severity gradient accent bar */}
+      <div className={`absolute left-0 top-0 bottom-0 w-[3px] bg-gradient-to-b ${config.accent}`} />
+
+      <div className="p-3.5 pl-4">
+        {/* Top row: icon + title + severity badge */}
+        <div className="flex items-start gap-2.5">
+          <span className={`flex-shrink-0 w-7 h-7 rounded-lg ${config.iconBg} flex items-center justify-center mt-0.5`}>
+            {obs.severity === "opportunity" ? (
+              <IconTrendingUp className={`w-3.5 h-3.5 ${config.text}`} />
+            ) : obs.severity === "info" ? (
+              <IconLightbulb className={`w-3.5 h-3.5 ${config.text}`} />
+            ) : (
+              <IconAlertCircle className={`w-3.5 h-3.5 ${config.text}`} />
+            )}
+          </span>
+
+          <div className="flex-1 min-w-0">
+            <div className="flex items-start justify-between gap-2 mb-1">
+              <p className="text-[12px] font-medium text-slate-800 dark:text-zinc-100 leading-snug">{obs.title}</p>
+              <span className={`flex-shrink-0 text-[7px] uppercase tracking-widest font-semibold px-1.5 py-0.5 rounded-md ${config.iconBg} ${config.text}`}>
+                {obs.severity}
+              </span>
+            </div>
+
+            {/* Description */}
+            <p className="text-[11px] font-light text-slate-500 dark:text-zinc-400 leading-relaxed mb-2">{obs.detail}</p>
+
+            {/* Bottom row: category + potential saving */}
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                {catLabel && (
+                  <span className="flex items-center gap-1 text-[8px] font-medium text-slate-400 dark:text-zinc-500 bg-slate-100/60 dark:bg-zinc-800/40 px-1.5 py-0.5 rounded">
+                    {CatIcon && CatIcon("w-2.5 h-2.5")}
+                    {catLabel}
+                  </span>
+                )}
+              </div>
+              {obs.potentialSaving != null && obs.potentialSaving > 0 && (
+                <span className="flex items-center gap-1 text-[11px] font-mono font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums">
+                  <IconTrendingUp className="w-3 h-3" />
+                  {`\u00A3${obs.potentialSaving.toLocaleString()}`}/yr
+                </span>
+              )}
+            </div>
+
+            {/* Suggested action */}
+            {obs.action && (
+              <div className="mt-2 pt-2 border-t border-slate-100/60 dark:border-zinc-800/30">
+                <div className="flex items-start gap-1.5">
+                  <IconArrowRight className="w-2.5 h-2.5 text-brand-400 dark:text-brand-500 mt-0.5 flex-shrink-0" />
+                  <p className="text-[10px] font-normal text-brand-600 dark:text-brand-400 leading-relaxed">{obs.action}</p>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </motion.div>
   );
 }
 

@@ -236,9 +236,11 @@ def _position_to_dashboard(pos: TaxPosition) -> dict:
     # Observations
     observations = [
         {
+            "id": o.id,
             "type": o.severity,
             "title": o.title,
             "description": o.description,
+            "category": o.category,
             "potentialSaving": o.potential_saving,
             "action": o.action,
         }
