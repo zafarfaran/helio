@@ -93,6 +93,42 @@ interface Observation {
   savingsBreakdown?: SavingsBreakdown | null;
 }
 
+interface ScenarioData {
+  id: string;
+  name: string;
+  description: string;
+  current: {
+    gross_salary: number;
+    sacrifice: number;
+    income_tax: number;
+    national_insurance: number;
+    hicbc: number;
+    total_tax: number;
+    personal_allowance: number;
+  };
+  proposed: {
+    gross_salary: number;
+    sacrifice: number;
+    income_tax: number;
+    national_insurance: number;
+    hicbc: number;
+    total_tax: number;
+    personal_allowance: number;
+  };
+  savings: {
+    income_tax: number;
+    national_insurance: number;
+    hicbc_avoided: number;
+    total: number;
+  };
+  pa_change: {
+    current: number;
+    proposed: number;
+    restored: number;
+  };
+  extra_into_pension: number;
+}
+
 /* eslint-disable @typescript-eslint/no-explicit-any */
 interface ClientSummary {
   id: string;
@@ -310,7 +346,9 @@ export default function ChatPage() {
   const [panelOpen, setPanelOpen] = useState(true);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historySearch, setHistorySearch] = useState("");
-  const [activeTab, setActiveTab] = useState<"overview" | "allowances" | "observations">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "allowances" | "scenarios" | "observations">("overview");
+  const [scenarios, setScenarios] = useState<ScenarioData[]>([]);
+  const [activeScenarioId, setActiveScenarioId] = useState<string | null>(null);
   const [isListening, setIsListening] = useState(false);
   const [inputFocused, setInputFocused] = useState(false);
   const [clientMenuOpen, setClientMenuOpen] = useState(false);
@@ -1258,7 +1296,7 @@ export default function ChatPage() {
                     {/* Tabs — underline style */}
                     <div className="flex-shrink-0 px-5 pb-4 relative z-10">
                       <div className="flex gap-1 border-b border-slate-100 dark:border-zinc-800/50">
-                        {(["overview", "allowances", "observations"] as const).map((tab) => (
+                        {(["overview", "allowances", "scenarios", "observations"] as const).map((tab) => (
                           <button
                             key={tab}
                             onClick={() => setActiveTab(tab)}
@@ -1306,6 +1344,7 @@ export default function ChatPage() {
                             </div>
                           )}
                           {activeTab === "allowances" && <AllowancesPanel allowances={allowancesData} isGenerating={isDashboardGenerating} />}
+                          {activeTab === "scenarios" && <ScenariosPanel scenarios={scenarios} activeScenarioId={activeScenarioId} onSelectScenario={setActiveScenarioId} onQuickModel={handleModelScenario} isGenerating={isDashboardGenerating} />}
                           {activeTab === "observations" && <ObservationsPanel observations={observations} isGenerating={isDashboardGenerating} onModelScenario={handleModelScenario} />}
                         </motion.div>
                       </AnimatePresence>
@@ -1850,6 +1889,290 @@ const categoryIcons: Record<string, (cls: string) => React.ReactNode> = {
   pension: (cls) => <IconShield className={cls} />,
   savings: (cls) => <IconChart className={cls} />,
 };
+
+/* ─── Scenario Comparison ─── */
+
+function ScenarioComparison({ scenario }: { scenario: ScenarioData }) {
+  const s = scenario;
+  const fmt = (n: number) => `£${Math.abs(n).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+  const fmtSigned = (n: number) => n > 0 ? `+${fmt(n)}` : n < 0 ? `-${fmt(n)}` : "—";
+
+  const rows: { label: string; current: number; proposed: number; invert?: boolean }[] = [
+    { label: "Gross Salary", current: s.current.gross_salary, proposed: s.proposed.gross_salary },
+    { label: "Pension Sacrifice", current: s.current.sacrifice, proposed: s.proposed.sacrifice },
+    { label: "Income Tax", current: s.current.income_tax, proposed: s.proposed.income_tax, invert: true },
+    { label: "National Insurance", current: s.current.national_insurance, proposed: s.proposed.national_insurance, invert: true },
+    { label: "HICBC", current: s.current.hicbc, proposed: s.proposed.hicbc, invert: true },
+    { label: "Total Tax", current: s.current.total_tax, proposed: s.proposed.total_tax, invert: true },
+    { label: "Personal Allowance", current: s.current.personal_allowance, proposed: s.proposed.personal_allowance },
+  ];
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4 }}
+      className="space-y-3"
+    >
+      {/* Before/After table */}
+      <div className="rounded-xl border border-slate-200/40 dark:border-zinc-800/30 bg-white/50 dark:bg-zinc-900/30 backdrop-blur-sm overflow-hidden">
+        {/* Header */}
+        <div className="grid grid-cols-[1fr,auto,auto,auto] gap-0 border-b border-slate-200/30 dark:border-zinc-800/20 bg-slate-50/50 dark:bg-zinc-800/20 px-3 py-2">
+          <span className="text-[8px] uppercase tracking-widest font-semibold text-slate-400 dark:text-zinc-500"></span>
+          <span className="text-[8px] uppercase tracking-widest font-semibold text-slate-400 dark:text-zinc-500 text-right w-[80px]">Current</span>
+          <span className="text-[8px] uppercase tracking-widest font-semibold text-brand-500 dark:text-brand-400 text-right w-[80px]">Proposed</span>
+          <span className="text-[8px] uppercase tracking-widest font-semibold text-slate-400 dark:text-zinc-500 text-right w-[70px]">Delta</span>
+        </div>
+        {/* Rows */}
+        {rows.map((row, i) => {
+          const delta = row.proposed - row.current;
+          const isSaving = row.invert ? delta < 0 : delta > 0;
+          const isCost = row.invert ? delta > 0 : delta < 0;
+          const deltaColor = isSaving
+            ? "text-emerald-600 dark:text-emerald-400"
+            : isCost
+            ? "text-amber-600 dark:text-amber-400"
+            : "text-slate-400 dark:text-zinc-500";
+
+          return (
+            <div
+              key={row.label}
+              className={`grid grid-cols-[1fr,auto,auto,auto] gap-0 px-3 py-1.5 ${
+                i % 2 === 0 ? "" : "bg-slate-50/30 dark:bg-zinc-800/10"
+              } ${row.label === "Total Tax" ? "border-t border-slate-200/30 dark:border-zinc-800/20 font-semibold" : ""}`}
+            >
+              <span className="text-[10px] text-slate-600 dark:text-zinc-300">{row.label}</span>
+              <span className="text-[10px] font-mono text-slate-500 dark:text-zinc-400 text-right w-[80px] tabular-nums">{fmt(row.current)}</span>
+              <span className="text-[10px] font-mono text-slate-800 dark:text-zinc-100 text-right w-[80px] tabular-nums">{fmt(row.proposed)}</span>
+              <span className={`text-[10px] font-mono text-right w-[70px] tabular-nums ${deltaColor}`}>
+                {delta === 0 ? "—" : fmtSigned(row.invert ? -delta : delta)}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Net Impact Summary */}
+      <div className="rounded-xl border border-emerald-200/40 dark:border-emerald-800/20 bg-emerald-50/30 dark:bg-emerald-900/10 backdrop-blur-sm p-4">
+        <p className="text-[8px] uppercase tracking-widest font-semibold text-emerald-600 dark:text-emerald-400 mb-3">Net Impact</p>
+
+        <div className="space-y-1.5">
+          {s.savings.income_tax > 0 && (
+            <div className="flex justify-between items-baseline">
+              <span className="text-[10px] font-light text-emerald-700 dark:text-emerald-300">Income tax saved</span>
+              <div className="flex gap-3">
+                <span className="text-[10px] font-mono font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums">{fmt(s.savings.income_tax)}/yr</span>
+                <span className="text-[9px] font-mono text-emerald-500/60 tabular-nums">{fmt(Math.round(s.savings.income_tax / 12))}/mo</span>
+              </div>
+            </div>
+          )}
+          {s.savings.national_insurance > 0 && (
+            <div className="flex justify-between items-baseline">
+              <span className="text-[10px] font-light text-emerald-700 dark:text-emerald-300">NI saved</span>
+              <div className="flex gap-3">
+                <span className="text-[10px] font-mono font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums">{fmt(s.savings.national_insurance)}/yr</span>
+                <span className="text-[9px] font-mono text-emerald-500/60 tabular-nums">{fmt(Math.round(s.savings.national_insurance / 12))}/mo</span>
+              </div>
+            </div>
+          )}
+          {s.savings.hicbc_avoided > 0 && (
+            <div className="flex justify-between items-baseline">
+              <span className="text-[10px] font-light text-emerald-700 dark:text-emerald-300">HICBC avoided</span>
+              <div className="flex gap-3">
+                <span className="text-[10px] font-mono font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums">{fmt(s.savings.hicbc_avoided)}/yr</span>
+                <span className="text-[9px] font-mono text-emerald-500/60 tabular-nums">{fmt(Math.round(s.savings.hicbc_avoided / 12))}/mo</span>
+              </div>
+            </div>
+          )}
+
+          {/* Total */}
+          <div className="flex justify-between items-baseline pt-2 mt-2 border-t border-emerald-200/30 dark:border-emerald-700/20">
+            <span className="text-[10px] font-semibold text-emerald-800 dark:text-emerald-200">Total tax benefit</span>
+            <div className="flex gap-3">
+              <span className="text-[12px] font-mono font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">{fmt(s.savings.total)}/yr</span>
+              <span className="text-[10px] font-mono font-medium text-emerald-500 tabular-nums">{fmt(Math.round(s.savings.total / 12))}/mo</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Pension impact */}
+        {s.extra_into_pension > 0 && (
+          <div className="mt-3 pt-3 border-t border-emerald-200/30 dark:border-emerald-700/20 space-y-1">
+            <div className="flex justify-between items-baseline">
+              <span className="text-[10px] font-light text-emerald-700 dark:text-emerald-300">Extra into pension</span>
+              <span className="text-[10px] font-mono font-semibold text-brand-600 dark:text-brand-400 tabular-nums">+{fmt(s.extra_into_pension)}/yr</span>
+            </div>
+            {s.savings.total > 0 && s.extra_into_pension > 0 && (
+              <p className="text-[10px] font-light text-emerald-600 dark:text-emerald-300 italic mt-1">
+                For every £1 of take-home sacrificed, £{((s.extra_into_pension + s.savings.total) / s.extra_into_pension).toFixed(2)} goes into the pension pot.
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* PA change */}
+        {s.pa_change.restored > 0 && (
+          <div className="mt-2 flex items-center gap-1.5">
+            <span className="text-[9px] font-medium text-emerald-700 dark:text-emerald-300 bg-emerald-100/60 dark:bg-emerald-800/30 px-2 py-0.5 rounded-full">
+              PA restored: +{fmt(s.pa_change.restored)}
+            </span>
+          </div>
+        )}
+      </div>
+    </motion.div>
+  );
+}
+
+/* ─── Scenarios Panel ─── */
+
+function ScenariosPanel({
+  scenarios,
+  activeScenarioId,
+  onSelectScenario,
+  onQuickModel,
+  isGenerating,
+}: {
+  scenarios: ScenarioData[];
+  activeScenarioId: string | null;
+  onSelectScenario: (id: string) => void;
+  onQuickModel: (prompt: string) => void;
+  isGenerating?: boolean;
+}) {
+  const [sliderValue, setSliderValue] = useState(6000);
+  const [showSlider, setShowSlider] = useState(false);
+  const activeScenario = scenarios.find((s) => s.id === activeScenarioId) || scenarios[0] || null;
+
+  if (scenarios.length === 0) {
+    if (isGenerating) return <PanelGeneratingSkeleton />;
+    return (
+      <div className="space-y-4">
+        <div className="text-center py-8">
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-brand-100 to-violet-100 dark:from-brand-900/30 dark:to-violet-900/30 flex items-center justify-center mx-auto mb-3">
+            <IconTrendingUp className="w-5 h-5 text-brand-500 dark:text-brand-400" />
+          </div>
+          <p className="text-[12px] font-medium text-slate-600 dark:text-zinc-300">No scenarios modelled yet</p>
+          <p className="text-[11px] font-light text-slate-400 dark:text-zinc-500 mt-1 max-w-[280px] mx-auto leading-relaxed">
+            Ask Helio to model a scenario, or use the quick model slider below.
+          </p>
+          <div className="mt-4 space-y-2">
+            {["What if I increase pension sacrifice to £20k?", "Model salary sacrifice at £18,860", "What's the optimal sacrifice to restore my PA?"].map((prompt, i) => (
+              <button
+                key={i}
+                onClick={() => onQuickModel(prompt)}
+                className="w-full text-left text-[10px] font-normal text-brand-600 dark:text-brand-400 bg-brand-50/50 dark:bg-brand-900/20 hover:bg-brand-100/50 dark:hover:bg-brand-900/30 rounded-lg px-3 py-2 transition-colors"
+              >
+                &ldquo;{prompt}&rdquo;
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Quick Model slider */}
+        <div className="rounded-xl border border-slate-200/40 dark:border-zinc-800/30 bg-white/50 dark:bg-zinc-900/30 backdrop-blur-sm p-4">
+          <button onClick={() => setShowSlider(!showSlider)} className="w-full flex items-center justify-between">
+            <span className="text-[10px] font-semibold uppercase tracking-widest text-slate-500 dark:text-zinc-400">Quick Model</span>
+            <motion.span animate={{ rotate: showSlider ? 180 : 0 }} transition={{ duration: 0.2 }}>
+              <IconChevronDown className="w-3.5 h-3.5 text-slate-400 dark:text-zinc-500" />
+            </motion.span>
+          </button>
+          <AnimatePresence>
+            {showSlider && (
+              <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
+                <div className="mt-3 space-y-3">
+                  <div>
+                    <label className="text-[10px] font-light text-slate-500 dark:text-zinc-400">Pension Sacrifice Amount</label>
+                    <input
+                      type="range"
+                      min={0}
+                      max={60000}
+                      step={500}
+                      value={sliderValue}
+                      onChange={(e) => setSliderValue(Number(e.target.value))}
+                      className="w-full mt-1 accent-brand-500"
+                    />
+                    <div className="flex justify-between text-[9px] font-mono text-slate-400 dark:text-zinc-500 tabular-nums mt-0.5">
+                      <span>£0</span>
+                      <span className="text-[11px] font-semibold text-brand-600 dark:text-brand-400">£{sliderValue.toLocaleString()}</span>
+                      <span>£60,000</span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => onQuickModel(`Model salary sacrifice at £${sliderValue.toLocaleString()}`)}
+                    className="w-full text-[10px] font-medium text-white bg-gradient-to-r from-brand-500 to-violet-500 hover:from-brand-600 hover:to-violet-600 rounded-lg py-2.5 transition-all duration-200 shadow-sm hover:shadow-md"
+                  >
+                    Calculate Impact
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      </div>
+    );
+  }
+
+  // With scenarios
+  return (
+    <div className="space-y-4">
+      {/* Scenario selector */}
+      {scenarios.length > 1 && (
+        <div className="flex gap-2 overflow-x-auto pb-1">
+          {scenarios.map((s) => (
+            <button
+              key={s.id}
+              onClick={() => onSelectScenario(s.id)}
+              className={`flex-shrink-0 rounded-lg px-3 py-2 text-[10px] font-medium transition-all ${
+                activeScenarioId === s.id || (!activeScenarioId && s.id === scenarios[0]?.id)
+                  ? "bg-brand-500/10 dark:bg-brand-500/15 text-brand-700 dark:text-brand-300 border border-brand-300/40 dark:border-brand-600/30"
+                  : "bg-slate-100/60 dark:bg-zinc-800/40 text-slate-500 dark:text-zinc-400 border border-slate-200/30 dark:border-zinc-700/20 hover:bg-slate-200/60"
+              }`}
+            >
+              <span className="block">{s.name}</span>
+              {s.savings.total > 0 && (
+                <span className="block text-[9px] font-mono text-emerald-600 dark:text-emerald-400 mt-0.5 tabular-nums">saves £{s.savings.total.toLocaleString()}/yr</span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {activeScenario && <ScenarioComparison scenario={activeScenario} />}
+
+      {/* Quick Model slider */}
+      <div className="rounded-xl border border-slate-200/40 dark:border-zinc-800/30 bg-white/50 dark:bg-zinc-900/30 backdrop-blur-sm p-4">
+        <button onClick={() => setShowSlider(!showSlider)} className="w-full flex items-center justify-between">
+          <span className="text-[10px] font-semibold uppercase tracking-widest text-slate-500 dark:text-zinc-400">Quick Model</span>
+          <motion.span animate={{ rotate: showSlider ? 180 : 0 }} transition={{ duration: 0.2 }}>
+            <IconChevronDown className="w-3.5 h-3.5 text-slate-400 dark:text-zinc-500" />
+          </motion.span>
+        </button>
+        <AnimatePresence>
+          {showSlider && (
+            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
+              <div className="mt-3 space-y-3">
+                <div>
+                  <label className="text-[10px] font-light text-slate-500 dark:text-zinc-400">Pension Sacrifice Amount</label>
+                  <input type="range" min={0} max={60000} step={500} value={sliderValue} onChange={(e) => setSliderValue(Number(e.target.value))} className="w-full mt-1 accent-brand-500" />
+                  <div className="flex justify-between text-[9px] font-mono text-slate-400 dark:text-zinc-500 tabular-nums mt-0.5">
+                    <span>£0</span>
+                    <span className="text-[11px] font-semibold text-brand-600 dark:text-brand-400">£{sliderValue.toLocaleString()}</span>
+                    <span>£60,000</span>
+                  </div>
+                </div>
+                <button
+                  onClick={() => onQuickModel(`Model salary sacrifice at £${sliderValue.toLocaleString()}`)}
+                  className="w-full text-[10px] font-medium text-white bg-gradient-to-r from-brand-500 to-violet-500 hover:from-brand-600 hover:to-violet-600 rounded-lg py-2.5 transition-all duration-200 shadow-sm hover:shadow-md"
+                >
+                  Calculate Impact
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    </div>
+  );
+}
 
 /* ─── Observations ─── */
 
