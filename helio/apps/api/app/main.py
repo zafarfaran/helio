@@ -18,6 +18,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Application lifespan — startup and shutdown."""
     settings = get_settings()
     setup_logging(settings.log_level, settings.environment)
+
+    # Initialise the SQLite database and seed demo data
+    from app.db.engine import get_session_factory, init_db
+    from app.db.seed import seed_if_empty
+
+    await init_db()
+    async with get_session_factory()() as session:
+        await seed_if_empty(session)
+
     yield
 
 
