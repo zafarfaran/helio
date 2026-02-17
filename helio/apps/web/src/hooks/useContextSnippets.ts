@@ -10,6 +10,7 @@ export interface ContextSnippet {
   source_title: string;
   capture_type: string;
   markdown_preview: string;
+  cleaned_markdown: string;
   created_at: string | null;
 }
 

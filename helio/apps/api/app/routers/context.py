@@ -125,6 +125,7 @@ async def get_pending_context(
                 "source_title": s.source_title,
                 "capture_type": s.capture_type,
                 "markdown_preview": s.cleaned_markdown[:200],
+                "cleaned_markdown": s.cleaned_markdown,
                 "created_at": s.created_at.isoformat() if s.created_at else None,
             }
             for s in snippets
