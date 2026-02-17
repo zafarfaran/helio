@@ -3,20 +3,18 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { StatusPhase } from "@/hooks/useChat";
-import { IconMic, IconStop } from "@/components/icons";
+import { IconMic } from "@/components/icons";
 
 /* ─── Types ─── */
 
 interface VoiceModeProps {
-  isOpen: boolean;
-  onClose: () => void;
   onSend: (text: string) => void;
   status: StatusPhase;
   statusMessage: string;
   isStreaming: boolean;
 }
 
-type OrbState = "idle" | "listening" | "processing" | "thinking" | "responding" | "error";
+type OrbState = "dormant" | "listening" | "processing" | "thinking" | "error";
 
 /* ─── SpeechRecognition type shim ─── */
 
@@ -42,105 +40,72 @@ type SpeechRecognitionInstance = {
   onstart: (() => void) | null;
 };
 
-/* ─── Status → label mapping for the orb ─── */
+/* ─── Status labels ─── */
 
 const STATUS_LABELS: Partial<Record<StatusPhase, string>> = {
-  understanding: "Understanding your question...",
-  analyzing_income: "Analysing income sources...",
-  checking_allowances: "Checking allowance status...",
-  calculating: "Running tax calculations...",
-  computing_tax: "Computing tax position...",
+  understanding: "Understanding...",
+  analyzing_income: "Analysing income...",
+  checking_allowances: "Checking allowances...",
+  calculating: "Calculating...",
+  computing_tax: "Computing tax...",
   building_dashboard: "Building dashboard...",
-  searching_notes: "Searching meeting notes...",
-  generating_response: "Generating response...",
+  searching_notes: "Searching notes...",
+  generating_response: "Responding...",
 };
 
-/* ─── Component ─── */
+/* ─── Floating Voice Widget ─── */
 
-export function VoiceMode({ isOpen, onClose, onSend, status, statusMessage, isStreaming }: VoiceModeProps) {
-  const [orbState, setOrbState] = useState<OrbState>("idle");
-  const [transcript, setTranscript] = useState("");
+export function VoiceMode({ onSend, status, statusMessage, isStreaming }: VoiceModeProps) {
+  const [orbState, setOrbState] = useState<OrbState>("dormant");
   const [interimTranscript, setInterimTranscript] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [supported, setSupported] = useState(true);
 
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
-  const shouldRestartRef = useRef(false);
+  const holdingRef = useRef(false);
   const errorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Derive orb state from chat status
-  useEffect(() => {
-    if (!isOpen) return;
-
-    if (status === "idle" && !isStreaming) {
-      // AI finished responding — go back to listening
-      if (orbState === "thinking" || orbState === "responding") {
-        setOrbState("listening");
-        shouldRestartRef.current = true;
-      }
-    } else if (status === "generating_response") {
-      setOrbState("responding");
-    } else if (status !== "idle" && status !== "complete") {
-      setOrbState("thinking");
-    }
-  }, [status, isStreaming, isOpen, orbState]);
-
-  // Start/stop recognition based on orbState
-  useEffect(() => {
-    if (!isOpen) return;
-
-    if (orbState === "listening" && shouldRestartRef.current) {
-      shouldRestartRef.current = false;
-      startRecognition();
-    }
-  }, [orbState, isOpen]);
+  const sentRef = useRef(false);
 
   // Feature detection
   useEffect(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SR) {
-      setSupported(false);
-    }
+    if (!SR) setSupported(false);
   }, []);
 
-  // Start recognition when voice mode opens
+  // Derive orb state from chat status (only when we're in thinking mode)
   useEffect(() => {
-    if (isOpen && supported) {
-      setOrbState("listening");
-      setTranscript("");
-      setInterimTranscript("");
-      setErrorMessage("");
-      startRecognition();
+    if (orbState !== "thinking") return;
+
+    if (status === "idle" && !isStreaming) {
+      // AI finished — return to dormant
+      setOrbState("dormant");
+    }
+  }, [status, isStreaming, orbState]);
+
+  // Auto-clear error
+  useEffect(() => {
+    if (orbState === "error") {
+      if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
+      errorTimerRef.current = setTimeout(() => setOrbState("dormant"), 2500);
     }
     return () => {
-      stopRecognition();
       if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
     };
-  }, [isOpen, supported]);
-
-  // Escape key to close
-  useEffect(() => {
-    if (!isOpen) return;
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [isOpen, onClose]);
+  }, [orbState]);
 
   const startRecognition = useCallback(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SR) return;
 
-    // Clean up any existing instance
     if (recognitionRef.current) {
       try { recognitionRef.current.abort(); } catch { /* ignore */ }
     }
 
+    sentRef.current = false;
     const recognition: SpeechRecognitionInstance = new SR();
-    recognition.continuous = false;
+    recognition.continuous = true;
     recognition.interimResults = true;
     recognition.lang = "en-GB";
 
@@ -154,7 +119,7 @@ export function VoiceMode({ isOpen, onClose, onSend, status, statusMessage, isSt
       let interim = "";
       let final = "";
 
-      for (let i = event.resultIndex; i < event.results.length; i++) {
+      for (let i = 0; i < event.results.length; i++) {
         const result = event.results[i];
         if (result.isFinal) {
           final += result[0].transcript;
@@ -163,244 +128,299 @@ export function VoiceMode({ isOpen, onClose, onSend, status, statusMessage, isSt
         }
       }
 
-      if (interim) {
-        setInterimTranscript(interim);
-        setOrbState("processing");
-      }
+      setInterimTranscript(interim || final);
 
-      if (final) {
-        setTranscript(final);
-        setInterimTranscript("");
-        setOrbState("thinking");
-        onSend(final.trim());
-      }
+      if (interim) setOrbState("processing");
     };
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-      if (event.error === "no-speech") {
-        // No speech detected — restart silently
-        shouldRestartRef.current = true;
-        setOrbState("listening");
-        return;
-      }
-
-      if (event.error === "aborted") return;
+      if (event.error === "aborted" || event.error === "no-speech") return;
 
       setOrbState("error");
       setErrorMessage(
         event.error === "not-allowed"
-          ? "Microphone access denied"
-          : "Couldn\u2019t hear that. Try again."
+          ? "Mic access denied"
+          : "Couldn\u2019t hear that"
       );
-
-      // Auto-recover after 2s
-      if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
-      errorTimerRef.current = setTimeout(() => {
-        if (recognitionRef.current) {
-          setOrbState("listening");
-          shouldRestartRef.current = true;
-        }
-      }, 2000);
     };
 
     recognition.onend = () => {
-      // Auto-restart if we're still in voice mode and not streaming
-      if (shouldRestartRef.current && !isStreaming) {
-        try { recognition.start(); } catch { /* ignore */ }
+      // When recognition ends (from .stop()), gather final text and send
+      if (holdingRef.current) return; // still holding, don't process yet
+
+      const text = interimTranscript.trim();
+      if (text && !sentRef.current) {
+        sentRef.current = true;
+        setOrbState("thinking");
+        onSend(text);
+        setInterimTranscript("");
+      } else if (!sentRef.current) {
+        setOrbState("dormant");
       }
     };
 
     recognitionRef.current = recognition;
     try { recognition.start(); } catch { /* ignore */ }
-  }, [onSend, isStreaming]);
+  }, [onSend, interimTranscript]);
 
   const stopRecognition = useCallback(() => {
-    shouldRestartRef.current = false;
-    if (recognitionRef.current) {
-      try { recognitionRef.current.abort(); } catch { /* ignore */ }
-      recognitionRef.current = null;
+    if (!recognitionRef.current) return;
+
+    // Grab whatever text we have before stopping
+    const text = interimTranscript.trim();
+    try { recognitionRef.current.stop(); } catch { /* ignore */ }
+
+    if (text && !sentRef.current) {
+      sentRef.current = true;
+      setOrbState("thinking");
+      onSend(text);
+      setInterimTranscript("");
+    } else if (!sentRef.current) {
+      setOrbState("dormant");
     }
+    recognitionRef.current = null;
+  }, [onSend, interimTranscript]);
+
+  // Hold V — push-to-talk
+  useEffect(() => {
+    if (!supported) return;
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "v" && e.key !== "V") return;
+      if (e.repeat) return;
+      // Don't capture when typing in an input/textarea
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if (isStreaming) return; // AI is still responding
+      if (orbState === "thinking") return; // still processing previous
+
+      holdingRef.current = true;
+      startRecognition();
+    };
+
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.key !== "v" && e.key !== "V") return;
+      if (!holdingRef.current) return;
+
+      holdingRef.current = false;
+      stopRecognition();
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+    };
+  }, [supported, isStreaming, orbState, startRecognition, stopRecognition]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (recognitionRef.current) {
+        try { recognitionRef.current.abort(); } catch { /* ignore */ }
+      }
+    };
   }, []);
 
-  const handleClose = useCallback(() => {
-    stopRecognition();
-    onClose();
-  }, [stopRecognition, onClose]);
+  if (!supported) return null;
 
-  // Determine display text
+  // Display text
   const displayText =
     orbState === "error"
       ? errorMessage
-      : orbState === "processing"
-        ? interimTranscript
-        : orbState === "thinking" || orbState === "responding"
+      : orbState === "processing" || orbState === "listening"
+        ? interimTranscript || "Listening..."
+        : orbState === "thinking"
           ? statusMessage || STATUS_LABELS[status] || "Thinking..."
-          : orbState === "listening"
-            ? "Listening..."
-            : "";
+          : "";
 
-  // Orb CSS class
-  const orbAnimClass =
-    orbState === "error"
-      ? "orb-error"
-      : orbState === "thinking"
-        ? "orb-thinking"
-        : orbState === "listening" || orbState === "processing"
-          ? "orb-listening"
-          : "orb-idle";
-
-  // Orb gradient based on state
-  const orbGradient =
-    orbState === "error"
-      ? "from-red-500 to-red-600"
-      : orbState === "thinking"
-        ? "from-brand-500 via-violet-500 to-blue-500"
-        : "from-brand-400 to-violet-500";
-
-  if (!isOpen) return null;
+  // Orb visual config
+  const isActive = orbState !== "dormant";
+  const orbSize = orbState === "thinking" ? 56 : orbState === "listening" || orbState === "processing" ? 52 : 40;
 
   return (
-    <AnimatePresence>
-      {isOpen && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.3 }}
-          className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/50 backdrop-blur-md"
-        >
-          {/* Unsupported browser fallback */}
-          {!supported ? (
-            <div className="text-center px-8">
-              <div className="w-16 h-16 rounded-full bg-slate-800/50 flex items-center justify-center mx-auto mb-4">
-                <IconMic className="w-8 h-8 text-slate-400" />
-              </div>
-              <p className="text-white/80 text-sm font-medium mb-2">Voice not supported</p>
-              <p className="text-white/40 text-xs font-light max-w-xs">
-                Your browser doesn&apos;t support speech recognition. Try Chrome, Safari, or Edge.
+    <div className="absolute bottom-6 right-6 z-40 flex flex-col items-end gap-2.5 pointer-events-none">
+      {/* Status text bubble — floats above the orb */}
+      <AnimatePresence mode="wait">
+        {isActive && displayText && (
+          <motion.div
+            key={orbState + displayText.slice(0, 20)}
+            initial={{ opacity: 0, y: 8, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 4, scale: 0.95 }}
+            transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+            className="pointer-events-auto"
+          >
+            <div
+              className={`px-3 py-1.5 rounded-xl backdrop-blur-xl border max-w-[240px] ${
+                orbState === "error"
+                  ? "bg-red-950/60 border-red-500/20 text-red-300"
+                  : orbState === "thinking"
+                    ? "bg-slate-950/70 border-brand-500/15 text-white/70"
+                    : "bg-slate-950/60 border-white/10 text-white/50"
+              }`}
+            >
+              <p className="text-[11px] font-light leading-snug truncate">
+                {displayText}
               </p>
-              <button
-                onClick={handleClose}
-                className="mt-6 px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white/70 text-xs transition-colors"
-              >
-                Close
-              </button>
             </div>
-          ) : (
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* The orb */}
+      <div className="relative pointer-events-auto">
+        {/* Pulse rings — listening state */}
+        <AnimatePresence>
+          {(orbState === "listening" || orbState === "processing") && (
             <>
-              {/* Transcript / last spoken text */}
-              <AnimatePresence mode="wait">
-                {transcript && (orbState === "thinking" || orbState === "responding") && (
-                  <motion.div
-                    key="transcript"
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    transition={{ duration: 0.25 }}
-                    className="mb-8 max-w-md text-center"
-                  >
-                    <p className="text-white/50 text-xs font-light">&ldquo;{transcript}&rdquo;</p>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              {/* The Orb */}
-              <div className="relative">
-                {/* Pulse rings (visible when listening) */}
-                {(orbState === "listening" || orbState === "processing") && (
-                  <>
-                    <div className="absolute inset-0 rounded-full bg-brand-400/20 orb-ring" />
-                    <div className="absolute inset-0 rounded-full bg-violet-400/10 orb-ring-delayed" />
-                  </>
-                )}
-
-                {/* Glow (visible when thinking) */}
-                {orbState === "thinking" && (
-                  <div className="absolute -inset-8 rounded-full orb-glow-shift" />
-                )}
-
-                {/* Main orb sphere */}
-                <motion.div
-                  initial={{ scale: 0.5, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  exit={{ scale: 0.5, opacity: 0 }}
-                  transition={{ type: "spring", stiffness: 200, damping: 20 }}
-                  className={`relative w-28 h-28 rounded-full bg-gradient-to-br ${orbGradient} ${orbAnimClass} shadow-2xl`}
-                  style={{
-                    boxShadow:
-                      orbState === "error"
-                        ? "0 0 60px 20px rgba(239, 68, 68, 0.3)"
-                        : orbState === "thinking"
-                          ? undefined
-                          : "0 0 60px 20px rgba(92, 124, 250, 0.25), 0 0 120px 40px rgba(139, 92, 246, 0.1)",
-                  }}
-                >
-                  {/* Inner shine */}
-                  <div className="absolute inset-2 rounded-full bg-gradient-to-br from-white/20 to-transparent" />
-
-                  {/* Center icon */}
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    {orbState === "listening" || orbState === "idle" ? (
-                      <IconMic className="w-8 h-8 text-white/80" />
-                    ) : orbState === "error" ? (
-                      <IconStop className="w-7 h-7 text-white/80" />
-                    ) : (
-                      <div className="flex gap-1">
-                        {[0, 1, 2].map((i) => (
-                          <motion.div
-                            key={i}
-                            animate={{ scaleY: [0.4, 1, 0.4] }}
-                            transition={{
-                              duration: 0.6,
-                              repeat: Infinity,
-                              delay: i * 0.15,
-                              ease: "easeInOut",
-                            }}
-                            className="w-1 h-5 rounded-full bg-white/70 origin-center"
-                          />
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </motion.div>
-              </div>
-
-              {/* Status text */}
-              <AnimatePresence mode="wait">
-                {displayText && (
-                  <motion.p
-                    key={displayText}
-                    initial={{ opacity: 0, y: 6 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -4 }}
-                    transition={{ duration: 0.2 }}
-                    className={`mt-6 text-sm font-light ${
-                      orbState === "error"
-                        ? "text-red-400"
-                        : orbState === "processing"
-                          ? "text-white/40"
-                          : "text-white/60"
-                    }`}
-                  >
-                    {displayText}
-                  </motion.p>
-                )}
-              </AnimatePresence>
-
-              {/* Close button */}
-              <motion.button
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.5 }}
-                onClick={handleClose}
-                className="mt-10 px-5 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-white/50 hover:text-white/70 text-xs font-light transition-all duration-200 border border-white/5 hover:border-white/10 backdrop-blur-sm"
-              >
-                Press Esc or tap to close
-              </motion.button>
+              <motion.div
+                key="ring1"
+                initial={{ scale: 1, opacity: 0 }}
+                animate={{ scale: 2.2, opacity: [0.4, 0] }}
+                transition={{ duration: 1.8, repeat: Infinity, ease: "easeOut" }}
+                className="absolute inset-0 rounded-full bg-brand-400/20"
+              />
+              <motion.div
+                key="ring2"
+                initial={{ scale: 1, opacity: 0 }}
+                animate={{ scale: 2.6, opacity: [0.2, 0] }}
+                transition={{ duration: 1.8, repeat: Infinity, ease: "easeOut", delay: 0.5 }}
+                className="absolute inset-0 rounded-full bg-violet-400/15"
+              />
             </>
           )}
+        </AnimatePresence>
+
+        {/* Thinking glow */}
+        <AnimatePresence>
+          {orbState === "thinking" && (
+            <motion.div
+              key="glow"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute -inset-4 rounded-full orb-glow-shift"
+            />
+          )}
+        </AnimatePresence>
+
+        {/* Main orb body */}
+        <motion.div
+          animate={{
+            width: orbSize,
+            height: orbSize,
+            scale: orbState === "error" ? [1, 0.92, 1.05, 0.97, 1] : 1,
+          }}
+          transition={
+            orbState === "error"
+              ? { duration: 0.4, ease: "easeInOut" }
+              : { type: "spring", stiffness: 300, damping: 25 }
+          }
+          className={`relative rounded-full cursor-default transition-shadow duration-500 ${
+            orbState === "error"
+              ? "bg-gradient-to-br from-red-500 to-red-600"
+              : orbState === "thinking"
+                ? "bg-gradient-to-br from-brand-500 via-violet-500 to-blue-500"
+                : orbState === "listening" || orbState === "processing"
+                  ? "bg-gradient-to-br from-brand-400 to-violet-500"
+                  : "bg-gradient-to-br from-slate-600 to-slate-700 dark:from-zinc-600 dark:to-zinc-700"
+          } ${
+            orbState === "listening" || orbState === "processing"
+              ? "orb-listening"
+              : orbState === "thinking"
+                ? "orb-thinking"
+                : ""
+          }`}
+          style={{
+            boxShadow:
+              orbState === "error"
+                ? "0 0 30px 8px rgba(239, 68, 68, 0.3)"
+                : orbState === "thinking"
+                  ? "0 0 40px 12px rgba(92, 124, 250, 0.25), 0 0 80px 24px rgba(139, 92, 246, 0.1)"
+                  : orbState === "listening" || orbState === "processing"
+                    ? "0 0 30px 10px rgba(92, 124, 250, 0.2), 0 0 60px 20px rgba(139, 92, 246, 0.08)"
+                    : "0 4px 16px -2px rgba(0, 0, 0, 0.15)",
+          }}
+        >
+          {/* Inner shine */}
+          <div className="absolute inset-[3px] rounded-full bg-gradient-to-br from-white/25 to-transparent" />
+
+          {/* Center content */}
+          <div className="absolute inset-0 flex items-center justify-center">
+            <AnimatePresence mode="wait">
+              {orbState === "dormant" ? (
+                <motion.div
+                  key="dormant"
+                  initial={{ opacity: 0, scale: 0.5 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.5 }}
+                  transition={{ duration: 0.15 }}
+                  className="flex items-center justify-center"
+                >
+                  <span className="text-[10px] font-mono font-medium text-white/50 tracking-wider">V</span>
+                </motion.div>
+              ) : orbState === "listening" || orbState === "processing" ? (
+                <motion.div
+                  key="mic"
+                  initial={{ opacity: 0, scale: 0.5 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.5 }}
+                  transition={{ duration: 0.15 }}
+                >
+                  <IconMic className="w-5 h-5 text-white/80" />
+                </motion.div>
+              ) : orbState === "thinking" ? (
+                <motion.div
+                  key="bars"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="flex gap-[3px] items-center"
+                >
+                  {[0, 1, 2].map((i) => (
+                    <motion.div
+                      key={i}
+                      animate={{ scaleY: [0.3, 1, 0.3] }}
+                      transition={{
+                        duration: 0.55,
+                        repeat: Infinity,
+                        delay: i * 0.12,
+                        ease: "easeInOut",
+                      }}
+                      className="w-[3px] h-4 rounded-full bg-white/70 origin-center"
+                    />
+                  ))}
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="error"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="w-3 h-3 rounded-sm bg-white/70"
+                />
+              )}
+            </AnimatePresence>
+          </div>
         </motion.div>
-      )}
-    </AnimatePresence>
+      </div>
+
+      {/* Dormant hint */}
+      <AnimatePresence>
+        {orbState === "dormant" && (
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ delay: 0.3, duration: 0.3 }}
+            className="text-[9px] font-mono font-light text-slate-400/40 dark:text-zinc-600/40 tracking-wider mr-1"
+          >
+            HOLD V TO SPEAK
+          </motion.p>
+        )}
+      </AnimatePresence>
+    </div>
   );
 }
