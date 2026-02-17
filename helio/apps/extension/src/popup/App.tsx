@@ -2,24 +2,102 @@ import { useState, useEffect } from "react";
 
 type CaptureState = "idle" | "capturing" | "sending" | "success" | "error";
 
+/* ────────────────────────────────────────────────
+   Helio Sun Mark — the animated hero icon
+   ──────────────────────────────────────────────── */
+const S = { strokeWidth: 1.4, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
+
+function HelioMark({ spinning = false }: { spinning?: boolean }) {
+  return (
+    <div className="relative flex items-center justify-center">
+      {/* Ambient glow — pulses gently behind the sun */}
+      <div
+        className="absolute w-20 h-20 rounded-full anim-glow"
+        style={{ background: "radial-gradient(circle, rgba(92,124,250,0.18), transparent 70%)" }}
+      />
+      <svg viewBox="0 0 32 32" className="relative w-11 h-11 text-brand-400" fill="none">
+        {/* Rays — spin during loading */}
+        <g className={spinning ? "anim-rays" : ""} style={{ opacity: spinning ? 0.7 : 1, transition: "opacity 0.4s" }}>
+          <line x1="16" y1="2.5" x2="16" y2="6.5" stroke="currentColor" {...S} />
+          <line x1="16" y1="25.5" x2="16" y2="29.5" stroke="currentColor" {...S} />
+          <line x1="2.5" y1="16" x2="6.5" y2="16" stroke="currentColor" {...S} />
+          <line x1="25.5" y1="16" x2="29.5" y2="16" stroke="currentColor" {...S} />
+          <line x1="6.5" y1="6.5" x2="9.3" y2="9.3" stroke="currentColor" {...S} />
+          <line x1="22.7" y1="22.7" x2="25.5" y2="25.5" stroke="currentColor" {...S} />
+          <line x1="6.5" y1="25.5" x2="9.3" y2="22.7" stroke="currentColor" {...S} />
+          <line x1="22.7" y1="9.3" x2="25.5" y2="6.5" stroke="currentColor" {...S} />
+        </g>
+        {/* Core */}
+        <circle cx="16" cy="16" r="5.5" fill="currentColor" opacity="0.12" />
+        <circle cx="16" cy="16" r="7" stroke="currentColor" {...S} />
+      </svg>
+    </div>
+  );
+}
+
+/* ────────────────────────────────────────────────
+   Icons — stroke-based, matching Helio design language
+   ──────────────────────────────────────────────── */
+function IconPage({ className = "" }: { className?: string }) {
+  return (
+    <svg className={`w-[17px] h-[17px] ${className}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" {...S}>
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" />
+      <polyline points="14 2 14 8 20 8" />
+      <line x1="16" y1="13" x2="8" y2="13" />
+      <line x1="16" y1="17" x2="8" y2="17" />
+      <line x1="10" y1="9" x2="8" y2="9" />
+    </svg>
+  );
+}
+
+function IconSelection({ className = "" }: { className?: string }) {
+  return (
+    <svg className={`w-[17px] h-[17px] ${className}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" {...S}>
+      <path d="M5 3v4M3 5h4M5 21v-4M3 19h4M19 3v4M21 5h-4M19 21v-4M21 19h-4" />
+      <rect x="8" y="8" width="8" height="8" rx="1" opacity="0.12" fill="currentColor" />
+      <rect x="8" y="8" width="8" height="8" rx="1" />
+    </svg>
+  );
+}
+
+function IconChevron() {
+  return (
+    <svg
+      className="w-3.5 h-3.5 opacity-0 -translate-x-1 group-hover:opacity-50 group-hover:translate-x-0 transition-all duration-300"
+      viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"
+    >
+      <polyline points="9 18 15 12 9 6" />
+    </svg>
+  );
+}
+
+function IconExternal() {
+  return (
+    <svg className="w-3 h-3 ml-1 opacity-40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+      <polyline points="15 3 21 3 21 9" />
+      <line x1="10" y1="14" x2="21" y2="3" />
+    </svg>
+  );
+}
+
+/* ────────────────────────────────────────────────
+   Main App
+   ──────────────────────────────────────────────── */
 export default function App() {
   const [state, setState] = useState<CaptureState>("idle");
   const [hasSelection, setHasSelection] = useState(false);
   const [error, setError] = useState("");
   const [helioTabOpen, setHelioTabOpen] = useState(false);
 
-  // Check for Helio tab and selection state on mount
   useEffect(() => {
-    // Check if Helio web app is open
     chrome.tabs.query({ url: "http://localhost:3000/*" }, (tabs) => {
       setHelioTabOpen(tabs.length > 0);
     });
-
-    // Check if there's a text selection on the active tab
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       if (tabs[0]?.id) {
         chrome.tabs.sendMessage(tabs[0].id, { type: "CHECK_SELECTION" }, (response) => {
-          if (chrome.runtime.lastError) return; // content script not loaded
+          if (chrome.runtime.lastError) return;
           setHasSelection(!!response?.hasSelection);
         });
       }
@@ -29,35 +107,17 @@ export default function App() {
   const capture = async (captureType: "CAPTURE_PAGE" | "CAPTURE_SELECTION") => {
     setState("capturing");
     setError("");
-
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
       if (!tab?.id) throw new Error("No active tab");
-
-      // Ask content script to extract content
       const response = await chrome.tabs.sendMessage(tab.id, { type: captureType });
-
-      if (!response?.success) {
-        throw new Error(response?.error || "Capture failed");
-      }
-
+      if (!response?.success) throw new Error(response?.error || "Capture failed");
       setState("sending");
-
-      // Send to background worker → API
       const apiResponse = await chrome.runtime.sendMessage({
         type: "SEND_TO_API",
-        payload: {
-          content: response.content,
-          url: response.url,
-          title: response.title,
-          captureType: response.captureType,
-        },
+        payload: { content: response.content, url: response.url, title: response.title, captureType: response.captureType },
       });
-
-      if (!apiResponse?.success) {
-        throw new Error(apiResponse?.error || "API request failed");
-      }
-
+      if (!apiResponse?.success) throw new Error(apiResponse?.error || "API request failed");
       setState("success");
     } catch (err) {
       setState("error");
@@ -65,99 +125,174 @@ export default function App() {
     }
   };
 
-  const openHelio = () => {
-    chrome.tabs.create({ url: "http://localhost:3000/chat" });
-  };
+  const openHelio = () => chrome.tabs.create({ url: "http://localhost:3000/chat" });
+  const isLoading = state === "capturing" || state === "sending";
 
   return (
-    <div className="w-80 bg-white">
-      {/* Header */}
-      <div className="px-4 pt-4 pb-3 border-b border-slate-100">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center">
-              <span className="text-white text-[10px] font-bold">H</span>
-            </div>
-            <span className="text-sm font-semibold text-slate-800">Helio</span>
+    <div className="relative overflow-hidden" style={{ background: "var(--bg)" }}>
+      {/* Background gradient mesh */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background:
+            "radial-gradient(ellipse at 40% 10%, rgba(92,124,250,0.07) 0%, transparent 55%), " +
+            "radial-gradient(ellipse at 65% 90%, rgba(92,124,250,0.04) 0%, transparent 45%)",
+        }}
+      />
+
+      <div className="relative px-5 pt-7 pb-5">
+        {/* ── Header: Logo + Brand + Status ── */}
+        <div className="flex flex-col items-center mb-5 anim-fade-up">
+          <HelioMark spinning={isLoading} />
+          <div className="mt-3.5 flex items-baseline gap-1.5">
+            <span
+              className="text-[16px] font-medium tracking-[-0.02em]"
+              style={{ color: "var(--text-1)" }}
+            >
+              helio
+            </span>
+            <span
+              className="text-[8px] font-light tracking-[0.06em] uppercase"
+              style={{ color: "var(--text-3)" }}
+            >
+              by saturn
+            </span>
           </div>
-          {/* Status dot */}
-          <div className="flex items-center gap-1.5">
-            <div className={`w-1.5 h-1.5 rounded-full ${helioTabOpen ? "bg-emerald-500" : "bg-slate-300"}`} />
-            <span className="text-[10px] text-slate-400">
-              {helioTabOpen ? "Connected" : "Not open"}
+          <div className="mt-2 flex items-center gap-1.5">
+            <div
+              className={`w-[5px] h-[5px] rounded-full ${helioTabOpen ? "bg-emerald-400 anim-ping" : ""}`}
+              style={!helioTabOpen ? { background: "var(--text-3)" } : undefined}
+            />
+            <span className="text-[9px] font-light tracking-[0.04em]" style={{ color: "var(--text-3)" }}>
+              {helioTabOpen ? "Connected" : "Not connected"}
             </span>
           </div>
         </div>
-      </div>
 
-      {/* Body */}
-      <div className="px-4 py-3 space-y-2">
+        {/* Separator */}
+        <div className="h-px mb-4 anim-fade-up d1" style={{ background: "var(--brand-border)" }} />
+
+        {/* ── Idle: Action cards ── */}
         {state === "idle" && (
-          <>
+          <div className="space-y-2.5">
             <button
               onClick={() => capture("CAPTURE_PAGE")}
-              className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-sm font-medium transition-colors"
+              className="group w-full flex items-center gap-3 p-3 rounded-xl glass-card anim-fade-up d2"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
-              </svg>
-              Capture Page
+              <span
+                className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-brand-400"
+                style={{ background: "rgba(92,124,250,0.08)" }}
+              >
+                <IconPage />
+              </span>
+              <div className="flex-1 text-left">
+                <span className="text-[12px] font-medium block" style={{ color: "var(--text-1)" }}>
+                  Capture Page
+                </span>
+                <span className="text-[10px] font-light" style={{ color: "var(--text-3)" }}>
+                  Extract &amp; clean full content
+                </span>
+              </div>
+              <IconChevron />
             </button>
+
             <button
               onClick={() => capture("CAPTURE_SELECTION")}
               disabled={!hasSelection}
-              className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                hasSelection
-                  ? "bg-violet-50 hover:bg-violet-100 text-violet-700"
-                  : "bg-slate-50 text-slate-300 cursor-not-allowed"
+              className={`group w-full flex items-center gap-3 p-3 rounded-xl glass-card anim-fade-up d3 ${
+                !hasSelection ? "opacity-[0.28] cursor-not-allowed" : ""
               }`}
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 0 1 .865-.501 48.172 48.172 0 0 0 3.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z" />
-              </svg>
-              Capture Selection
+              <span
+                className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-brand-400"
+                style={{ background: "rgba(92,124,250,0.08)" }}
+              >
+                <IconSelection />
+              </span>
+              <div className="flex-1 text-left">
+                <span className="text-[12px] font-medium block" style={{ color: "var(--text-1)" }}>
+                  Capture Selection
+                </span>
+                <span className="text-[10px] font-light" style={{ color: "var(--text-3)" }}>
+                  {hasSelection ? "Send highlighted text" : "Highlight text first"}
+                </span>
+              </div>
+              <IconChevron />
             </button>
-          </>
-        )}
-
-        {(state === "capturing" || state === "sending") && (
-          <div className="flex items-center gap-2.5 px-3 py-4 text-sm text-slate-500">
-            <div className="w-4 h-4 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
-            {state === "capturing" ? "Extracting content..." : "Sending to Helio..."}
           </div>
         )}
 
+        {/* ── Loading ── */}
+        {isLoading && (
+          <div className="flex flex-col items-center py-8 anim-fade-up">
+            <div
+              className="w-5 h-5 rounded-full anim-spin"
+              style={{ border: "1.5px solid rgba(92,124,250,0.2)", borderTopColor: "var(--brand)" }}
+            />
+            <span className="mt-3.5 text-[11px] font-light tracking-wide" style={{ color: "var(--text-2)" }}>
+              {state === "capturing" ? "Extracting content\u2026" : "Sending to Helio\u2026"}
+            </span>
+          </div>
+        )}
+
+        {/* ── Success ── */}
         {state === "success" && (
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-emerald-50 text-emerald-700 text-sm">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+          <div className="flex flex-col items-center py-4 anim-fade-up">
+            <div
+              className="w-11 h-11 rounded-full flex items-center justify-center anim-pop"
+              style={{ background: "var(--success-soft)", border: "1px solid var(--success-border)" }}
+            >
+              <svg
+                className="w-5 h-5 text-emerald-400"
+                viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round"
+              >
+                <polyline points="20 6 9 17 4 12" className="anim-check" />
               </svg>
-              Sent to Helio
             </div>
-            <button
-              onClick={openHelio}
-              className="w-full px-3 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium transition-colors"
-            >
-              Open Helio
-            </button>
-            <button
-              onClick={() => setState("idle")}
-              className="w-full text-[11px] text-slate-400 hover:text-slate-500 transition-colors"
-            >
-              Capture another
-            </button>
+            <span className="mt-3 text-[12px] font-medium" style={{ color: "var(--success)" }}>
+              Sent to Helio
+            </span>
+
+            <div className="mt-5 w-full space-y-2">
+              <button
+                onClick={openHelio}
+                className="w-full flex items-center justify-center py-2.5 rounded-xl glass-card text-[11px] font-medium anim-fade-up d1"
+                style={{ color: "var(--brand)" }}
+              >
+                Open Helio
+                <IconExternal />
+              </button>
+              <button
+                onClick={() => setState("idle")}
+                className="w-full py-2 text-[10px] font-light transition-colors duration-200 anim-fade-up d2"
+                style={{ color: "var(--text-3)" }}
+                onMouseEnter={(e) => { (e.target as HTMLElement).style.color = "var(--text-2)"; }}
+                onMouseLeave={(e) => { (e.target as HTMLElement).style.color = "var(--text-3)"; }}
+              >
+                Capture another
+              </button>
+            </div>
           </div>
         )}
 
+        {/* ── Error ── */}
         {state === "error" && (
-          <div className="space-y-2">
-            <div className="px-3 py-2.5 rounded-lg bg-red-50 text-red-600 text-sm">
+          <div className="flex flex-col items-center py-4 anim-fade-up">
+            <div
+              className="w-full p-3.5 rounded-xl text-[11px] font-light text-center leading-relaxed"
+              style={{
+                color: "var(--error)",
+                background: "var(--error-soft)",
+                border: "1px solid var(--error-border)",
+              }}
+            >
               {error || "Something went wrong"}
             </div>
             <button
               onClick={() => setState("idle")}
-              className="w-full px-3 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium transition-colors"
+              className="mt-3 w-full py-2.5 rounded-xl glass-card text-[11px] font-medium anim-fade-up d1"
+              style={{ color: "var(--text-2)" }}
             >
               Try again
             </button>
