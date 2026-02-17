@@ -116,6 +116,9 @@ export const TaxComputationBreakdown = memo(function TaxComputationBreakdown({
   const [isOpen, setIsOpen] = useState(false);
   const { taxPosition: pos, dashboardData: dash } = data;
 
+  // Guard: salary sacrifice results don't include dashboardData
+  if (!dash?.taxCalculation) return null;
+
   // Filter out zero-income bands for cleaner display
   const activeBands = dash.taxCalculation.incomeTaxByBand.filter((b) => b.amount > 0);
 
