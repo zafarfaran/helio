@@ -32,8 +32,6 @@ import {
   IconClock,
   IconBookOpen,
   IconPlus,
-  IconMic,
-  IconStop,
   IconHelioMark,
   IconSearch,
   IconMessage,
@@ -198,13 +196,6 @@ const QUICK_PROMPTS = [
 
 /* ─── Pre-computed waveform data (avoids recalc on render) ─── */
 
-const WAVE_BARS = Array.from({ length: 32 }, (_, i) => ({
-  i,
-  h: `${14 + ((i * 7 + 3) % 28)}px`,
-  dur: `${0.7 + ((i * 13) % 7) * 0.1}s`,
-  del: `${i * 0.03}s`,
-}));
-
 const AMBIENT_BARS = Array.from({ length: 5 }, (_, i) => ({
   i,
   h: `${8 + i * 2}px`,
@@ -355,7 +346,6 @@ export default function ChatPage() {
   const [historySearch, setHistorySearch] = useState("");
   const [activeTab, setActiveTab] = useState<"overview" | "allowances" | "scenarios" | "observations">("overview");
   const [activeScenarioId, setActiveScenarioId] = useState<string | null>(null);
-  const [isListening, setIsListening] = useState(false);
   const [inputFocused, setInputFocused] = useState(false);
   const [clientMenuOpen, setClientMenuOpen] = useState(false);
   const clientMenuRef = useRef<HTMLDivElement>(null);
@@ -901,7 +891,7 @@ export default function ChatPage() {
         </AnimatePresence>
 
         {/* ═══ Conversation Area ═══ */}
-        <div className="flex-1 flex flex-col min-w-0">
+        <div className="flex-1 flex flex-col min-w-0 relative">
 
           {/* ── Context ribbon ── */}
           <div className="flex-shrink-0 px-5 py-2.5 border-b border-slate-100 dark:border-zinc-800/50 bg-white/50 dark:bg-zinc-950/50 backdrop-blur-sm">
@@ -982,7 +972,7 @@ export default function ChatPage() {
             <div className="max-w-3xl mx-auto px-5 pb-5 pt-2">
               {/* Quick prompts — only visible when input is empty and not listening */}
               <AnimatePresence>
-                {!input.trim() && !isListening && (
+                {!input.trim() && (
                   <motion.div
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -1014,51 +1004,19 @@ export default function ChatPage() {
 
               {/* Main input container */}
               <div className={`relative rounded-2xl transition-all duration-300 ${
-                inputFocused || isListening
+                inputFocused
                   ? "shadow-lg shadow-brand-500/8 dark:shadow-brand-500/5"
                   : "shadow-sm shadow-slate-200/50 dark:shadow-none"
               }`}>
                 {/* Gradient border */}
                 <div className={`absolute -inset-[1px] rounded-2xl transition-opacity duration-300 ${
-                  inputFocused || isListening ? "opacity-100" : "opacity-0"
+                  inputFocused ? "opacity-100" : "opacity-0"
                 }`} style={{
                   background: "linear-gradient(135deg, rgba(92,124,250,0.3), rgba(139,92,246,0.2), rgba(92,124,250,0.1))",
                 }} />
 
                 {/* Input body */}
                 <div className="relative rounded-2xl bg-white dark:bg-zinc-900 border border-slate-200/60 dark:border-zinc-800/60 overflow-hidden">
-
-                  {/* Voice listening state */}
-                  <AnimatePresence>
-                    {isListening && (
-                      <motion.div
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: "auto" }}
-                        exit={{ opacity: 0, height: 0 }}
-                        transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-                        className="overflow-hidden"
-                      >
-                        <div className="px-5 pt-4 pb-2">
-                          <div className="flex items-center justify-center gap-1">
-                            <div className="listen-pulse flex items-center gap-1 mr-2">
-                              <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                              <span className="text-[10px] font-medium text-red-500 uppercase tracking-wider">Listening</span>
-                            </div>
-                          </div>
-                          {/* Waveform — pure CSS, GPU-composited */}
-                          <div className="flex items-end justify-center gap-[3px] h-12 mt-2">
-                            {WAVE_BARS.map((bar) => (
-                              <div
-                                key={bar.i}
-                                className="wave-bar w-[3px] rounded-full bg-gradient-to-t from-brand-500 to-violet-400"
-                                style={{ height: bar.h, ["--wave-dur" as string]: bar.dur, ["--wave-del" as string]: bar.del }}
-                              />
-                            ))}
-                          </div>
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
 
                   {/* Textarea + controls row */}
                   <div className="flex items-end">
@@ -1068,7 +1026,7 @@ export default function ChatPage() {
                       onChange={handleTextareaChange}
                       onFocus={() => setInputFocused(true)}
                       onBlur={() => setInputFocused(false)}
-                      placeholder={isListening ? "Speak your question..." : clientDetail ? `Ask about ${clientDetail.first_name}'s tax position...` : "Ask a question..."}
+                      placeholder={clientDetail ? `Ask about ${clientDetail.first_name}'s tax position...` : "Ask a question..."}
                       rows={1}
                       className="flex-1 resize-none bg-transparent pl-5 pr-2 py-4 text-[13px] font-light text-slate-900 dark:text-zinc-100 placeholder:text-slate-400/60 dark:placeholder:text-zinc-600/60 focus:outline-none"
                       style={{ minHeight: "52px", maxHeight: "160px" }}
@@ -1077,25 +1035,6 @@ export default function ChatPage() {
 
                     {/* Action buttons */}
                     <div className="flex items-center gap-1.5 pr-3 pb-3">
-                      <motion.button
-                        whileTap={{ scale: 0.92 }}
-                        onClick={() => setIsListening(!isListening)}
-                        className={`relative w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-200 ${
-                          isListening
-                            ? "bg-red-500 text-white shadow-md shadow-red-500/25"
-                            : "bg-slate-100 dark:bg-zinc-800 text-slate-400 dark:text-zinc-500 hover:text-brand-500 dark:hover:text-brand-400 hover:bg-brand-50 dark:hover:bg-brand-950/30"
-                        }`}
-                      >
-                        {isListening ? (
-                          <IconStop className="w-3.5 h-3.5" />
-                        ) : (
-                          <IconMic className="w-4 h-4" />
-                        )}
-                        {isListening && (
-                          <span className="absolute inset-0 rounded-xl border-2 border-red-400 mic-pulse-ring" />
-                        )}
-                      </motion.button>
-
                       <motion.button
                         whileTap={{ scale: 0.92 }}
                         animate={input.trim() ? { scale: 1 } : { scale: 0.95 }}
@@ -1113,7 +1052,7 @@ export default function ChatPage() {
 
 
                   {/* Ambient waveform — pure CSS */}
-                  {!input.trim() && !inputFocused && !isListening && (
+                  {!input.trim() && !inputFocused && (
                     <div className="absolute left-5 top-1/2 -translate-y-1/2 flex items-center gap-[2px] pointer-events-none">
                       {AMBIENT_BARS.map((bar) => (
                         <div
@@ -1138,6 +1077,14 @@ export default function ChatPage() {
               </div>
             </div>
           </div>
+
+          {/* Floating voice widget (chat area) */}
+          <VoiceMode
+            onSend={(text) => sendMessage(text)}
+            status={status}
+            statusMessage={statusMessage}
+            isStreaming={isStreaming}
+          />
         </div>
 
         {/* ═══ Intelligence Panel (slide-over / fullscreen) ═══ */}
