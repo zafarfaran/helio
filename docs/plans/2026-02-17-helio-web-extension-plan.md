@@ -120,9 +120,18 @@ router = APIRouter(tags=["context"])
 
 MAX_RAW_CONTENT_LENGTH = 50_000
 
+# Boilerplate phrases to strip (case-insensitive, matched as whole lines)
+BOILERPLATE_PHRASES = [
+    "accept all cookies", "accept cookies", "reject all", "reject cookies",
+    "skip to main content", "skip to content", "skip navigation",
+    "subscribe to newsletter", "subscribe to our newsletter",
+    "cookie policy", "privacy policy", "terms of use", "terms of service",
+    "terms and conditions", "manage cookie preferences", "cookie settings",
+    "we use cookies", "this site uses cookies",
+]
+
 CLEANUP_PROMPT = (
     "Convert this raw web page text into clean, structured markdown. "
-    "Remove navigation, ads, cookie banners, and boilerplate. "
     "Preserve all substantive content, tables, lists, and data. "
     "Keep it concise. Do NOT add commentary — just the cleaned content."
 )
@@ -155,8 +164,12 @@ async def ingest_context(
         raw_length=len(raw),
     )
 
-    # Clean the content with Claude Haiku
-    cleaned = await _clean_with_llm(raw)
+    # Step 1: Programmatic cleanup (reduces noise before LLM, saves tokens)
+    pre_cleaned = _programmatic_cleanup(raw)
+    log.info("Pre-cleaned content", raw_length=len(raw), cleaned_length=len(pre_cleaned))
+
+    # Step 2: LLM cleanup for semantic structuring
+    cleaned = await _clean_with_llm(pre_cleaned)
 
     snippet = ContextSnippet(
         id=snippet_id,
@@ -183,6 +196,47 @@ async def ingest_context(
     }
 
 
+def _programmatic_cleanup(raw: str) -> str:
+    """Server-side programmatic cleanup before LLM processing.
+
+    Strips obvious noise that doesn't need an LLM to identify:
+    URL-only lines, boilerplate phrases, repeated separators, excessive whitespace.
+    """
+    import re
+
+    lines = raw.splitlines()
+    cleaned_lines: list[str] = []
+
+    for line in lines:
+        stripped = line.strip()
+
+        # Skip empty lines (we'll normalize later)
+        if not stripped:
+            cleaned_lines.append("")
+            continue
+
+        # Skip URL-only lines
+        if re.match(r"^https?://\S+$", stripped):
+            continue
+
+        # Skip separator-only lines (---, ===, ***, etc.)
+        if re.match(r"^[-=*_]{3,}$", stripped):
+            continue
+
+        # Skip boilerplate phrases (case-insensitive exact match)
+        if stripped.lower() in BOILERPLATE_PHRASES:
+            continue
+
+        cleaned_lines.append(line.rstrip())
+
+    result = "\n".join(cleaned_lines)
+
+    # Collapse 3+ consecutive newlines → 2
+    result = re.sub(r"\n{3,}", "\n\n", result)
+
+    return result.strip()
+
+
 async def _clean_with_llm(raw_content: str) -> str:
     """Use Claude Haiku to convert raw text to clean markdown."""
     settings = get_settings()
@@ -199,8 +253,8 @@ async def _clean_with_llm(raw_content: str) -> str:
         )
         return response.content[0].text
     except Exception as e:
-        logger.exception("LLM cleanup failed, returning raw content", error=str(e))
-        return raw_content
+        logger.exception("LLM cleanup failed, returning pre-cleaned content", error=str(e))
+        return raw_content  # Falls back to _programmatic_cleanup output (already cleaner than raw)
 ```
 
 ### Step 2: Create the pending snippets endpoint
@@ -466,17 +520,57 @@ Replace the content of `helio/apps/extension/src/content/index.ts`:
  * Helio content script — extracts page content on demand.
  * Listens for messages from the popup/background and responds
  * with the page text (full page or selection).
+ *
+ * Performs aggressive client-side cleanup to strip noise before
+ * sending to the API, reducing payload size and LLM token cost.
  */
 
-const STRIP_SELECTORS = ["script", "style", "nav", "footer", "header", "noscript", "svg", "iframe"];
+// Structural elements to remove entirely
+const STRIP_TAGS = ["script", "style", "nav", "footer", "header", "noscript", "svg", "iframe", "aside"];
+
+// Noise selectors — cookie banners, ads, social widgets, hidden elements
+const NOISE_SELECTORS = [
+  // Cookie / consent / GDPR
+  '[class*="cookie"]', '[class*="consent"]', '[id*="cookie"]', '[id*="consent"]',
+  '[id*="gdpr"]', '[class*="gdpr"]',
+  // Ads
+  '[class*="advert"]', '[class*="ad-"]', '[class*="sponsor"]', '[id*="advert"]',
+  // Social
+  '[class*="share"]', '[class*="social"]',
+  // Skip nav
+  '[class*="skip"]',
+  // Hidden / complementary
+  '[aria-hidden="true"]', '[role="complementary"]', '[hidden]',
+  '[style*="display:none"]', '[style*="display: none"]',
+];
+
+function cleanText(raw: string): string {
+  return raw
+    .replace(/\n{3,}/g, "\n\n")       // collapse 3+ newlines → 2
+    .replace(/^[ \t]+$/gm, "")        // trim whitespace-only lines
+    .trim();
+}
 
 function extractFullPage(): string {
   // Clone the body so we can strip elements without affecting the live page
   const clone = document.body.cloneNode(true) as HTMLElement;
-  for (const sel of STRIP_SELECTORS) {
-    clone.querySelectorAll(sel).forEach((el) => el.remove());
+
+  // 1. Strip structural junk tags
+  for (const tag of STRIP_TAGS) {
+    clone.querySelectorAll(tag).forEach((el) => el.remove());
   }
-  return clone.innerText.trim();
+
+  // 2. Strip noise elements by selector
+  for (const sel of NOISE_SELECTORS) {
+    try {
+      clone.querySelectorAll(sel).forEach((el) => el.remove());
+    } catch {
+      // Invalid selector on some pages — skip
+    }
+  }
+
+  // 3. Extract text and clean whitespace
+  return cleanText(clone.innerText);
 }
 
 function extractSelection(): string | null {

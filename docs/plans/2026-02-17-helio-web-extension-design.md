@@ -33,9 +33,15 @@ The extension is a **capture tool only** — no chat UI, no LLM calls, no client
 - Status indicator: green dot when Helio web app tab is detected open
 
 ### Content Script
-- Extracts text from the page DOM:
-  - Full page: strips `<script>`, `<style>`, `<nav>`, `<footer>` elements first, then reads `document.body.innerText`
-  - Selection: `window.getSelection().toString()`
+- Extracts text from the page DOM with **aggressive programmatic cleanup** before sending to the API:
+  - Full page:
+    1. Clone `document.body` (non-destructive)
+    2. Strip structural junk: `<script>`, `<style>`, `<nav>`, `<footer>`, `<header>`, `<aside>`, `<iframe>`, `<noscript>`, `<svg>`
+    3. Strip common noise by selector: cookie/consent banners (`[class*="cookie"]`, `[class*="consent"]`, `[id*="gdpr"]`), ad containers (`[class*="advert"]`, `[class*="ad-"]`, `[class*="sponsor"]`), social widgets (`[class*="share"]`, `[class*="social"]`), skip-nav links (`[class*="skip"]`)
+    4. Strip hidden elements: `[aria-hidden="true"]`, `[role="complementary"]`, `[hidden]`, `[style*="display:none"]`, `[style*="display: none"]`
+    5. Read `clone.innerText`
+    6. Collapse runs of 3+ newlines to 2, trim whitespace-only lines
+  - Selection: `window.getSelection().toString()` (no cleanup needed)
 - Grabs page URL (`window.location.href`) and title (`document.title`) as metadata
 - Sends payload to background service worker via `chrome.runtime.sendMessage`
 
@@ -63,9 +69,15 @@ The extension is a **capture tool only** — no chat UI, no LLM calls, no client
 
 **Processing:**
 1. Truncate `raw_content` to 50,000 characters if larger
-2. Call Claude Haiku with prompt: "Convert this raw web page text into clean, structured markdown. Remove navigation, ads, boilerplate. Preserve all substantive content, tables, and data. Keep it concise."
-3. Store result as `ContextSnippet` with `status="ready"`
-4. On LLM failure: fall back to basic regex cleanup, store with `status="ready"` (degraded but usable)
+2. **Server-side programmatic cleanup** (before LLM, reduces token cost):
+   - Strip residual URL-only lines (lines that are just `http://...` or `https://...`)
+   - Collapse 3+ consecutive newlines to 2
+   - Remove repeated separator patterns (`---`, `===`, `***` lines)
+   - Strip common boilerplate phrases ("Accept all cookies", "Skip to main content", "Subscribe to newsletter", "Cookie policy", "Privacy policy", "Terms of use")
+   - Trim trailing whitespace per line
+3. Call Claude Haiku with prompt: "Convert this raw web page text into clean, structured markdown. Preserve all substantive content, tables, lists, and data. Keep it concise. Do NOT add commentary."
+4. Store result as `ContextSnippet` with `status="ready"`
+5. On LLM failure: use the regex-cleaned content from step 2, store with `status="ready"` (degraded but usable)
 
 **Response:**
 ```json
