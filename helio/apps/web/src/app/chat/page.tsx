@@ -60,6 +60,28 @@ interface Insight {
   color: string;
 }
 
+interface SavingsBreakdownItem {
+  label: string;
+  value: string;
+}
+
+interface TaxImpactItem {
+  label: string;
+  annual: number;
+  monthly: number;
+}
+
+interface SavingsBreakdown {
+  currentState: SavingsBreakdownItem[];
+  recommendedAction: SavingsBreakdownItem[];
+  taxImpact: TaxImpactItem[];
+  totalAnnual: number;
+  totalMonthly: number;
+  costNote?: string;
+  effectiveRelief?: number;
+  modelPrompt?: string;
+}
+
 interface Observation {
   id?: string;
   severity: "critical" | "warning" | "opportunity" | "info";
@@ -68,6 +90,7 @@ interface Observation {
   category?: string;
   potentialSaving?: number | null;
   action?: string | null;
+  savingsBreakdown?: SavingsBreakdown | null;
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -461,6 +484,7 @@ export default function ChatPage() {
       category: obs.category || undefined,
       potentialSaving: obs.potentialSaving ?? obs.potential_saving ?? null,
       action: obs.action || null,
+      savingsBreakdown: obs.savingsBreakdown || null,
     }));
   }, [dashboardData]);
 
@@ -575,6 +599,10 @@ export default function ChatPage() {
       }
     }
   }, [input, isStreaming, sendMessage, consumeAllSnippets]);
+
+  const handleModelScenario = useCallback((prompt: string) => {
+    sendMessage(prompt);
+  }, [sendMessage]);
 
   return (
     <div className="h-screen flex flex-col bg-[#fafbfc] dark:bg-[#0a0a0c]">
@@ -1278,7 +1306,7 @@ export default function ChatPage() {
                             </div>
                           )}
                           {activeTab === "allowances" && <AllowancesPanel allowances={allowancesData} isGenerating={isDashboardGenerating} />}
-                          {activeTab === "observations" && <ObservationsPanel observations={observations} isGenerating={isDashboardGenerating} />}
+                          {activeTab === "observations" && <ObservationsPanel observations={observations} isGenerating={isDashboardGenerating} onModelScenario={handleModelScenario} />}
                         </motion.div>
                       </AnimatePresence>
 
@@ -1796,6 +1824,17 @@ function AllowancesPanel({ allowances, isGenerating }: { allowances: { label: st
   );
 }
 
+/* ─── Extra Icons ─── */
+
+function IconCopy({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </svg>
+  );
+}
+
 /* ─── Category config ─── */
 
 const categoryLabels: Record<string, string> = {
@@ -1814,7 +1853,7 @@ const categoryIcons: Record<string, (cls: string) => React.ReactNode> = {
 
 /* ─── Observations ─── */
 
-function ObservationsPanel({ observations, isGenerating }: { observations: Observation[]; isGenerating?: boolean }) {
+function ObservationsPanel({ observations, isGenerating, onModelScenario }: { observations: Observation[]; isGenerating?: boolean; onModelScenario?: (prompt: string) => void }) {
   if (observations.length === 0) {
     if (isGenerating) {
       return <PanelGeneratingSkeleton />;
@@ -1831,6 +1870,7 @@ function ObservationsPanel({ observations, isGenerating }: { observations: Obser
   }
 
   const totalSavings = observations.reduce((sum, o) => sum + (o.potentialSaving || 0), 0);
+  const totalMonthlySavings = Math.round(totalSavings / 12);
   const warnings = observations.filter((o) => o.severity === "critical" || o.severity === "warning");
   const opportunities = observations.filter((o) => o.severity === "opportunity" || o.severity === "info");
 
@@ -1861,9 +1901,14 @@ function ObservationsPanel({ observations, isGenerating }: { observations: Obser
           <div className="mt-3 pt-3 border-t border-slate-200/30 dark:border-zinc-800/20">
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-medium text-slate-500 dark:text-zinc-400">Total potential savings</span>
-              <span className="text-[15px] font-mono font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums">
-                {`\u00A3${totalSavings.toLocaleString()}`}/yr
-              </span>
+              <div className="flex items-baseline gap-2">
+                <span className="text-[15px] font-mono font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums">
+                  {`\u00A3${totalSavings.toLocaleString()}`}/yr
+                </span>
+                <span className="text-[11px] font-mono text-emerald-500/60 dark:text-emerald-400/50 tabular-nums">
+                  {`\u00A3${totalMonthlySavings.toLocaleString()}`}/mo
+                </span>
+              </div>
             </div>
           </div>
         )}
@@ -1875,7 +1920,7 @@ function ObservationsPanel({ observations, isGenerating }: { observations: Obser
           <p className="text-[9px] uppercase tracking-widest font-medium text-slate-400 dark:text-zinc-600 mb-2 pl-1">Warnings & Actions</p>
           <div className="space-y-2">
             {warnings.map((obs, i) => (
-              <ObservationCard key={obs.id || i} obs={obs} index={i} />
+              <ObservationCard key={obs.id || i} obs={obs} index={i} onModelScenario={onModelScenario} />
             ))}
           </div>
         </div>
@@ -1887,7 +1932,7 @@ function ObservationsPanel({ observations, isGenerating }: { observations: Obser
           <p className="text-[9px] uppercase tracking-widest font-medium text-slate-400 dark:text-zinc-600 mb-2 pl-1">Opportunities</p>
           <div className="space-y-2">
             {opportunities.map((obs, i) => (
-              <ObservationCard key={obs.id || `opp-${i}`} obs={obs} index={i} />
+              <ObservationCard key={obs.id || `opp-${i}`} obs={obs} index={i} onModelScenario={onModelScenario} />
             ))}
           </div>
         </div>
@@ -1898,10 +1943,12 @@ function ObservationsPanel({ observations, isGenerating }: { observations: Obser
 
 /* ─── Single Observation Card ─── */
 
-function ObservationCard({ obs, index }: { obs: Observation; index: number }) {
+function ObservationCard({ obs, index, onModelScenario }: { obs: Observation; index: number; onModelScenario?: (prompt: string) => void }) {
+  const [expanded, setExpanded] = useState(false);
   const config = severityConfig[obs.severity] || severityConfig.info;
   const catLabel = obs.category ? categoryLabels[obs.category] || obs.category : null;
   const CatIcon = obs.category ? categoryIcons[obs.category] : null;
+  const hasBreakdown = obs.savingsBreakdown && obs.savingsBreakdown.taxImpact.length > 0;
 
   return (
     <motion.div
@@ -1937,7 +1984,7 @@ function ObservationCard({ obs, index }: { obs: Observation; index: number }) {
             {/* Description */}
             <p className="text-[11px] font-light text-slate-500 dark:text-zinc-400 leading-relaxed mb-2">{obs.detail}</p>
 
-            {/* Bottom row: category + potential saving */}
+            {/* Bottom row: category + potential saving + expand toggle */}
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 {catLabel && (
@@ -1947,16 +1994,33 @@ function ObservationCard({ obs, index }: { obs: Observation; index: number }) {
                   </span>
                 )}
               </div>
-              {obs.potentialSaving != null && obs.potentialSaving > 0 && (
-                <span className="flex items-center gap-1 text-[11px] font-mono font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums">
-                  <IconTrendingUp className="w-3 h-3" />
-                  {`\u00A3${obs.potentialSaving.toLocaleString()}`}/yr
-                </span>
-              )}
+              <div className="flex items-center gap-2">
+                {obs.potentialSaving != null && obs.potentialSaving > 0 && (
+                  <span className="flex items-center gap-1 text-[11px] font-mono font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums">
+                    <IconTrendingUp className="w-3 h-3" />
+                    {`\u00A3${obs.potentialSaving.toLocaleString()}`}/yr
+                  </span>
+                )}
+                {hasBreakdown && (
+                  <button
+                    onClick={() => setExpanded(!expanded)}
+                    className="text-[9px] font-medium text-brand-500 dark:text-brand-400 hover:text-brand-600 dark:hover:text-brand-300 transition-colors flex items-center gap-0.5"
+                  >
+                    {expanded ? "Hide" : "Details"}
+                    <motion.span
+                      animate={{ rotate: expanded ? 180 : 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="inline-block"
+                    >
+                      <IconChevronDown className="w-3 h-3" />
+                    </motion.span>
+                  </button>
+                )}
+              </div>
             </div>
 
-            {/* Suggested action */}
-            {obs.action && (
+            {/* Suggested action — only show when NOT expanded */}
+            {obs.action && !expanded && (
               <div className="mt-2 pt-2 border-t border-slate-100/60 dark:border-zinc-800/30">
                 <div className="flex items-start gap-1.5">
                   <IconArrowRight className="w-2.5 h-2.5 text-brand-400 dark:text-brand-500 mt-0.5 flex-shrink-0" />
@@ -1966,6 +2030,100 @@ function ObservationCard({ obs, index }: { obs: Observation; index: number }) {
             )}
           </div>
         </div>
+
+        {/* Expanded savings breakdown */}
+        <AnimatePresence>
+          {expanded && obs.savingsBreakdown && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+              className="overflow-hidden"
+            >
+              <div className="mt-3 pt-3 border-t border-slate-200/40 dark:border-zinc-800/30 space-y-3">
+                {/* Current state vs Recommended action */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="rounded-lg bg-slate-50/80 dark:bg-zinc-800/40 p-2.5">
+                    <p className="text-[8px] uppercase tracking-widest font-semibold text-slate-400 dark:text-zinc-500 mb-2">Current State</p>
+                    {obs.savingsBreakdown.currentState.map((item, i) => (
+                      <div key={i} className="flex justify-between items-baseline mb-1 last:mb-0">
+                        <span className="text-[10px] font-light text-slate-500 dark:text-zinc-400">{item.label}</span>
+                        <span className="text-[10px] font-mono font-medium text-slate-700 dark:text-zinc-200 tabular-nums">{item.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="rounded-lg bg-emerald-50/80 dark:bg-emerald-900/20 p-2.5">
+                    <p className="text-[8px] uppercase tracking-widest font-semibold text-emerald-600 dark:text-emerald-400 mb-2">Recommended</p>
+                    {obs.savingsBreakdown.recommendedAction.map((item, i) => (
+                      <div key={i} className="flex justify-between items-baseline mb-1 last:mb-0">
+                        <span className="text-[10px] font-light text-emerald-700 dark:text-emerald-300">{item.label}</span>
+                        <span className="text-[10px] font-mono font-medium text-emerald-800 dark:text-emerald-200 tabular-nums">{item.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Tax impact table */}
+                <div className="rounded-lg bg-white/60 dark:bg-zinc-800/30 border border-slate-200/30 dark:border-zinc-700/20 p-2.5">
+                  <p className="text-[8px] uppercase tracking-widest font-semibold text-slate-400 dark:text-zinc-500 mb-2">Tax Impact</p>
+                  {obs.savingsBreakdown.taxImpact.map((item, i) => (
+                    <div key={i} className="flex justify-between items-baseline mb-1.5 last:mb-0">
+                      <span className="text-[10px] font-light text-slate-500 dark:text-zinc-400">{item.label}</span>
+                      <div className="flex gap-3">
+                        <span className="text-[10px] font-mono font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums">{`\u00A3${item.annual.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}/yr</span>
+                        <span className="text-[9px] font-mono text-slate-400 dark:text-zinc-500 tabular-nums">{`\u00A3${item.monthly.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}/mo</span>
+                      </div>
+                    </div>
+                  ))}
+                  {/* Total row */}
+                  <div className="flex justify-between items-baseline mt-2 pt-2 border-t border-slate-200/30 dark:border-zinc-700/20">
+                    <span className="text-[10px] font-semibold text-slate-700 dark:text-zinc-200">Total benefit</span>
+                    <div className="flex gap-3">
+                      <span className="text-[11px] font-mono font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">{`\u00A3${obs.savingsBreakdown.totalAnnual.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}/yr</span>
+                      <span className="text-[10px] font-mono font-medium text-emerald-500 dark:text-emerald-500 tabular-nums">{`\u00A3${obs.savingsBreakdown.totalMonthly.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}/mo</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Cost note */}
+                {obs.savingsBreakdown.costNote && (
+                  <p className="text-[10px] font-light text-slate-500 dark:text-zinc-400 italic leading-relaxed px-0.5">
+                    {obs.savingsBreakdown.costNote}
+                  </p>
+                )}
+
+                {/* Action buttons */}
+                <div className="flex gap-2 pt-1">
+                  {obs.savingsBreakdown.modelPrompt && onModelScenario && (
+                    <button
+                      onClick={() => onModelScenario(obs.savingsBreakdown!.modelPrompt!)}
+                      className="flex-1 flex items-center justify-center gap-1.5 text-[10px] font-medium text-white bg-gradient-to-r from-brand-500 to-violet-500 hover:from-brand-600 hover:to-violet-600 rounded-lg py-2 px-3 transition-all duration-200 shadow-sm hover:shadow-md"
+                    >
+                      <IconTrendingUp className="w-3 h-3" />
+                      Model This Scenario
+                    </button>
+                  )}
+                  <button
+                    onClick={() => {
+                      const text = [
+                        obs.title,
+                        obs.detail,
+                        obs.savingsBreakdown?.costNote,
+                        `Potential saving: \u00A3${obs.potentialSaving?.toLocaleString()}/yr`,
+                      ].filter(Boolean).join("\n");
+                      navigator.clipboard.writeText(text);
+                    }}
+                    className="flex items-center justify-center gap-1 text-[10px] font-medium text-slate-500 dark:text-zinc-400 hover:text-slate-700 dark:hover:text-zinc-200 bg-slate-100/60 dark:bg-zinc-800/40 hover:bg-slate-200/60 dark:hover:bg-zinc-700/40 rounded-lg py-2 px-3 transition-all duration-200"
+                  >
+                    <IconCopy className="w-3 h-3" />
+                    Copy
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </motion.div>
   );
