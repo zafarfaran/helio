@@ -325,6 +325,7 @@ export default function ChatPage() {
     conversationId,
     dashboardData,
     isDashboardGenerating,
+    isScenarioGenerating,
     scenarios: scenariosList,
     sendMessage,
     stopStreaming,
@@ -358,6 +359,13 @@ export default function ChatPage() {
       setActiveScenarioId(scenariosList[scenariosList.length - 1].id);
     }
   }, [scenariosList.length]);
+
+  // Auto-switch to Scenarios tab when generation starts
+  useEffect(() => {
+    if (isScenarioGenerating) {
+      setActiveTab("scenarios");
+    }
+  }, [isScenarioGenerating]);
 
   /* ── Load clients on mount ── */
   useEffect(() => {
@@ -1369,7 +1377,7 @@ export default function ChatPage() {
                             </div>
                           )}
                           {activeTab === "allowances" && <AllowancesPanel allowances={allowancesData} isGenerating={isDashboardGenerating} />}
-                          {activeTab === "scenarios" && <ScenariosPanel scenarios={scenariosList} activeScenarioId={activeScenarioId} onSelectScenario={setActiveScenarioId} onQuickModel={handleModelScenario} isGenerating={isDashboardGenerating} />}
+                          {activeTab === "scenarios" && <ScenariosPanel scenarios={scenariosList} activeScenarioId={activeScenarioId} onSelectScenario={setActiveScenarioId} onQuickModel={handleModelScenario} isGenerating={isDashboardGenerating} isScenarioGenerating={isScenarioGenerating} />}
                           {activeTab === "observations" && <ObservationsPanel observations={observations} isGenerating={isDashboardGenerating} onModelScenario={handleModelScenario} />}
                         </motion.div>
                       </AnimatePresence>
@@ -2076,22 +2084,129 @@ function ScenarioComparison({ scenario }: { scenario: ScenarioData }) {
 
 /* ─── Scenarios Panel ─── */
 
+function ScenarioGeneratingSkeleton() {
+  const rows = ["Gross Salary", "Pension Sacrifice", "Income Tax", "National Insurance", "HICBC", "Total Tax", "Personal Allowance"];
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.3 }}
+      className="space-y-3"
+    >
+      {/* Status ribbon */}
+      <div className="flex items-center gap-2.5 px-1">
+        <span className="relative flex h-2 w-2">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-400 opacity-50" />
+          <span className="relative inline-flex rounded-full h-2 w-2 bg-brand-500" />
+        </span>
+        <span className="text-[11px] font-light text-brand-500 dark:text-brand-400">
+          Computing scenario...
+        </span>
+      </div>
+
+      {/* Skeleton table */}
+      <div className="rounded-xl border border-slate-200/40 dark:border-zinc-800/30 bg-white/50 dark:bg-zinc-900/30 backdrop-blur-sm overflow-hidden relative">
+        {/* Scan line */}
+        <div className="dash-overlay-scan-line" />
+
+        {/* Header */}
+        <div className="grid grid-cols-[1fr,auto,auto,auto] gap-0 border-b border-slate-200/30 dark:border-zinc-800/20 bg-slate-50/50 dark:bg-zinc-800/20 px-3 py-2">
+          <span className="text-[8px] uppercase tracking-widest font-semibold text-slate-400 dark:text-zinc-500"></span>
+          <span className="text-[8px] uppercase tracking-widest font-semibold text-slate-400 dark:text-zinc-500 text-right w-[80px]">Current</span>
+          <span className="text-[8px] uppercase tracking-widest font-semibold text-slate-400/40 dark:text-zinc-600/40 text-right w-[80px]">Proposed</span>
+          <span className="text-[8px] uppercase tracking-widest font-semibold text-slate-400/40 dark:text-zinc-600/40 text-right w-[70px]">Delta</span>
+        </div>
+
+        {/* Skeleton rows */}
+        {rows.map((label, i) => (
+          <motion.div
+            key={label}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: i * 0.06, duration: 0.3 }}
+            className={`grid grid-cols-[1fr,auto,auto,auto] gap-0 px-3 py-1.5 ${
+              i % 2 === 0 ? "" : "bg-slate-50/30 dark:bg-zinc-800/10"
+            } ${label === "Total Tax" ? "border-t border-slate-200/30 dark:border-zinc-800/20" : ""}`}
+          >
+            <span className="text-[10px] text-slate-600 dark:text-zinc-300">{label}</span>
+            {/* Current — shows as "known" */}
+            <span className="text-right w-[80px]">
+              <span
+                className="inline-block h-3 rounded dash-shimmer-bar"
+                style={{ width: `${40 + ((i * 17) % 25)}px`, animationDelay: `${i * 0.1}s` }}
+              />
+            </span>
+            {/* Proposed — "resolving" */}
+            <span className="text-right w-[80px]">
+              <span
+                className="inline-block h-3 rounded dash-shimmer-bar"
+                style={{ width: `${35 + ((i * 13) % 30)}px`, animationDelay: `${0.3 + i * 0.1}s` }}
+              />
+            </span>
+            {/* Delta — blank */}
+            <span className="text-right w-[70px]">
+              <span
+                className="inline-block h-3 rounded dash-shimmer-bar"
+                style={{ width: `${20 + ((i * 11) % 20)}px`, animationDelay: `${0.6 + i * 0.1}s` }}
+              />
+            </span>
+          </motion.div>
+        ))}
+      </div>
+
+      {/* Net impact skeleton */}
+      <div className="rounded-xl border border-emerald-200/20 dark:border-emerald-800/10 bg-emerald-50/10 dark:bg-emerald-900/5 backdrop-blur-sm p-4 relative overflow-hidden">
+        <div className="dash-overlay-scan-line" />
+        <div className="space-y-2">
+          <span
+            className="inline-block h-2 w-20 rounded dash-shimmer-bar"
+            style={{ animationDelay: "0.2s" }}
+          />
+          {[0, 1, 2].map((j) => (
+            <div key={j} className="flex justify-between items-center">
+              <span
+                className="inline-block h-3 rounded dash-shimmer-bar"
+                style={{ width: `${60 + j * 20}px`, animationDelay: `${0.4 + j * 0.15}s` }}
+              />
+              <span
+                className="inline-block h-3 rounded dash-shimmer-bar"
+                style={{ width: `${50 + j * 10}px`, animationDelay: `${0.5 + j * 0.15}s` }}
+              />
+            </div>
+          ))}
+          <div className="pt-2 mt-1 border-t border-emerald-200/20 dark:border-emerald-700/10 flex justify-between">
+            <span className="inline-block h-3.5 w-24 rounded dash-shimmer-bar" style={{ animationDelay: "0.9s" }} />
+            <span className="inline-block h-3.5 w-20 rounded dash-shimmer-bar" style={{ animationDelay: "1s" }} />
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
 function ScenariosPanel({
   scenarios,
   activeScenarioId,
   onSelectScenario,
   onQuickModel,
   isGenerating,
+  isScenarioGenerating,
 }: {
   scenarios: ScenarioData[];
   activeScenarioId: string | null;
   onSelectScenario: (id: string) => void;
   onQuickModel: (prompt: string) => void;
   isGenerating?: boolean;
+  isScenarioGenerating?: boolean;
 }) {
   const [sliderValue, setSliderValue] = useState(6000);
   const [showSlider, setShowSlider] = useState(false);
   const activeScenario = scenarios.find((s) => s.id === activeScenarioId) || scenarios[0] || null;
+
+  if (scenarios.length === 0 && isScenarioGenerating) {
+    return <ScenarioGeneratingSkeleton />;
+  }
 
   if (scenarios.length === 0) {
     if (isGenerating) return <PanelGeneratingSkeleton />;
@@ -2188,6 +2303,11 @@ function ScenariosPanel({
       )}
 
       {activeScenario && <ScenarioComparison scenario={activeScenario} />}
+
+      {/* Generating a new scenario */}
+      {isScenarioGenerating && (
+        <ScenarioGeneratingSkeleton />
+      )}
 
       {/* Quick Model slider */}
       <div className="rounded-xl border border-slate-200/40 dark:border-zinc-800/30 bg-white/50 dark:bg-zinc-900/30 backdrop-blur-sm p-4">

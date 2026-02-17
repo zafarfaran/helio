@@ -84,6 +84,7 @@ export function useChat(clientId: string, taxPlanMode: boolean = false) {
   const [dashboardData, setDashboardData] = useState<any>(null);
   const [isDashboardGenerating, setIsDashboardGenerating] = useState(false);
   const [scenarios, setScenarios] = useState<any[]>([]);
+  const [isScenarioGenerating, setIsScenarioGenerating] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const dashboardTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -178,6 +179,9 @@ export function useChat(clientId: string, taxPlanMode: boolean = false) {
                 if (data.tool === "compute_tax_position" || data.tool === "model_salary_sacrifice") {
                   setStatus("computing_tax");
                   setStatusMessage("Computing tax position...");
+                  if (data.tool === "model_salary_sacrifice") {
+                    setIsScenarioGenerating(true);
+                  }
                 } else if (data.tool === "generate_dashboard") {
                   setIsDashboardGenerating(true);
                   setStatus("building_dashboard");
@@ -211,6 +215,7 @@ export function useChat(clientId: string, taxPlanMode: boolean = false) {
                     extra_into_pension: result.extra_into_pension,
                   };
                   setScenarios((prev) => [...prev, newScenario]);
+                  setIsScenarioGenerating(false);
                 }
                 // Extract dashboard data from tool_result (fallback)
                 if (data.tool === "generate_dashboard" && data.result?.dashboardData) {
@@ -257,6 +262,7 @@ export function useChat(clientId: string, taxPlanMode: boolean = false) {
         }
       } finally {
         setIsStreaming(false);
+        setIsScenarioGenerating(false);
         // Only force-clear isDashboardGenerating if no timer is pending
         // (timer means data arrived and we're showing the animation)
         if (!dashboardTimerRef.current) {
@@ -323,6 +329,7 @@ export function useChat(clientId: string, taxPlanMode: boolean = false) {
     conversationId,
     dashboardData,
     isDashboardGenerating,
+    isScenarioGenerating,
     scenarios,
     sendMessage,
     stopStreaming,
