@@ -2,18 +2,22 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+
 import structlog
-from fastapi import Request
-from supabase import Client
+from fastapi import Depends, Request
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import Section
 from app.core.logging import get_logger as _get_logger
-from app.core.supabase import get_supabase_client
+from app.db.engine import get_db_session
 
 
-def get_db() -> Client:
-    """Provide Supabase client as a dependency."""
-    return get_supabase_client()
+async def get_db(
+    session: AsyncSession = Depends(get_db_session),
+) -> AsyncIterator[AsyncSession]:
+    """Provide an async SQLAlchemy session as a FastAPI dependency."""
+    yield session
 
 
 def get_request_logger(request: Request) -> structlog.stdlib.BoundLogger:
