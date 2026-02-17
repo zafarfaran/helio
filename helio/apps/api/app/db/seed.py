@@ -10,6 +10,7 @@ from app.db.models import (
     Client,
     Conversation,
     Household,
+    MeetingNote,
     Message,
     Observation,
     TaxProfile,
@@ -204,6 +205,89 @@ async def seed_if_empty(session: AsyncSession) -> None:
         ),
     ]
     session.add_all(observations)
+
+    # ── Meeting Notes ──────────────────────────────────────────────────
+    meeting_notes = [
+        MeetingNote(
+            id="mn-1",
+            client_id="client-sarah",
+            author_id="demo-user",
+            meeting_date=datetime(2025, 11, 14, 10, 0, tzinfo=timezone.utc),
+            subject="Annual review — 2025/26 tax planning",
+            attendees="Sarah Mitchell, James Mitchell (spouse)",
+            summary=(
+                "Reviewed Sarah's current tax position for 2025/26. Total income at £195,500 "
+                "across employment (£145k), dividends (£32.5k) and rental (£18k). "
+                "Personal allowance fully tapered — paying an effective 60% marginal rate in the "
+                "taper zone. Discussed pension contribution strategy: Sarah's employer offers "
+                "salary sacrifice but she hasn't increased contributions beyond the default 6%. "
+                "James earns approximately £45,000 from his consultancy and has unused pension "
+                "allowance. They have two children (ages 8 and 11) and are currently claiming "
+                "Child Benefit — triggering HICBC. Sarah expressed interest in reducing overall "
+                "household tax burden before April 2026. She mentioned a potential £80k bonus "
+                "expected in February 2026 which would push income significantly higher."
+            ),
+            action_items=[
+                "Model salary sacrifice scenario — increase pension contributions to restore PA",
+                "Calculate HICBC impact and salary sacrifice threshold to eliminate it",
+                "Explore spousal transfer of rental property to utilise James's basic rate band",
+                "Prepare Bed & ISA analysis for dividend-generating portfolio",
+                "Revisit once bonus amount confirmed — may need carry-forward pension planning",
+            ],
+            tags=["annual-review", "pension", "hicbc", "salary-sacrifice"],
+        ),
+        MeetingNote(
+            id="mn-2",
+            client_id="client-sarah",
+            author_id="demo-user",
+            meeting_date=datetime(2025, 7, 3, 14, 30, tzinfo=timezone.utc),
+            subject="Rental property — remortgage and tax implications",
+            attendees="Sarah Mitchell",
+            summary=(
+                "Sarah is remortgaging one of her two buy-to-let properties. Current rental "
+                "income is £18,000 across both properties (£10,800 from Flat A in Clapham, "
+                "£7,200 from Flat B in Brixton). Mortgage interest on Flat A is £4,200/yr — "
+                "she only gets basic rate relief (20%) as a higher-rate taxpayer. Discussed "
+                "incorporating the properties into a limited company but decided against it "
+                "due to CGT crystallisation and SDLT costs. Sarah also mentioned she may sell "
+                "Flat B within the next 18 months — we need to plan around CGT annual exemption "
+                "and potential principal private residence relief considerations. She has never "
+                "lived in Flat B so PPR would not apply."
+            ),
+            action_items=[
+                "Calculate CGT exposure on potential sale of Flat B (estimated current value £320k, purchase price £245k)",
+                "Check if CGT annual exemption can be used against other gains",
+                "Review mortgage interest relief position under Section 24 restrictions",
+            ],
+            tags=["rental", "property", "cgt", "mortgage"],
+        ),
+        MeetingNote(
+            id="mn-3",
+            client_id="client-sarah",
+            author_id="demo-user",
+            meeting_date=datetime(2025, 3, 20, 9, 0, tzinfo=timezone.utc),
+            subject="Pre year-end planning — 2024/25 wrap-up",
+            attendees="Sarah Mitchell, James Mitchell",
+            summary=(
+                "Urgent pre-5 April meeting. Sarah had not yet used her ISA allowance for "
+                "2024/25. Recommended immediate Bed & ISA transfer of £20k from her GIA — "
+                "she holds approximately £85k in a global equity fund with £12k unrealised gains. "
+                "Also confirmed that James used his full ISA allowance in February. "
+                "Sarah made a £5,000 Gift Aid donation to Cancer Research UK in March — "
+                "this extends her basic rate band and provides additional higher rate relief. "
+                "Pension carry-forward: confirmed Sarah has £14,000 unused from 2021/22 (3 years "
+                "available) on top of current year's £42,000 remaining. Total available headroom "
+                "could be up to £56,000 if carry-forward claimed."
+            ),
+            action_items=[
+                "Confirm Bed & ISA completed before 5 April",
+                "File Gift Aid claim on Self Assessment return",
+                "Document pension carry-forward position for 2025/26 planning",
+            ],
+            tags=["year-end", "isa", "gift-aid", "carry-forward"],
+        ),
+    ]
+    session.add_all(meeting_notes)
 
     # ── Conversation + Messages ─────────────────────────────────────────
     now = datetime.now(timezone.utc)

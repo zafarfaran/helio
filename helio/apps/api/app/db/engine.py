@@ -2,6 +2,7 @@
 
 from collections.abc import AsyncIterator
 
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
@@ -52,3 +53,29 @@ async def init_db() -> None:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     logger.info("Database tables created")
+
+
+async def init_fts() -> None:
+    """Create and populate FTS5 index for meeting notes."""
+    logger.info("Initialising FTS5 index for meeting notes")
+    async with engine.begin() as conn:
+        await conn.execute(text("""
+            CREATE VIRTUAL TABLE IF NOT EXISTS meeting_notes_fts USING fts5(
+                note_id UNINDEXED,
+                client_id UNINDEXED,
+                subject,
+                summary,
+                action_items_text,
+                tags_text
+            )
+        """))
+        # Rebuild index from current data
+        await conn.execute(text("DELETE FROM meeting_notes_fts"))
+        await conn.execute(text("""
+            INSERT INTO meeting_notes_fts (note_id, client_id, subject, summary, action_items_text, tags_text)
+            SELECT id, client_id, subject, summary,
+                   COALESCE(action_items, '[]'),
+                   COALESCE(tags, '[]')
+            FROM meeting_notes
+        """))
+    logger.info("FTS5 index created and populated")

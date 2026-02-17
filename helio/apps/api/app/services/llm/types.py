@@ -9,6 +9,8 @@ class StatusPhase(StrEnum):
     ANALYZING_INCOME = "analyzing_income"
     CHECKING_ALLOWANCES = "checking_allowances"
     CALCULATING = "calculating"
+    BUILDING_DASHBOARD = "building_dashboard"
+    SEARCHING_NOTES = "searching_notes"
     GENERATING_RESPONSE = "generating_response"
     COMPLETE = "complete"
 
@@ -18,6 +20,8 @@ STATUS_MESSAGES: dict[StatusPhase, str] = {
     StatusPhase.ANALYZING_INCOME: "Analysing income sources...",
     StatusPhase.CHECKING_ALLOWANCES: "Checking allowance status...",
     StatusPhase.CALCULATING: "Running tax calculations...",
+    StatusPhase.BUILDING_DASHBOARD: "Building dashboard...",
+    StatusPhase.SEARCHING_NOTES: "Searching meeting notes...",
     StatusPhase.GENERATING_RESPONSE: "Generating response...",
     StatusPhase.COMPLETE: "",
 }
@@ -55,6 +59,13 @@ class ToolResultEvent:
 
 
 @dataclass
+class DashboardUpdateEvent:
+    data: dict
+    mode: str = "reset"
+    type: str = field(default="dashboard_update", init=False)
+
+
+@dataclass
 class DoneEvent:
     conversation_id: str
     message_id: str
@@ -75,6 +86,7 @@ StreamEvent = (
     | StatusEvent
     | ToolCallEvent
     | ToolResultEvent
+    | DashboardUpdateEvent
     | DoneEvent
     | ErrorEvent
 )

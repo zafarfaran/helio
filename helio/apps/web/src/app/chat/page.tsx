@@ -4,6 +4,9 @@ import { useState, useRef, useEffect, memo, useMemo, useCallback } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { ThemeToggle } from "@/components/theme-provider";
+import { useChat } from "@/hooks/useChat";
+import { ThinkingIndicator } from "@/components/thinking-indicator";
+import { MarkdownRenderer } from "@/components/markdown-renderer";
 import {
   HelioLogo,
   IconSend,
@@ -35,6 +38,8 @@ import {
   IconBell,
 } from "@/components/icons";
 
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
 /* ─── Types ─── */
 
 interface Message {
@@ -48,7 +53,7 @@ interface Message {
 interface Insight {
   label: string;
   value: string;
-  color: "emerald" | "amber" | "red" | "brand";
+  color: string;
 }
 
 interface Observation {
@@ -57,59 +62,64 @@ interface Observation {
   detail: string;
 }
 
-/* ─── Sample Data ─── */
+/* eslint-disable @typescript-eslint/no-explicit-any */
+interface ClientSummary {
+  id: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  region: string;
+  employment_status: string;
+  tax_year: string;
+  total_income: number;
+  total_tax: number;
+  effective_rate: number;
+  marginal_rate: number;
+}
 
-const SAMPLE_MESSAGES: Message[] = [
-  {
-    id: "1",
-    role: "assistant",
-    content:
-      "I've loaded Sarah Mitchell's profile for 2025/26. Her current position shows employment income of £145,000, dividend income of £32,500, and rental income of £18,000.\n\nTotal gross income: £195,500\n\nWhat would you like to explore?",
-    timestamp: "09:41",
-  },
-  {
-    id: "2",
-    role: "user",
-    content:
-      "What's her current tax liability and are there any obvious planning opportunities?",
-    timestamp: "09:42",
-  },
-  {
-    id: "3",
-    role: "assistant",
-    content:
-      "Based on Sarah's current position:\n\nTotal tax liability: £52,847\nEffective tax rate: 27.0%\nMarginal rate: 40%\n\nI've identified 3 key opportunities:\n\n1. Pension contribution headroom — she has £42,000 unused annual allowance, which could save up to £16,800\n\n2. ISA allowance — £20,000 unused this tax year. Moving dividend-generating assets into an ISA wrapper would reduce her dividend tax exposure\n\n3. HICBC exposure — salary sacrifice into pension could eliminate the High Income Child Benefit Charge\n\nShall I model any of these scenarios?",
-    timestamp: "09:42",
-    insights: [
-      { label: "Pension", value: "£16,800", color: "emerald" },
-      { label: "ISA", value: "£1,520", color: "brand" },
-      { label: "HICBC", value: "£860", color: "amber" },
-    ],
-  },
-];
+interface ClientDetail {
+  id: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  ni_number?: string;
+  date_of_birth?: string;
+  tax_profile?: {
+    total_income?: number;
+    total_tax?: number;
+    effective_rate?: number;
+    marginal_rate?: number;
+    income_tax?: number;
+    national_insurance?: number;
+    dividend_tax?: number;
+    tax_breakdown?: { band: string; amount: number; rate: number; tax: number }[];
+    ni_breakdown?: { class1?: { total_employee_ni?: number } };
+    allowances?: { type: string; label: string; annual_limit: number; used: number; remaining: number; status?: string }[];
+    hicbc?: { hicbc_charge?: number };
+  };
+  observations?: {
+    id: string;
+    title: string;
+    description: string;
+    severity: string;
+    priority: string;
+    category: string;
+    potential_saving?: number;
+  }[];
+}
 
-const SAMPLE_OBSERVATIONS: Observation[] = [
-  {
-    severity: "critical",
-    title: "Personal allowance tapered to £0",
-    detail: "Income exceeds £125,140 — full PA taper applies",
-  },
-  {
-    severity: "opportunity",
-    title: "£42,000 pension headroom",
-    detail: "Potential saving of £16,800 at marginal rate",
-  },
-  {
-    severity: "opportunity",
-    title: "Unused ISA allowance",
-    detail: "Shelter dividend income to reduce tax exposure",
-  },
-  {
-    severity: "warning",
-    title: "HICBC applicable",
-    detail: "Salary sacrifice could eliminate the charge",
-  },
-];
+interface Conversation {
+  id: string;
+  client_id: string;
+  title: string;
+  status: string;
+  last_message_preview: string;
+  last_message_at: string;
+  message_count: number;
+  unread: boolean;
+  created_at: string;
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
 
 const QUICK_PROMPTS = [
   "Model pension sacrifice",
@@ -148,100 +158,6 @@ interface HistoryThread {
   messageCount: number;
 }
 
-const CHAT_HISTORY: { group: string; threads: HistoryThread[] }[] = [
-  {
-    group: "Today",
-    threads: [
-      {
-        id: "t1",
-        client: { name: "Sarah Mitchell", initials: "SM", gradient: "from-brand-400 to-violet-500" },
-        title: "Tax planning opportunities",
-        preview: "Identified 3 key opportunities including pension headroom...",
-        time: "09:42",
-        tag: { label: "Planning", color: "brand" },
-        active: true,
-        messageCount: 3,
-      },
-      {
-        id: "t2",
-        client: { name: "David Clarke", initials: "DC", gradient: "from-emerald-400 to-teal-500" },
-        title: "Pension consolidation review",
-        preview: "Compared 4 pension schemes with total value of £485,000...",
-        time: "08:15",
-        tag: { label: "Pension", color: "emerald" },
-        unread: true,
-        messageCount: 7,
-      },
-    ],
-  },
-  {
-    group: "Yesterday",
-    threads: [
-      {
-        id: "t3",
-        client: { name: "Richard Patel", initials: "RP", gradient: "from-amber-400 to-orange-500" },
-        title: "IHT estate planning",
-        preview: "Estate valued at £2.1M — discussed nil-rate band...",
-        time: "16:30",
-        tag: { label: "IHT", color: "amber" },
-        messageCount: 12,
-      },
-      {
-        id: "t4",
-        client: { name: "Margaret Simmons", initials: "MS", gradient: "from-rose-400 to-pink-500" },
-        title: "Annual review 2025/26",
-        preview: "Reviewed all allowances and updated income projections...",
-        time: "11:20",
-        messageCount: 9,
-      },
-    ],
-  },
-  {
-    group: "This Week",
-    threads: [
-      {
-        id: "t5",
-        client: { name: "James Wright", initials: "JW", gradient: "from-sky-400 to-blue-500" },
-        title: "Salary sacrifice modelling",
-        preview: "Modelled £25k salary sacrifice — saves £8,400 in tax...",
-        time: "Mon",
-        tag: { label: "Sacrifice", color: "brand" },
-        messageCount: 5,
-      },
-      {
-        id: "t6",
-        client: { name: "Oliver Chen", initials: "OC", gradient: "from-violet-400 to-purple-500" },
-        title: "CGT disposal planning",
-        preview: "Mapped disposal strategy across 3 tax years to utilise...",
-        time: "Mon",
-        tag: { label: "CGT", color: "red" },
-        messageCount: 8,
-      },
-    ],
-  },
-  {
-    group: "Earlier",
-    threads: [
-      {
-        id: "t7",
-        client: { name: "Emma Davies", initials: "ED", gradient: "from-cyan-400 to-blue-400" },
-        title: "Dividend vs salary extraction",
-        preview: "Compared extraction strategies for Ltd company director...",
-        time: "8 Feb",
-        messageCount: 6,
-      },
-      {
-        id: "t8",
-        client: { name: "Sarah Mitchell", initials: "SM", gradient: "from-brand-400 to-violet-500" },
-        title: "HICBC salary sacrifice",
-        preview: "How would salary sacrifice affect her HICBC exposure...",
-        time: "5 Feb",
-        messageCount: 4,
-      },
-    ],
-  },
-];
-
 /* ─── Severity config ─── */
 
 const severityConfig = {
@@ -275,12 +191,80 @@ const severityConfig = {
   },
 };
 
+/* ─── Gradient rotation for conversation avatars ─── */
+
+const GRADIENTS = [
+  "from-brand-400 to-violet-500",
+  "from-emerald-400 to-teal-500",
+  "from-amber-400 to-orange-500",
+  "from-rose-400 to-pink-500",
+  "from-sky-400 to-blue-500",
+  "from-violet-400 to-purple-500",
+  "from-cyan-400 to-blue-400",
+];
+
+function getGradient(index: number): string {
+  return GRADIENTS[index % GRADIENTS.length];
+}
+
+/* ─── Relative time grouping ─── */
+
+function getRelativeGroup(dateStr: string): string {
+  const d = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now.getTime() - d.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+  if (diffDays === 0) return "Today";
+  if (diffDays === 1) return "Yesterday";
+  if (diffDays <= 7) return "This Week";
+  return "Earlier";
+}
+
+function formatConversationTime(dateStr: string): string {
+  const d = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now.getTime() - d.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+  if (diffDays <= 1) {
+    return d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+  }
+  if (diffDays <= 7) {
+    return d.toLocaleDateString("en-GB", { weekday: "short" });
+  }
+  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+}
+
 /* ═══════════════════════════════════════════════════
    CHAT PAGE — Refined Command Center
    ═══════════════════════════════════════════════════ */
 
 export default function ChatPage() {
-  const [messages] = useState<Message[]>(SAMPLE_MESSAGES);
+  /* ── Live data state ── */
+  const [selectedClientId, setSelectedClientId] = useState<string>("client-sarah");
+  const [clients, setClients] = useState<ClientSummary[]>([]);
+  const [clientDetail, setClientDetail] = useState<ClientDetail | null>(null);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
+  const [taxPlanMode, setTaxPlanMode] = useState(false);
+
+  /* ── useChat hook ── */
+  const {
+    messages,
+    status,
+    statusMessage,
+    isStreaming,
+    conversationId,
+    dashboardData,
+    isDashboardGenerating,
+    sendMessage,
+    stopStreaming,
+    loadMessages,
+    clearMessages,
+  } = useChat(selectedClientId, taxPlanMode);
+
+  /* ── UI state ── */
   const [input, setInput] = useState("");
   const [panelOpen, setPanelOpen] = useState(true);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -288,16 +272,61 @@ export default function ChatPage() {
   const [activeTab, setActiveTab] = useState<"overview" | "allowances" | "observations">("overview");
   const [isListening, setIsListening] = useState(false);
   const [inputFocused, setInputFocused] = useState(false);
-  const [taxPlanMode, setTaxPlanMode] = useState(false);
   const [clientMenuOpen, setClientMenuOpen] = useState(false);
   const clientMenuRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  /* ── Load clients on mount ── */
+  useEffect(() => {
+    fetch(`${API_BASE}/api/clients`)
+      .then((r) => r.json())
+      .then((data) => {
+        setClients(data.clients);
+        if (data.clients.length > 0) {
+          setSelectedClientId(data.clients[0].id);
+        }
+      })
+      .catch((err) => console.error("Failed to load clients:", err));
+  }, []);
+
+  /* ── Load conversations helper ── */
+  const loadConversations = useCallback(async () => {
+    if (!selectedClientId) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/chat/conversations?client_id=${selectedClientId}`);
+      const data = await res.json();
+      setConversations(data.conversations);
+    } catch (err) {
+      console.error("Failed to load conversations:", err);
+    }
+  }, [selectedClientId]);
+
+  /* ── Load client detail + conversations when selectedClientId changes ── */
+  useEffect(() => {
+    if (!selectedClientId) return;
+    // Fetch client detail (for observations, tax profile)
+    fetch(`${API_BASE}/api/clients/${selectedClientId}`)
+      .then((r) => r.json())
+      .then((data) => setClientDetail(data))
+      .catch((err) => console.error("Failed to load client detail:", err));
+    // Fetch conversations
+    loadConversations();
+  }, [selectedClientId, loadConversations]);
+
+  /* ── Refresh conversations after streaming completes ── */
+  useEffect(() => {
+    if (!isStreaming && conversationId) {
+      loadConversations();
+    }
+  }, [isStreaming, conversationId, loadConversations]);
+
+  /* ── Scroll to bottom when messages change ── */
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  /* ── Close client menu on outside click ── */
   useEffect(() => {
     function handleClick(e: MouseEvent) {
       if (clientMenuRef.current && !clientMenuRef.current.contains(e.target as Node)) {
@@ -308,20 +337,187 @@ export default function ChatPage() {
     return () => document.removeEventListener("mousedown", handleClick);
   }, [clientMenuOpen]);
 
-  /* Memoised history filtering — only recalculates when search changes */
+  /* ── New chat handler ── */
+  const handleNewChat = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/chat/conversations`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ client_id: selectedClientId }),
+      });
+      const data = await res.json();
+      setActiveConversationId(data.id);
+      clearMessages();
+      loadConversations();
+    } catch (err) {
+      console.error("Failed to create conversation:", err);
+    }
+  }, [selectedClientId, clearMessages, loadConversations]);
+
+  /* ── Select conversation handler ── */
+  const handleSelectConversation = useCallback((convId: string) => {
+    setActiveConversationId(convId);
+    loadMessages(convId);
+  }, [loadMessages]);
+
+  /* ── Delete conversation handler ── */
+  const handleDeleteConversation = useCallback(async (convId: string) => {
+    try {
+      await fetch(`${API_BASE}/api/chat/conversations/${convId}`, { method: "DELETE" });
+      if (activeConversationId === convId) {
+        clearMessages();
+        setActiveConversationId(null);
+      }
+      loadConversations();
+    } catch (err) {
+      console.error("Failed to delete conversation:", err);
+    }
+  }, [activeConversationId, clearMessages, loadConversations]);
+
+  /* ── Build grouped history from live conversations ── */
   const filteredHistory = useMemo(() => {
-    if (!historySearch) return CHAT_HISTORY;
-    const q = historySearch.toLowerCase();
-    return CHAT_HISTORY.map((group) => ({
-      ...group,
-      threads: group.threads.filter(
-        (t) =>
-          t.title.toLowerCase().includes(q) ||
-          t.client.name.toLowerCase().includes(q) ||
-          t.preview.toLowerCase().includes(q)
-      ),
-    })).filter((g) => g.threads.length > 0);
-  }, [historySearch]);
+    // Find the matching client info for each conversation
+    const findClient = (clientId: string) => {
+      const c = clients.find((cl) => cl.id === clientId);
+      if (!c) return { name: "Unknown", initials: "??", gradient: GRADIENTS[0] };
+      const initials = `${c.first_name?.[0] ?? ""}${c.last_name?.[0] ?? ""}`.toUpperCase();
+      const idx = clients.indexOf(c);
+      return { name: `${c.first_name} ${c.last_name}`, initials, gradient: getGradient(idx) };
+    };
+
+    // Map conversations to HistoryThread shape
+    const threads: HistoryThread[] = conversations.map((conv) => ({
+      id: conv.id,
+      client: findClient(conv.client_id),
+      title: conv.title || "New conversation",
+      preview: conv.last_message_preview || "",
+      time: conv.last_message_at ? formatConversationTime(conv.last_message_at) : formatConversationTime(conv.created_at),
+      unread: conv.unread,
+      active: conv.id === activeConversationId,
+      messageCount: conv.message_count,
+    }));
+
+    // Group by relative time
+    const groupMap: Record<string, HistoryThread[]> = {};
+    const groupOrder = ["Today", "Yesterday", "This Week", "Earlier"];
+    for (const t of threads) {
+      const conv = conversations.find((c) => c.id === t.id);
+      const dateStr = conv?.last_message_at || conv?.created_at || "";
+      const group = dateStr ? getRelativeGroup(dateStr) : "Earlier";
+      if (!groupMap[group]) groupMap[group] = [];
+      groupMap[group].push(t);
+    }
+
+    let groups = groupOrder
+      .filter((g) => groupMap[g] && groupMap[g].length > 0)
+      .map((g) => ({ group: g, threads: groupMap[g] }));
+
+    // Apply search filter
+    if (historySearch) {
+      const q = historySearch.toLowerCase();
+      groups = groups
+        .map((g) => ({
+          ...g,
+          threads: g.threads.filter(
+            (t) =>
+              t.title.toLowerCase().includes(q) ||
+              t.client.name.toLowerCase().includes(q) ||
+              t.preview.toLowerCase().includes(q)
+          ),
+        }))
+        .filter((g) => g.threads.length > 0);
+    }
+
+    return groups;
+  }, [conversations, clients, activeConversationId, historySearch]);
+
+  /* ── Derived data — prefer dashboardData over clientDetail ── */
+
+  const observations: Observation[] = useMemo(() => {
+    if (!dashboardData?.observations) return [];
+    return dashboardData.observations.map((obs: any) => ({
+      severity: (obs.type || obs.severity || "info") as "critical" | "warning" | "opportunity" | "info",
+      title: obs.title,
+      detail: obs.description || obs.detail || obs.action || "",
+    }));
+  }, [dashboardData]);
+
+  const taxBreakdownItems = useMemo(() => {
+    if (!dashboardData?.taxCalculation) return [];
+
+    const BAND_COLORS = ["bg-brand-500", "bg-violet-500", "bg-amber-500", "bg-red-400", "bg-emerald-500"];
+    const tc = dashboardData.taxCalculation;
+    const total = tc.totalIncomeTax || tc.totalTax || 1;
+    const items: { label: string; amount: string; detail: string; pct: number; color: string }[] = [];
+
+    if (tc.incomeTaxByBand && Array.isArray(tc.incomeTaxByBand)) {
+      tc.incomeTaxByBand.forEach((band: any, i: number) => {
+        const amount = band.tax ?? band.amount ?? 0;
+        items.push({
+          label: band.band || band.label || `Band ${i + 1}`,
+          amount: `\u00A3${Number(amount).toLocaleString()}`,
+          detail: band.rate ? `${(Number(band.rate) * 100).toFixed(0)}%` : "",
+          pct: Math.round((amount / total) * 100),
+          color: BAND_COLORS[i % BAND_COLORS.length],
+        });
+      });
+    }
+
+    if (dashboardData?.nationalInsurance) {
+      const ni = dashboardData.nationalInsurance;
+      const niTotal = (ni.class1 || 0) + (ni.class2 || 0) + (ni.class4 || 0);
+      if (niTotal > 0) {
+        const classes = [ni.class1 && "Class 1", ni.class2 && "Class 2", ni.class4 && "Class 4"].filter(Boolean).join(" + ");
+        items.push({
+          label: "National Insurance",
+          amount: `\u00A3${niTotal.toLocaleString()}`,
+          detail: classes,
+          pct: Math.round((niTotal / total) * 100),
+          color: BAND_COLORS[items.length % BAND_COLORS.length],
+        });
+      }
+    }
+
+    if (dashboardData?.hicbc?.charge) {
+      items.push({
+        label: "HICBC",
+        amount: `\u00A3${Number(dashboardData.hicbc.charge).toLocaleString()}`,
+        detail: "Child benefit clawback",
+        pct: Math.round((dashboardData.hicbc.charge / total) * 100),
+        color: BAND_COLORS[items.length % BAND_COLORS.length],
+      });
+    }
+
+    return items;
+  }, [dashboardData]);
+
+  const allowancesData = useMemo(() => {
+    if (!dashboardData?.allowancesTracker?.allowances) return [];
+    return dashboardData.allowancesTracker.allowances.map((a: any) => ({
+      label: a.name || a.label,
+      used: a.used ?? 0,
+      total: a.annualLimit ?? a.annual_limit ?? 0,
+    }));
+  }, [dashboardData]);
+
+  // Client data — used in context ribbon and client dropdown (from DB)
+  const clientTotalIncome = clientDetail?.tax_profile?.total_income;
+  const clientTotalTax = clientDetail?.tax_profile?.total_tax;
+  const clientEffectiveRate = clientDetail?.tax_profile?.effective_rate;
+  const clientMarginalRate = clientDetail?.tax_profile?.marginal_rate;
+
+  // Panel data — from AI-generated dashboardData only
+  const totalIncome = dashboardData?.incomeSummary?.totalIncome ?? null;
+  const totalTax = dashboardData?.taxCalculation?.totalIncomeTax ?? dashboardData?.taxCalculation?.totalTax ?? null;
+  const effectiveRate = dashboardData?.taxCalculation?.effectiveRate ?? null;
+  const marginalRate = dashboardData?.taxCalculation?.marginalRate ?? null;
+  const netIncome = totalIncome != null && totalTax != null ? totalIncome - totalTax : null;
+
+  /* ── Client display info ── */
+  const clientName = clientDetail ? `${clientDetail.first_name} ${clientDetail.last_name}` : "\u2014";
+  const clientInitials = clientDetail
+    ? `${clientDetail.first_name?.[0] ?? ""}${clientDetail.last_name?.[0] ?? ""}`.toUpperCase()
+    : "--";
 
   /* Stable callbacks to avoid child re-renders */
   const handleTextareaChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -332,8 +528,28 @@ export default function ChatPage() {
   }, []);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) e.preventDefault();
-  }, []);
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      if (input.trim() && !isStreaming) {
+        sendMessage(input);
+        setInput("");
+        // Reset textarea height
+        if (textareaRef.current) {
+          textareaRef.current.style.height = "auto";
+        }
+      }
+    }
+  }, [input, isStreaming, sendMessage]);
+
+  const handleSendClick = useCallback(() => {
+    if (input.trim() && !isStreaming) {
+      sendMessage(input);
+      setInput("");
+      if (textareaRef.current) {
+        textareaRef.current.style.height = "auto";
+      }
+    }
+  }, [input, isStreaming, sendMessage]);
 
   return (
     <div className="h-screen flex flex-col bg-[#fafbfc] dark:bg-[#0a0a0c]">
@@ -372,11 +588,11 @@ export default function ChatPage() {
               }`}
             >
               <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-brand-400 to-violet-500 flex items-center justify-center text-[10px] font-semibold text-white shadow-sm shadow-brand-500/20">
-                SM
+                {clientInitials}
               </div>
               <div className="text-left">
-                <div className="text-[12px] font-medium text-slate-900 dark:text-white leading-tight">Sarah Mitchell</div>
-                <div className="text-[10px] font-light text-slate-400 dark:text-zinc-500 leading-tight">2025/26 &middot; Active</div>
+                <div className="text-[12px] font-medium text-slate-900 dark:text-white leading-tight">{clientName}</div>
+                <div className="text-[10px] font-light text-slate-400 dark:text-zinc-500 leading-tight">{clientDetail?.tax_profile ? `${clientDetail.tax_profile.effective_rate ?? ''}%` : ''} &middot; Active</div>
               </div>
               <motion.div animate={{ rotate: clientMenuOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
                 <IconChevronDown className="w-3 h-3 text-slate-300 dark:text-zinc-600 group-hover:text-slate-500 dark:group-hover:text-zinc-400 transition-colors" />
@@ -397,24 +613,28 @@ export default function ChatPage() {
                   <div className="px-4 pt-4 pb-3 border-b border-slate-100 dark:border-zinc-800/70">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-400 to-violet-500 flex items-center justify-center text-[12px] font-semibold text-white shadow-sm shadow-brand-500/20">
-                        SM
+                        {clientInitials}
                       </div>
                       <div>
-                        <p className="text-[13px] font-medium text-slate-900 dark:text-white">Sarah Mitchell</p>
-                        <p className="text-[10px] font-light text-slate-400 dark:text-zinc-500">NI: QQ 12 34 56 C &middot; DOB: 15 Mar 1982</p>
+                        <p className="text-[13px] font-medium text-slate-900 dark:text-white">{clientName}</p>
+                        <p className="text-[10px] font-light text-slate-400 dark:text-zinc-500">
+                          {clientDetail?.ni_number ? `NI: ${clientDetail.ni_number}` : ''}
+                          {clientDetail?.ni_number && clientDetail?.date_of_birth ? ' \u00B7 ' : ''}
+                          {clientDetail?.date_of_birth ? `DOB: ${new Date(clientDetail.date_of_birth).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}
+                        </p>
                       </div>
                     </div>
                     <div className="flex items-center gap-3 mt-3">
                       <div className="flex-1 text-center px-2 py-1.5 rounded-lg bg-slate-50 dark:bg-zinc-800/60">
-                        <p className="text-[11px] font-mono font-medium text-slate-900 dark:text-white">£195,500</p>
+                        <p className="text-[11px] font-mono font-medium text-slate-900 dark:text-white">{clientTotalIncome != null ? `\u00A3${clientTotalIncome.toLocaleString()}` : '\u2014'}</p>
                         <p className="text-[8px] font-light text-slate-400 dark:text-zinc-500 uppercase tracking-wider">Gross</p>
                       </div>
                       <div className="flex-1 text-center px-2 py-1.5 rounded-lg bg-slate-50 dark:bg-zinc-800/60">
-                        <p className="text-[11px] font-mono font-medium text-red-600 dark:text-red-400">£52,847</p>
+                        <p className="text-[11px] font-mono font-medium text-red-600 dark:text-red-400">{clientTotalTax != null ? `\u00A3${clientTotalTax.toLocaleString()}` : '\u2014'}</p>
                         <p className="text-[8px] font-light text-slate-400 dark:text-zinc-500 uppercase tracking-wider">Tax</p>
                       </div>
                       <div className="flex-1 text-center px-2 py-1.5 rounded-lg bg-slate-50 dark:bg-zinc-800/60">
-                        <p className="text-[11px] font-mono font-medium text-slate-900 dark:text-white">27.0%</p>
+                        <p className="text-[11px] font-mono font-medium text-slate-900 dark:text-white">{clientEffectiveRate != null ? `${clientEffectiveRate}%` : '\u2014'}</p>
                         <p className="text-[8px] font-light text-slate-400 dark:text-zinc-500 uppercase tracking-wider">Effective</p>
                       </div>
                     </div>
@@ -426,7 +646,7 @@ export default function ChatPage() {
                     <ClientMenuItem icon={<IconFileText className="w-3.5 h-3.5" />} label="Tax documents" badge="12" />
                     <ClientMenuItem icon={<IconChart className="w-3.5 h-3.5" />} label="Scenario history" badge="3" />
                     <ClientMenuItem icon={<IconClock className="w-3.5 h-3.5" />} label="Meeting notes" />
-                    <ClientMenuItem icon={<IconBell className="w-3.5 h-3.5" />} label="Observation alerts" badge="4" accent />
+                    <ClientMenuItem icon={<IconBell className="w-3.5 h-3.5" />} label="Observation alerts" badge={observations.length > 0 ? String(observations.length) : undefined} accent />
                   </div>
 
                   {/* Footer actions */}
@@ -486,7 +706,10 @@ export default function ChatPage() {
                 <div className="flex-shrink-0 px-4 pt-4 pb-3">
                   <div className="flex items-center justify-between mb-3">
                     <span className="text-[13px] font-medium text-slate-900 dark:text-white">History</span>
-                    <button className="flex items-center gap-1.5 text-[11px] font-medium text-brand-500 dark:text-brand-400 hover:text-brand-600 dark:hover:text-brand-300 px-2 py-1 rounded-lg hover:bg-brand-50 dark:hover:bg-brand-950/30 transition-all">
+                    <button
+                      onClick={handleNewChat}
+                      className="flex items-center gap-1.5 text-[11px] font-medium text-brand-500 dark:text-brand-400 hover:text-brand-600 dark:hover:text-brand-300 px-2 py-1 rounded-lg hover:bg-brand-50 dark:hover:bg-brand-950/30 transition-all"
+                    >
                       <IconPlus className="w-3 h-3" />
                       New chat
                     </button>
@@ -514,11 +737,22 @@ export default function ChatPage() {
                       </p>
                       <div className="space-y-0.5">
                         {group.threads.map((thread, ti) => (
-                          <HistoryItem key={thread.id} thread={thread} delay={gi * 0.05 + ti * 0.03} />
+                          <HistoryItem
+                            key={thread.id}
+                            thread={thread}
+                            delay={gi * 0.05 + ti * 0.03}
+                            onSelect={() => handleSelectConversation(thread.id)}
+                            onDelete={() => handleDeleteConversation(thread.id)}
+                          />
                         ))}
                       </div>
                     </div>
                   ))}
+                  {filteredHistory.length === 0 && (
+                    <div className="text-center py-8">
+                      <p className="text-[11px] font-light text-slate-400 dark:text-zinc-600">No conversations yet</p>
+                    </div>
+                  )}
                 </div>
               </div>
             </motion.aside>
@@ -531,10 +765,10 @@ export default function ChatPage() {
           {/* ── Context ribbon ── */}
           <div className="flex-shrink-0 px-5 py-2.5 border-b border-slate-100 dark:border-zinc-800/50 bg-white/50 dark:bg-zinc-950/50 backdrop-blur-sm">
             <div className="flex items-center gap-6">
-              <ContextChip label="Gross" value="£195,500" />
-              <ContextChip label="Tax" value="£52,847" accent="red" />
-              <ContextChip label="Effective" value="27.0%" />
-              <ContextChip label="Marginal" value="40%" accent="amber" />
+              <ContextChip label="Gross" value={clientTotalIncome != null ? `\u00A3${clientTotalIncome.toLocaleString()}` : "\u2014"} />
+              <ContextChip label="Tax" value={clientTotalTax != null ? `\u00A3${clientTotalTax.toLocaleString()}` : "\u2014"} accent="red" />
+              <ContextChip label="Effective" value={clientEffectiveRate != null ? `${clientEffectiveRate}%` : "\u2014"} />
+              <ContextChip label="Marginal" value={clientMarginalRate != null ? `${clientMarginalRate}%` : "\u2014"} accent="amber" />
 
               <div className="ml-auto flex items-center gap-4">
                 {/* Tax Plan checkbox */}
@@ -592,6 +826,12 @@ export default function ChatPage() {
                   <ChatMessage message={msg} />
                 </motion.div>
               ))}
+              {(status !== "idle" || isDashboardGenerating) && (
+                <ThinkingIndicator
+                  status={isDashboardGenerating ? "building_dashboard" : status}
+                  statusMessage={isDashboardGenerating ? "Generating detailed dashboard..." : statusMessage}
+                />
+              )}
               <div ref={messagesEndRef} />
             </div>
           </div>
@@ -684,7 +924,7 @@ export default function ChatPage() {
                       onChange={handleTextareaChange}
                       onFocus={() => setInputFocused(true)}
                       onBlur={() => setInputFocused(false)}
-                      placeholder={isListening ? "Speak your question..." : "Ask about Sarah's tax position..."}
+                      placeholder={isListening ? "Speak your question..." : clientDetail ? `Ask about ${clientDetail.first_name}'s tax position...` : "Ask a question..."}
                       rows={1}
                       className="flex-1 resize-none bg-transparent pl-5 pr-2 py-4 text-[13px] font-light text-slate-900 dark:text-zinc-100 placeholder:text-slate-400/60 dark:placeholder:text-zinc-600/60 focus:outline-none"
                       style={{ minHeight: "52px", maxHeight: "160px" }}
@@ -715,6 +955,7 @@ export default function ChatPage() {
                       <motion.button
                         whileTap={{ scale: 0.92 }}
                         animate={input.trim() ? { scale: 1 } : { scale: 0.95 }}
+                        onClick={handleSendClick}
                         className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-200 ${
                           input.trim()
                             ? "bg-brand-500 text-white shadow-md shadow-brand-500/25 hover:bg-brand-600 hover:shadow-lg hover:shadow-brand-500/30"
@@ -765,72 +1006,246 @@ export default function ChatPage() {
               transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
               className="flex-shrink-0 overflow-hidden border-l border-slate-200/70 dark:border-zinc-800/70 bg-white dark:bg-zinc-950"
             >
-              <div className="w-[420px] h-full flex flex-col">
+              <div className="w-[420px] h-full flex flex-col relative">
                 {/* Panel header */}
-                <div className="flex-shrink-0 px-5 pt-5 pb-4">
+                <div className="flex-shrink-0 px-5 pt-5 pb-4 relative z-10">
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-2">
-                      <div className="w-6 h-6 rounded-md bg-gradient-to-br from-brand-400 to-violet-500 flex items-center justify-center">
-                        <IconSparkles className="w-3 h-3 text-white" />
+                      <div className={`w-6 h-6 rounded-md bg-gradient-to-br from-brand-400 to-violet-500 flex items-center justify-center transition-shadow duration-500 ${isDashboardGenerating ? "shadow-md shadow-brand-500/30 dark:shadow-brand-400/20" : ""}`}>
+                        <span className={`inline-flex transition-transform duration-700 ${isDashboardGenerating ? "animate-spin [animation-duration:3s]" : ""}`}>
+                          <IconSparkles className="w-3 h-3 text-white" />
+                        </span>
                       </div>
                       <span className="text-[13px] font-medium text-slate-900 dark:text-white">Intelligence</span>
+                      <AnimatePresence>
+                        {isDashboardGenerating && (
+                          <motion.span
+                            initial={{ opacity: 0, x: -4 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: -4 }}
+                            transition={{ duration: 0.2 }}
+                            className="text-[10px] font-medium text-brand-500 dark:text-brand-400 flex items-center gap-1.5"
+                          >
+                            <span className="relative flex h-1.5 w-1.5">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-400 opacity-75" />
+                              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-brand-500" />
+                            </span>
+                            Generating
+                          </motion.span>
+                        )}
+                      </AnimatePresence>
                     </div>
                     <button className="text-[11px] font-light text-brand-500 hover:text-brand-600 dark:text-brand-400 dark:hover:text-brand-300 flex items-center gap-1 transition-colors">
                       Export <IconArrowRight className="w-2.5 h-2.5" />
                     </button>
                   </div>
 
-                  {/* Stat cards — horizontal scroll */}
+                  {/* Stat cards */}
                   <div className="grid grid-cols-2 gap-2">
-                    <MiniStat icon={<IconCalculator className="w-3.5 h-3.5" />} label="Gross income" value="£195,500" />
-                    <MiniStat icon={<IconPieChart className="w-3.5 h-3.5" />} label="Tax liability" value="£52,847" accent />
-                    <MiniStat icon={<IconChart className="w-3.5 h-3.5" />} label="Effective rate" value="27.0%" />
-                    <MiniStat icon={<IconWallet className="w-3.5 h-3.5" />} label="Net income" value="£142,653" />
+                    <MiniStat icon={<IconCalculator className="w-3.5 h-3.5" />} label="Gross income" value={totalIncome != null ? `\u00A3${totalIncome.toLocaleString()}` : "\u2014"} />
+                    <MiniStat icon={<IconPieChart className="w-3.5 h-3.5" />} label="Tax liability" value={totalTax != null ? `\u00A3${totalTax.toLocaleString()}` : "\u2014"} accent />
+                    <MiniStat icon={<IconChart className="w-3.5 h-3.5" />} label="Effective rate" value={effectiveRate != null ? `${effectiveRate}%` : "\u2014"} />
+                    <MiniStat icon={<IconWallet className="w-3.5 h-3.5" />} label="Net income" value={netIncome != null ? `\u00A3${netIncome.toLocaleString()}` : "\u2014"} />
                   </div>
                 </div>
 
-                {/* Tabs */}
-                <div className="flex-shrink-0 px-5 pb-3">
-                  <div className="flex gap-0.5 bg-slate-100/80 dark:bg-zinc-800/80 rounded-lg p-0.5">
-                    {(["overview", "allowances", "observations"] as const).map((tab) => (
-                      <button
-                        key={tab}
-                        onClick={() => setActiveTab(tab)}
-                        className={`relative flex-1 px-2 py-1.5 text-[11px] font-medium rounded-md transition-all ${
-                          activeTab === tab
-                            ? "text-slate-900 dark:text-white"
-                            : "text-slate-400 dark:text-zinc-500 hover:text-slate-600 dark:hover:text-zinc-300"
-                        }`}
+                {!taxPlanMode && !dashboardData ? (
+                  /* ── Empty state — "Dormant Observatory" ── */
+                  <div className="flex-1 flex flex-col relative overflow-hidden">
+                    {/* Dot-matrix background texture */}
+                    <div
+                      className="absolute inset-0 pointer-events-none opacity-[0.035] dark:opacity-[0.06]"
+                      style={{
+                        backgroundImage: 'radial-gradient(circle, currentColor 0.5px, transparent 0.5px)',
+                        backgroundSize: '18px 18px',
+                      }}
+                    />
+
+                    {/* Content */}
+                    <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-6">
+
+                      {/* Central composition — ghost dashboard preview with floating satellites */}
+                      <div className="relative mb-10">
+                        {/* Main preview card */}
+                        <motion.div
+                          initial={{ opacity: 0, scale: 0.94, y: 20 }}
+                          animate={{ opacity: 1, scale: 1, y: 0 }}
+                          transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+                          className="w-[260px] rounded-2xl border border-slate-200/60 dark:border-zinc-800/40 bg-white/70 dark:bg-zinc-900/50 backdrop-blur-md shadow-xl shadow-slate-200/30 dark:shadow-black/30 p-5"
+                        >
+                          {/* Card header skeleton */}
+                          <div className="flex items-center gap-2 mb-4">
+                            <div className="w-5 h-5 rounded-md bg-brand-100/80 dark:bg-brand-900/30 flex items-center justify-center">
+                              <IconPieChart className="w-2.5 h-2.5 text-brand-400/70 dark:text-brand-500/60" />
+                            </div>
+                            <div className="h-2 w-20 rounded-full bg-slate-100 dark:bg-zinc-800/80" />
+                            <div className="ml-auto h-2 w-8 rounded-full bg-slate-100 dark:bg-zinc-800/80" />
+                          </div>
+
+                          {/* Ghost bar chart */}
+                          <div className="flex items-end gap-[5px] h-[72px]">
+                            {[38, 62, 26, 80, 48, 70, 30, 58, 44, 74, 52, 66].map((h, i) => (
+                              <motion.div
+                                key={i}
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: `${h}%`, opacity: 1 }}
+                                transition={{
+                                  delay: 0.35 + i * 0.04,
+                                  duration: 0.8,
+                                  ease: [0.16, 1, 0.3, 1],
+                                }}
+                                className="flex-1 rounded-[3px] bg-gradient-to-t from-brand-300/30 to-brand-200/10 dark:from-brand-700/25 dark:to-brand-800/10"
+                              />
+                            ))}
+                          </div>
+
+                          {/* Ghost axis labels */}
+                          <div className="mt-3 flex items-center gap-[6px]">
+                            <div className="h-[1px] flex-1 bg-slate-150 dark:bg-zinc-800/60" />
+                            <div className="h-1.5 w-7 rounded-full bg-slate-100 dark:bg-zinc-800/60" />
+                            <div className="h-1.5 w-11 rounded-full bg-slate-100 dark:bg-zinc-800/60" />
+                            <div className="h-1.5 w-5 rounded-full bg-slate-100 dark:bg-zinc-800/60" />
+                          </div>
+                        </motion.div>
+
+                        {/* Floating satellite — trend indicator (top right) */}
+                        <motion.div
+                          initial={{ opacity: 0, x: -10, y: 10 }}
+                          animate={{ opacity: 1, x: 0, y: 0 }}
+                          transition={{ delay: 0.55, duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+                          className="absolute -top-3 -right-5 rounded-xl border border-slate-200/50 dark:border-zinc-800/40 bg-white/90 dark:bg-zinc-900/70 backdrop-blur-sm shadow-lg shadow-slate-200/20 dark:shadow-black/20 px-3 py-2.5 flex items-center gap-2.5"
+                        >
+                          <div className="w-5 h-5 rounded-md bg-emerald-50 dark:bg-emerald-950/30 flex items-center justify-center">
+                            <IconTrendingUp className="w-2.5 h-2.5 text-emerald-400/80" />
+                          </div>
+                          <div>
+                            <div className="h-1.5 w-9 rounded-full bg-slate-100 dark:bg-zinc-800/80 mb-1.5" />
+                            <div className="h-2.5 w-14 rounded-full bg-emerald-100/50 dark:bg-emerald-900/20" />
+                          </div>
+                        </motion.div>
+
+                        {/* Floating satellite — allowance badge (bottom left) */}
+                        <motion.div
+                          initial={{ opacity: 0, x: 10, y: -10 }}
+                          animate={{ opacity: 1, x: 0, y: 0 }}
+                          transition={{ delay: 0.65, duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+                          className="absolute -bottom-2 -left-4 rounded-xl border border-slate-200/50 dark:border-zinc-800/40 bg-white/90 dark:bg-zinc-900/70 backdrop-blur-sm shadow-lg shadow-slate-200/20 dark:shadow-black/20 px-3 py-2.5 flex items-center gap-2.5"
+                        >
+                          <div className="w-5 h-5 rounded-md bg-brand-50 dark:bg-brand-950/30 flex items-center justify-center">
+                            <IconShield className="w-2.5 h-2.5 text-brand-400/80" />
+                          </div>
+                          <div>
+                            <div className="h-1.5 w-11 rounded-full bg-slate-100 dark:bg-zinc-800/80 mb-1.5" />
+                            <div className="h-2.5 w-16 rounded-full bg-brand-100/50 dark:bg-brand-900/20" />
+                          </div>
+                        </motion.div>
+                      </div>
+
+                      {/* Copy */}
+                      <motion.div
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.55, duration: 0.5 }}
+                        className="text-center mb-8"
                       >
-                        {activeTab === tab && (
-                          <motion.div
-                            layoutId="panel-tab"
-                            className="absolute inset-0 bg-white dark:bg-zinc-700 rounded-md shadow-sm"
-                            transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-                          />
-                        )}
-                        <span className="relative z-10 capitalize">{tab}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                        <p className="text-[15px] font-medium text-slate-800 dark:text-zinc-200 tracking-[-0.01em]">
+                          Intelligence standing by
+                        </p>
+                        <p className="text-[11px] font-light text-slate-400 dark:text-zinc-500 mt-2 max-w-[250px] mx-auto leading-relaxed">
+                          Activate Tax Plan to unlock real-time breakdown, allowance tracking, and planning insights
+                        </p>
+                      </motion.div>
 
-                {/* Tab content */}
-                <div className="flex-1 overflow-y-auto px-5 pb-5">
-                  <AnimatePresence mode="wait">
-                    <motion.div
-                      key={activeTab}
-                      initial={{ opacity: 0, y: 6 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -6 }}
-                      transition={{ duration: 0.2 }}
-                    >
-                      {activeTab === "overview" && <TaxBreakdown />}
-                      {activeTab === "allowances" && <AllowancesPanel />}
-                      {activeTab === "observations" && <ObservationsPanel />}
-                    </motion.div>
-                  </AnimatePresence>
-                </div>
+                      {/* CTA — gradient-bordered pill */}
+                      <motion.button
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.7, duration: 0.4 }}
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.97 }}
+                        onClick={() => { setTaxPlanMode(true); setPanelOpen(true); }}
+                        className="group relative"
+                      >
+                        {/* Outer glow border */}
+                        <div className="absolute -inset-[1px] rounded-2xl bg-gradient-to-r from-brand-400 via-violet-400 to-brand-400 opacity-40 group-hover:opacity-100 transition-opacity duration-500 blur-[0.5px]" />
+                        <div className="relative flex items-center gap-3 px-7 py-3.5 rounded-2xl bg-white dark:bg-zinc-900 transition-all duration-300">
+                          <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-brand-500 to-violet-500 flex items-center justify-center shadow-sm shadow-brand-500/20 group-hover:shadow-md group-hover:shadow-brand-500/30 transition-shadow duration-300">
+                            <IconSparkles className="w-3 h-3 text-white" />
+                          </div>
+                          <span className="text-[12px] font-medium text-slate-600 dark:text-zinc-300 group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors duration-300">
+                            Activate Tax Plan
+                          </span>
+                          <IconArrowRight className="w-3 h-3 text-slate-300 dark:text-zinc-600 group-hover:text-brand-500 group-hover:translate-x-0.5 transition-all duration-300" />
+                        </div>
+                      </motion.button>
+
+                      {/* Feature indicators */}
+                      <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ delay: 0.85, duration: 0.5 }}
+                        className="flex items-center gap-4 mt-6"
+                      >
+                        {["Tax breakdown", "Allowances", "Opportunities"].map((feat) => (
+                          <div key={feat} className="flex items-center gap-1.5">
+                            <div className="w-1 h-1 rounded-full bg-brand-400/40 dark:bg-brand-500/30" />
+                            <span className="text-[9px] font-light text-slate-400/60 dark:text-zinc-600/50 tracking-wide">{feat}</span>
+                          </div>
+                        ))}
+                      </motion.div>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    {/* Tabs */}
+                    <div className="flex-shrink-0 px-5 pb-3 relative z-10">
+                      <div className="flex gap-0.5 bg-slate-100/80 dark:bg-zinc-800/80 rounded-lg p-0.5">
+                        {(["overview", "allowances", "observations"] as const).map((tab) => (
+                          <button
+                            key={tab}
+                            onClick={() => setActiveTab(tab)}
+                            className={`relative flex-1 px-2 py-1.5 text-[11px] font-medium rounded-md transition-all ${
+                              activeTab === tab
+                                ? "text-slate-900 dark:text-white"
+                                : "text-slate-400 dark:text-zinc-500 hover:text-slate-600 dark:hover:text-zinc-300"
+                            }`}
+                          >
+                            {activeTab === tab && (
+                              <motion.div
+                                layoutId="panel-tab"
+                                className="absolute inset-0 bg-white dark:bg-zinc-700 rounded-md shadow-sm"
+                                transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                              />
+                            )}
+                            <span className="relative z-10 capitalize">{tab}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Tab content — relative container for overlay */}
+                    <div className="flex-1 overflow-y-auto px-5 pb-5 relative">
+                      <AnimatePresence mode="wait">
+                        <motion.div
+                          key={activeTab}
+                          initial={{ opacity: 0, y: 6 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -6 }}
+                          transition={{ duration: 0.2 }}
+                        >
+                          {activeTab === "overview" && <TaxBreakdown items={taxBreakdownItems} totalTax={totalTax} isGenerating={isDashboardGenerating} />}
+                          {activeTab === "allowances" && <AllowancesPanel allowances={allowancesData} isGenerating={isDashboardGenerating} />}
+                          {activeTab === "observations" && <ObservationsPanel observations={observations} isGenerating={isDashboardGenerating} />}
+                        </motion.div>
+                      </AnimatePresence>
+
+                      {/* Dashboard generating overlay */}
+                      <AnimatePresence>
+                        {isDashboardGenerating && <DashboardGeneratingOverlay />}
+                      </AnimatePresence>
+                    </div>
+                  </>
+                )}
               </div>
             </motion.aside>
           )}
@@ -843,6 +1258,150 @@ export default function ChatPage() {
 /* ═══════════════════════════════════════════════════
    SUB-COMPONENTS
    ═══════════════════════════════════════════════════ */
+
+/* ── Panel generating skeleton (replaces empty state text) ── */
+
+function PanelGeneratingSkeleton() {
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+      className="space-y-4 py-2"
+    >
+      {/* Pulsing status label */}
+      <div className="flex items-center justify-center gap-2 pb-2">
+        <span className="relative flex h-2 w-2">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-400 opacity-50" />
+          <span className="relative inline-flex rounded-full h-2 w-2 bg-brand-500" />
+        </span>
+        <span className="text-[11px] font-medium text-brand-500 dark:text-brand-400 listen-pulse">
+          Analysing tax data...
+        </span>
+      </div>
+
+      {/* Shimmer bar skeleton (looks like a stacked bar chart loading) */}
+      <div className="h-3 rounded-lg overflow-hidden flex gap-0.5">
+        {[40, 25, 20, 15].map((w, i) => (
+          <div
+            key={i}
+            className="h-full rounded-md dash-shimmer-bar"
+            style={{
+              width: `${w}%`,
+              animationDelay: `${i * 0.2}s`,
+              background: `linear-gradient(90deg, transparent 0%, rgba(92,124,250,${0.08 + i * 0.02}) 50%, transparent 100%)`,
+              backgroundSize: '200% 100%',
+            }}
+          />
+        ))}
+      </div>
+
+      {/* Skeleton rows */}
+      {[1, 2, 3, 4].map((_, i) => (
+        <motion.div
+          key={i}
+          initial={{ opacity: 0, x: -6 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: 0.1 + i * 0.08, duration: 0.4 }}
+          className="flex items-center justify-between py-2.5 border-b border-slate-100/60 dark:border-zinc-800/40"
+        >
+          <div className="flex items-center gap-2.5">
+            <div className="w-1 h-8 rounded-full dash-shimmer-bar" style={{ animationDelay: `${i * 0.15}s` }} />
+            <div className="space-y-1.5">
+              <div
+                className="h-2.5 rounded dash-shimmer-bar"
+                style={{ width: `${70 + ((i * 23) % 40)}px`, animationDelay: `${i * 0.2}s` }}
+              />
+              <div
+                className="h-2 rounded dash-shimmer-bar"
+                style={{ width: `${40 + ((i * 17) % 25)}px`, animationDelay: `${0.1 + i * 0.2}s` }}
+              />
+            </div>
+          </div>
+          <div
+            className="h-3 rounded dash-shimmer-bar"
+            style={{ width: `${50 + ((i * 13) % 30)}px`, animationDelay: `${0.15 + i * 0.15}s` }}
+          />
+        </motion.div>
+      ))}
+
+      {/* Skeleton total row */}
+      <div className="flex justify-between items-center pt-2 border-t border-slate-200/50 dark:border-zinc-700/50">
+        <div className="h-3 w-24 rounded dash-shimmer-bar" />
+        <div className="h-4 w-20 rounded dash-shimmer-bar" style={{ animationDelay: '0.3s' }} />
+      </div>
+    </motion.div>
+  );
+}
+
+/* ── Dashboard generating overlay ── */
+
+const SHIMMER_ROWS = Array.from({ length: 7 }, (_, i) => ({
+  i,
+  top: `${12 + i * 13}%`,
+  width: `${45 + ((i * 17 + 11) % 40)}%`,
+  dur: `${2.2 + (i % 3) * 0.4}s`,
+  del: `${i * 0.3}s`,
+}));
+
+const DATA_DOTS = Array.from({ length: 12 }, (_, i) => ({
+  i,
+  left: `${10 + ((i * 23 + 7) % 75)}%`,
+  top: `${8 + ((i * 19 + 13) % 78)}%`,
+  dur: `${1.6 + (i % 4) * 0.35}s`,
+  del: `${0.1 + (i * 0.25)}s`,
+  size: i % 3 === 0 ? 'w-1 h-1' : 'w-0.5 h-0.5',
+}));
+
+function DashboardGeneratingOverlay() {
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+      className="absolute inset-0 z-20 pointer-events-none overflow-hidden rounded-b-xl"
+    >
+      {/* Soft background glow */}
+      <div className="absolute inset-0 bg-gradient-to-b from-brand-500/[0.02] via-violet-500/[0.03] to-transparent dark:from-brand-400/[0.02] dark:via-violet-400/[0.02] dash-glow-bg" />
+
+      {/* Scan line sweeping down */}
+      <div className="dash-overlay-scan-line" />
+
+      {/* Shimmer data rows — horizontal bars appearing/fading */}
+      {SHIMMER_ROWS.map((row) => (
+        <div
+          key={row.i}
+          className="absolute left-[10%] h-[3px] rounded-full dash-shimmer-bar dash-row-shimmer"
+          style={{
+            top: row.top,
+            width: row.width,
+            ['--row-dur' as string]: row.dur,
+            ['--row-del' as string]: row.del,
+          }}
+        />
+      ))}
+
+      {/* Scattered data dots — appearing like data points being plotted */}
+      {DATA_DOTS.map((dot) => (
+        <div
+          key={dot.i}
+          className={`absolute rounded-full bg-brand-400/40 dark:bg-brand-400/30 dash-cell-dot ${dot.size}`}
+          style={{
+            left: dot.left,
+            top: dot.top,
+            ['--cell-dur' as string]: dot.dur,
+            ['--cell-del' as string]: dot.del,
+          }}
+        />
+      ))}
+
+      {/* Edge gradient vignette — softens the overlay edges */}
+      <div className="absolute inset-0 bg-gradient-to-t from-white/60 via-transparent to-white/40 dark:from-zinc-950/60 dark:via-transparent dark:to-zinc-950/40" />
+    </motion.div>
+  );
+}
 
 /* ── Context ribbon chip ── */
 
@@ -899,38 +1458,8 @@ const ChatMessage = memo(function ChatMessage({ message }: { message: Message })
             <span className="text-[10px] font-light text-slate-400 dark:text-zinc-600">{message.timestamp}</span>
           </div>
 
-          {/* Message body — render lines with formatting */}
-          <div className="text-[13px] font-light text-slate-700 dark:text-zinc-300 leading-[1.7]">
-            {message.content.split("\n").map((line, i) => {
-              if (!line.trim()) return <div key={i} className="h-2" />;
-
-              // Lines starting with a number and dot get styled as list items
-              const listMatch = line.match(/^(\d+)\.\s(.+)/);
-              if (listMatch) {
-                return (
-                  <div key={i} className="flex gap-2.5 py-0.5">
-                    <span className="flex-shrink-0 w-5 h-5 rounded-full bg-brand-50 dark:bg-brand-950/30 text-brand-600 dark:text-brand-400 flex items-center justify-center text-[10px] font-medium mt-0.5">
-                      {listMatch[1]}
-                    </span>
-                    <span className="flex-1">{formatHighlights(listMatch[2])}</span>
-                  </div>
-                );
-              }
-
-              // Lines with key-value pattern (Label: Value)
-              const kvMatch = line.match(/^(.+?):\s*(£[\d,.]+|[\d.]+%?)$/);
-              if (kvMatch) {
-                return (
-                  <div key={i} className="flex items-center justify-between py-0.5 border-b border-dashed border-slate-100 dark:border-zinc-800/50 last:border-0">
-                    <span className="text-slate-500 dark:text-zinc-400">{kvMatch[1]}</span>
-                    <span className="font-mono font-medium text-slate-900 dark:text-white text-[12px]">{kvMatch[2]}</span>
-                  </div>
-                );
-              }
-
-              return <p key={i}>{formatHighlights(line)}</p>;
-            })}
-          </div>
+          {/* Message body — markdown rendered */}
+          <MarkdownRenderer content={message.content} />
 
           {/* Insight chips */}
           {message.insights && (
@@ -968,22 +1497,6 @@ const ChatMessage = memo(function ChatMessage({ message }: { message: Message })
   );
 });
 
-/* ── Format inline highlights ── */
-
-function formatHighlights(text: string) {
-  // Highlight pound amounts and percentages
-  const parts = text.split(/(£[\d,]+(?:\.\d+)?|\d+(?:\.\d+)?%)/g);
-  return parts.map((part, i) => {
-    if (/^£/.test(part)) {
-      return <span key={i} className="font-mono font-medium text-slate-900 dark:text-white">{part}</span>;
-    }
-    if (/\d+(?:\.\d+)?%$/.test(part)) {
-      return <span key={i} className="font-mono font-medium text-slate-900 dark:text-white">{part}</span>;
-    }
-    return <span key={i}>{part}</span>;
-  });
-}
-
 /* ── Mini stat (panel) ── */
 
 const MiniStat = memo(function MiniStat({ icon, label, value, accent }: { icon: React.ReactNode; label: string; value: string; accent?: boolean }) {
@@ -1004,13 +1517,19 @@ const MiniStat = memo(function MiniStat({ icon, label, value, accent }: { icon: 
 
 /* ─── Tax Breakdown ─── */
 
-function TaxBreakdown() {
-  const items = [
-    { label: "Income Tax", amount: "£42,432", detail: "Basic + Higher rate", pct: 65, color: "bg-brand-500" },
-    { label: "National Insurance", amount: "£5,486", detail: "Class 1 primary", pct: 16, color: "bg-violet-500" },
-    { label: "Dividend Tax", amount: "£4,069", detail: "Higher rate on £32,000", pct: 12, color: "bg-amber-500" },
-    { label: "HICBC", amount: "£860", detail: "Child benefit clawback", pct: 5, color: "bg-red-400" },
-  ];
+function TaxBreakdown({ items, totalTax, isGenerating }: { items: { label: string; amount: string; detail: string; pct: number; color: string }[]; totalTax?: number | null; isGenerating?: boolean }) {
+  if (items.length === 0) {
+    if (isGenerating) {
+      return <PanelGeneratingSkeleton />;
+    }
+    return (
+      <div className="text-center py-8">
+        <IconPieChart className="w-8 h-8 text-slate-200 dark:text-zinc-700 mx-auto mb-3" />
+        <p className="text-[12px] font-medium text-slate-400 dark:text-zinc-500">No tax breakdown yet</p>
+        <p className="text-[11px] font-light text-slate-400/60 dark:text-zinc-600/60 mt-1">Enable Tax Plan mode and ask Helio to analyse</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -1063,7 +1582,7 @@ function TaxBreakdown() {
       {/* Total */}
       <div className="flex justify-between items-center pt-2 border-t border-slate-200 dark:border-zinc-700">
         <span className="text-[12px] font-medium text-slate-900 dark:text-white">Total tax liability</span>
-        <span className="text-base font-mono font-semibold text-slate-900 dark:text-white">£52,847</span>
+        <span className="text-base font-mono font-semibold text-slate-900 dark:text-white">{totalTax != null ? `\u00A3${totalTax.toLocaleString()}` : "\u2014"}</span>
       </div>
     </div>
   );
@@ -1071,21 +1590,26 @@ function TaxBreakdown() {
 
 /* ─── Allowances ─── */
 
-function AllowancesPanel() {
-  const allowances = [
-    { label: "Personal Allowance", used: 12570, total: 12570 },
-    { label: "Pension Annual Allowance", used: 18000, total: 60000 },
-    { label: "ISA Allowance", used: 0, total: 20000 },
-    { label: "Dividend Allowance", used: 500, total: 500 },
-    { label: "CGT Annual Exemption", used: 0, total: 3000 },
-  ];
+function AllowancesPanel({ allowances, isGenerating }: { allowances: { label: string; used: number; total: number }[]; isGenerating?: boolean }) {
+  if (allowances.length === 0) {
+    if (isGenerating) {
+      return <PanelGeneratingSkeleton />;
+    }
+    return (
+      <div className="text-center py-8">
+        <IconShield className="w-8 h-8 text-slate-200 dark:text-zinc-700 mx-auto mb-3" />
+        <p className="text-[12px] font-medium text-slate-400 dark:text-zinc-500">No allowance data yet</p>
+        <p className="text-[11px] font-light text-slate-400/60 dark:text-zinc-600/60 mt-1">Enable Tax Plan mode and ask Helio to analyse</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
       {allowances.map((a, i) => {
-        const pct = Math.round((a.used / a.total) * 100);
+        const pct = a.total > 0 ? Math.round((a.used / a.total) * 100) : 0;
         const remaining = a.total - a.used;
-        const fmt = (n: number) => n >= 1000 ? `£${(n / 1000).toFixed(n % 1000 === 0 ? 0 : 1)}k` : `£${n}`;
+        const fmt = (n: number) => n >= 1000 ? `\u00A3${(n / 1000).toFixed(n % 1000 === 0 ? 0 : 1)}k` : `\u00A3${n}`;
         const barColor =
           pct >= 100 ? "bg-red-400" :
           pct >= 75 ? "bg-amber-400" :
@@ -1124,11 +1648,22 @@ function AllowancesPanel() {
 
 /* ─── Observations ─── */
 
-function ObservationsPanel() {
+function ObservationsPanel({ observations, isGenerating }: { observations: Observation[]; isGenerating?: boolean }) {
+  if (observations.length === 0) {
+    if (isGenerating) {
+      return <PanelGeneratingSkeleton />;
+    }
+    return (
+      <div className="text-center py-8">
+        <p className="text-[11px] font-light text-slate-400 dark:text-zinc-600">No observations available</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-2.5">
-      {SAMPLE_OBSERVATIONS.map((obs, i) => {
-        const config = severityConfig[obs.severity];
+      {observations.map((obs, i) => {
+        const config = severityConfig[obs.severity] || severityConfig.info;
         return (
           <motion.div
             key={i}
@@ -1169,7 +1704,7 @@ const tagColors: Record<string, string> = {
   red: "bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 border-red-200/40 dark:border-red-800/30",
 };
 
-function HistoryItem({ thread, delay }: { thread: HistoryThread; delay: number }) {
+function HistoryItem({ thread, delay, onSelect, onDelete }: { thread: HistoryThread; delay: number; onSelect: () => void; onDelete: () => void }) {
   const [confirming, setConfirming] = useState(false);
 
   return (
@@ -1177,6 +1712,7 @@ function HistoryItem({ thread, delay }: { thread: HistoryThread; delay: number }
       initial={{ opacity: 0, x: -10 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ delay, duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+      onClick={onSelect}
       className={`group relative w-full text-left px-3 py-2.5 rounded-lg transition-all ${
         confirming
           ? "bg-red-50/60 dark:bg-red-950/10 border border-red-200/40 dark:border-red-800/20"
@@ -1206,7 +1742,7 @@ function HistoryItem({ thread, delay }: { thread: HistoryThread; delay: number }
           >
             <span className="text-[10px] font-medium text-red-600 dark:text-red-400">Delete?</span>
             <span
-              onClick={(e) => { e.stopPropagation(); /* handle delete */ }}
+              onClick={(e) => { e.stopPropagation(); onDelete(); setConfirming(false); }}
               className="text-[10px] font-medium text-white bg-red-500 hover:bg-red-600 px-2.5 py-1 rounded-md transition-colors cursor-pointer shadow-sm shadow-red-500/20"
             >
               Yes

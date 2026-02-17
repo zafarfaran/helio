@@ -23,6 +23,7 @@ class ChatStreamRequest(BaseModel):
     conversation_id: str | None = None
     client_id: str
     message: str
+    tax_plan_mode: bool = False
 
 
 class CreateConversationRequest(BaseModel):
@@ -63,6 +64,7 @@ async def chat_stream(
             user_id=user_id,
             client_id=body.client_id,
             content=body.message,
+            tax_plan_mode=body.tax_plan_mode,
         ):
             data = json.dumps(asdict(event))
             yield f"event: {event.type}\ndata: {data}\n\n"
@@ -166,6 +168,7 @@ async def get_messages(
                 "role": m.role,
                 "content": m.content,
                 "insights": m.insights,
+                "dashboard_data": m.dashboard_data,
                 "created_at": m.created_at.isoformat() if m.created_at else None,
             }
             for m in messages

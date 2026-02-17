@@ -8,9 +8,16 @@ from sqlalchemy import desc, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import get_logger
-from app.db.models import Client, Conversation, Message, Observation, TaxProfile
+from app.db.models import Client, Conversation, MeetingNote, Message, Observation, TaxProfile
 from app.services.llm.factory import get_llm_provider
-from app.services.llm.types import DoneEvent, ErrorEvent, StreamEvent, TokenEvent
+from app.services.llm.types import (
+    DashboardUpdateEvent,
+    DoneEvent,
+    ErrorEvent,
+    StreamEvent,
+    TokenEvent,
+    ToolResultEvent,
+)
 from app.services.system_prompt import build_system_prompt
 
 logger = get_logger(__name__)
@@ -152,6 +159,7 @@ class ChatService:
         user_id: str,
         client_id: str,
         content: str,
+        tax_plan_mode: bool = False,
     ) -> AsyncGenerator[StreamEvent, None]:
         """Send a user message and stream the LLM assistant response.
 
@@ -196,7 +204,7 @@ class ChatService:
         client_context = await self._load_client_context(client_id)
 
         # 5. Build system prompt with client context
-        system_prompt = build_system_prompt(client_context)
+        system_prompt = build_system_prompt(client_context, tax_plan_mode=tax_plan_mode)
 
         # 6. Format messages for LLM
         llm_messages = [{"role": m.role, "content": m.content} for m in history]
@@ -205,6 +213,7 @@ class ChatService:
         provider = get_llm_provider()
         full_response = ""
         assistant_message_id = str(uuid.uuid4())
+        dashboard_data: dict | None = None
 
         # 8. Iterate the async generator
         logger.info(
@@ -213,9 +222,23 @@ class ChatService:
             history_length=len(llm_messages),
             has_client_context=client_context is not None,
         )
-        async for event in provider.stream_chat(llm_messages, system_prompt):
+        # Always provide base tools; add dashboard tools in tax plan mode
+        from app.services.llm.claude import BASE_TOOLS, DASHBOARD_TOOLS
+
+        tools = list(BASE_TOOLS)
+        if tax_plan_mode:
+            tools.extend(DASHBOARD_TOOLS)
+
+        tool_context = {"client_id": client_id}
+        async for event in provider.stream_chat(
+            llm_messages, system_prompt, tools=tools, tool_context=tool_context
+        ):
             if isinstance(event, TokenEvent):
                 full_response += event.content
+            elif isinstance(event, ToolResultEvent) and event.tool == "generate_dashboard":
+                result = event.result
+                if result.get("success"):
+                    dashboard_data = result.get("dashboardData")
             elif isinstance(event, ErrorEvent):
                 logger.error(
                     "LLM stream error",
@@ -225,12 +248,13 @@ class ChatService:
                 )
             yield event
 
-        # 9. Save assistant message with full_response
+        # 9. Save assistant message with full_response and dashboard_data
         assistant_message = Message(
             id=assistant_message_id,
             conversation_id=conversation_id,
             role="assistant",
             content=full_response,
+            dashboard_data=dashboard_data,
         )
         self.session.add(assistant_message)
         logger.info(
@@ -326,6 +350,15 @@ class ChatService:
         )
         observations = list(result.scalars().all())
 
+        # Load meeting notes — lightweight (dates + subjects only for the index)
+        result = await self.session.execute(
+            select(MeetingNote.meeting_date, MeetingNote.subject)
+            .where(MeetingNote.client_id == client_id)
+            .order_by(desc(MeetingNote.meeting_date))
+            .limit(10)
+        )
+        meeting_notes = result.all()
+
         # Build context dict
         context: dict = {
             "client": {
@@ -362,10 +395,20 @@ class ChatService:
                 for obs in observations
             ]
 
+        if meeting_notes:
+            context["meeting_notes"] = [
+                {
+                    "date": note.meeting_date.strftime("%Y-%m-%d"),
+                    "subject": note.subject,
+                }
+                for note in meeting_notes
+            ]
+
         logger.debug(
             "Client context loaded",
             client_id=client_id,
             has_tax_profile=tax_profile is not None,
             observation_count=len(observations),
+            meeting_note_count=len(meeting_notes),
         )
         return context

@@ -98,6 +98,7 @@ class Client(Base):
     documents = relationship("Document", back_populates="client")
     conversations = relationship("Conversation", back_populates="client")
     observations = relationship("Observation", back_populates="client")
+    meeting_notes = relationship("MeetingNote", back_populates="client", order_by="MeetingNote.meeting_date.desc()")
 
 
 # ─── 4. TaxProfile ─────────────────────────────────────────────────────────
@@ -251,3 +252,26 @@ class Observation(Base):
 
     # relationships
     client = relationship("Client", back_populates="observations")
+
+
+# ─── 9. MeetingNote ───────────────────────────────────────────────────────
+
+
+class MeetingNote(Base):
+    __tablename__ = "meeting_notes"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    client_id: Mapped[str] = mapped_column(ForeignKey("clients.id"), nullable=False)
+    author_id: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False)
+    meeting_date: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    subject: Mapped[str] = mapped_column(String, nullable=False)
+    attendees: Mapped[str | None] = mapped_column(String)
+    summary: Mapped[str] = mapped_column(Text, nullable=False)
+    action_items: Mapped[list | None] = mapped_column(JSON, default=list)
+    tags: Mapped[list | None] = mapped_column(JSON, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
+
+    # relationships
+    client = relationship("Client", back_populates="meeting_notes")
+    author = relationship("User", foreign_keys=[author_id])

@@ -1,5 +1,6 @@
-"""Anthropic Claude LLM adapter."""
+"""Anthropic Claude LLM adapter with tool-calling support."""
 
+import json
 from collections.abc import AsyncGenerator
 
 import anthropic
@@ -7,15 +8,75 @@ import anthropic
 from app.config import get_settings
 from app.core.logging import get_logger
 from app.services.llm.types import (
+    DashboardUpdateEvent,
     DoneEvent,
     ErrorEvent,
     StatusEvent,
     StatusPhase,
     StreamEvent,
     TokenEvent,
+    ToolCallEvent,
+    ToolResultEvent,
 )
+from app.services.tools import execute_tool
 
 logger = get_logger(__name__)
+
+MAX_TOOL_ROUNDS = 3
+
+BASE_TOOLS = [
+    {
+        "name": "search_meeting_notes",
+        "description": (
+            "Search through the client's meeting notes to find relevant past discussions, "
+            "decisions, action items, and context. Use when the adviser asks about previous "
+            "meetings, or when you need historical context about the client's situation."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": (
+                        "Search keywords — e.g. 'pension salary sacrifice', "
+                        "'rental property CGT', 'year-end planning'"
+                    ),
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Max results to return (default 5)",
+                    "default": 5,
+                },
+            },
+            "required": ["query"],
+        },
+    }
+]
+
+DASHBOARD_TOOLS = [
+    {
+        "name": "generate_dashboard",
+        "description": (
+            "Generate an interactive dashboard to visualise and analyse UK tax data. "
+            "Use 'reset' mode to create from scratch, 'iterate' to modify existing dashboard."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "mode": {
+                    "type": "string",
+                    "enum": ["reset", "iterate"],
+                    "description": "reset = create from scratch, iterate = modify existing",
+                },
+                "relevantTaxData": {
+                    "type": "object",
+                    "description": "Structured UK tax data for dashboard generation",
+                },
+            },
+            "required": ["mode", "relevantTaxData"],
+        },
+    }
+]
 
 
 class ClaudeProvider:
@@ -29,8 +90,10 @@ class ClaudeProvider:
 
     async def stream_chat(
         self,
-        messages: list[dict[str, str]],
+        messages: list[dict],
         system_prompt: str,
+        tools: list[dict] | None = None,
+        tool_context: dict | None = None,
     ) -> AsyncGenerator[StreamEvent, None]:
         logger.info(
             "Starting Claude stream",
@@ -45,27 +108,167 @@ class ClaudeProvider:
         output_tokens = 0
 
         try:
-            async with self.client.messages.stream(
-                model=self.model,
-                max_tokens=4096,
-                system=system_prompt,
-                messages=messages,
-            ) as stream:
-                async for event in stream:
-                    if event.type == "content_block_delta":
-                        if hasattr(event.delta, "text"):
-                            if first_token:
+            # Build API kwargs — only include tools when provided
+            api_kwargs: dict = {
+                "model": self.model,
+                "max_tokens": 4096,
+                "system": system_prompt,
+                "messages": messages,
+            }
+            if tools:
+                api_kwargs["tools"] = tools
+
+            max_rounds = MAX_TOOL_ROUNDS if tools else 1
+
+            for _round in range(max_rounds):
+                tool_called = False
+                # Track tool_use content blocks being built
+                current_tool_id: str | None = None
+                current_tool_name: str | None = None
+                input_json_parts: list[str] = []
+                # Collect full assistant content blocks for the tool-result loop
+                assistant_content_blocks: list[dict] = []
+                current_text_block: str = ""
+
+                async with self.client.messages.stream(**{**api_kwargs, "messages": messages}) as stream:
+                    async for event in stream:
+                        if event.type == "content_block_start":
+                            if event.content_block.type == "tool_use":
+                                # Starting a tool_use block
+                                current_tool_id = event.content_block.id
+                                current_tool_name = event.content_block.name
+                                input_json_parts = []
+                                tool_status = {
+                                    "generate_dashboard": StatusPhase.BUILDING_DASHBOARD,
+                                    "search_meeting_notes": StatusPhase.SEARCHING_NOTES,
+                                }
                                 yield StatusEvent(
-                                    phase=StatusPhase.GENERATING_RESPONSE,
+                                    phase=tool_status.get(current_tool_name, StatusPhase.CALCULATING),
                                 )
-                                first_token = False
-                            yield TokenEvent(content=event.delta.text)
-                    elif event.type == "message_start":
-                        if event.message and event.message.usage:
-                            input_tokens = event.message.usage.input_tokens
-                    elif event.type == "message_delta":
-                        if hasattr(event, "usage") and event.usage:
-                            output_tokens = event.usage.output_tokens
+                            elif event.content_block.type == "text":
+                                current_text_block = ""
+
+                        elif event.type == "content_block_delta":
+                            if hasattr(event.delta, "text"):
+                                # Text delta
+                                if first_token:
+                                    yield StatusEvent(
+                                        phase=StatusPhase.GENERATING_RESPONSE,
+                                    )
+                                    first_token = False
+                                current_text_block += event.delta.text
+                                yield TokenEvent(content=event.delta.text)
+                            elif hasattr(event.delta, "partial_json"):
+                                # Tool input JSON delta
+                                input_json_parts.append(event.delta.partial_json)
+
+                        elif event.type == "content_block_stop":
+                            if current_tool_id and current_tool_name:
+                                # Tool block completed — parse input and execute
+                                raw_json = "".join(input_json_parts)
+                                try:
+                                    tool_input = json.loads(raw_json) if raw_json else {}
+                                except json.JSONDecodeError:
+                                    logger.error(
+                                        "Failed to parse tool input JSON",
+                                        tool=current_tool_name,
+                                        raw=raw_json[:500],
+                                    )
+                                    tool_input = {}
+
+                                logger.info(
+                                    "Tool call detected",
+                                    tool=current_tool_name,
+                                    tool_id=current_tool_id,
+                                )
+
+                                yield ToolCallEvent(
+                                    tool=current_tool_name,
+                                    tool_input=tool_input,
+                                )
+
+                                # Execute the tool
+                                tool_result = await execute_tool(
+                                    current_tool_name, tool_input, context=tool_context
+                                )
+
+                                yield ToolResultEvent(
+                                    tool=current_tool_name,
+                                    result=tool_result,
+                                )
+
+                                # If it's a dashboard tool, yield dashboard update
+                                if (
+                                    current_tool_name == "generate_dashboard"
+                                    and tool_result.get("success")
+                                ):
+                                    yield DashboardUpdateEvent(
+                                        data=tool_result["dashboardData"],
+                                        mode=tool_result.get("mode", "reset"),
+                                    )
+
+                                # Record the tool_use block for the continuation message
+                                assistant_content_blocks.append({
+                                    "type": "tool_use",
+                                    "id": current_tool_id,
+                                    "name": current_tool_name,
+                                    "input": tool_input,
+                                })
+
+                                # Append the tool result to messages for the next round
+                                # First, add the assistant message with all content blocks so far
+                                # (will be done after stream ends)
+                                tool_called = True
+
+                                # Build tool_result message content for continuation
+                                tool_result_content = {
+                                    "type": "tool_result",
+                                    "tool_use_id": current_tool_id,
+                                    "content": json.dumps(tool_result),
+                                }
+
+                                # Reset
+                                current_tool_id = None
+                                current_tool_name = None
+                                input_json_parts = []
+                            else:
+                                # Text block completed
+                                if current_text_block:
+                                    assistant_content_blocks.append({
+                                        "type": "text",
+                                        "text": current_text_block,
+                                    })
+                                    current_text_block = ""
+
+                        elif event.type == "message_start":
+                            if event.message and event.message.usage:
+                                input_tokens += event.message.usage.input_tokens
+
+                        elif event.type == "message_delta":
+                            if hasattr(event, "usage") and event.usage:
+                                output_tokens += event.usage.output_tokens
+
+                if tool_called:
+                    # Continue the conversation with the tool result
+                    # Append assistant message with all content blocks
+                    messages.append({
+                        "role": "assistant",
+                        "content": assistant_content_blocks,
+                    })
+                    # Append the tool result as a user message
+                    messages.append({
+                        "role": "user",
+                        "content": [tool_result_content],
+                    })
+                    # Reset for next round
+                    first_token = True
+                    logger.info(
+                        "Continuing after tool call",
+                        round=_round + 1,
+                    )
+                else:
+                    # No tool calls — we're done
+                    break
 
             logger.info(
                 "Claude stream completed",

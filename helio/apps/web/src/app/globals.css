@@ -345,6 +345,147 @@
   animation: listen-pulse 1.5s ease-in-out infinite;
 }
 
+/* ── Dashboard generation overlay ── */
+
+@keyframes dash-scan {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(calc(100vh)); }
+}
+
+@keyframes dash-scan-line {
+  0% { top: -2px; opacity: 0; }
+  5% { opacity: 1; }
+  95% { opacity: 1; }
+  100% { top: 100%; opacity: 0; }
+}
+
+@keyframes dash-row-reveal {
+  0% { transform: scaleX(0); opacity: 0; }
+  20% { opacity: 0.6; }
+  80% { opacity: 0.6; }
+  100% { transform: scaleX(1); opacity: 0; }
+}
+
+@keyframes dash-cell-pulse {
+  0%, 100% { opacity: 0; transform: scale(0.8); }
+  40% { opacity: 1; transform: scale(1); }
+  70% { opacity: 0.6; transform: scale(1); }
+}
+
+@keyframes dash-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes dash-glow-pulse {
+  0%, 100% { opacity: 0.03; }
+  50% { opacity: 0.08; }
+}
+
+.dash-overlay-scan-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  animation: dash-scan-line 2.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.dash-overlay-scan-line::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -20px;
+  height: 40px;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    rgba(92, 124, 250, 0.04) 40%,
+    rgba(92, 124, 250, 0.12) 50%,
+    rgba(92, 124, 250, 0.04) 60%,
+    transparent 100%
+  );
+}
+
+.dark .dash-overlay-scan-line::before {
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    rgba(116, 143, 252, 0.03) 40%,
+    rgba(116, 143, 252, 0.1) 50%,
+    rgba(116, 143, 252, 0.03) 60%,
+    transparent 100%
+  );
+}
+
+.dash-overlay-scan-line::after {
+  content: '';
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  top: 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(92, 124, 250, 0.5) 20%,
+    rgba(139, 92, 246, 0.6) 50%,
+    rgba(92, 124, 250, 0.5) 80%,
+    transparent
+  );
+  box-shadow: 0 0 8px 1px rgba(92, 124, 250, 0.3);
+}
+
+.dark .dash-overlay-scan-line::after {
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(116, 143, 252, 0.4) 20%,
+    rgba(139, 92, 246, 0.5) 50%,
+    rgba(116, 143, 252, 0.4) 80%,
+    transparent
+  );
+  box-shadow: 0 0 8px 1px rgba(116, 143, 252, 0.25);
+}
+
+.dash-row-shimmer {
+  transform-origin: left;
+  animation: dash-row-reveal var(--row-dur, 2s) ease-in-out var(--row-del, 0s) infinite;
+}
+
+.dash-cell-dot {
+  animation: dash-cell-pulse var(--cell-dur, 1.8s) ease-in-out var(--cell-del, 0s) infinite;
+}
+
+.dash-shimmer-bar {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(92, 124, 250, 0.06) 25%,
+    rgba(139, 92, 246, 0.1) 50%,
+    rgba(92, 124, 250, 0.06) 75%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: dash-shimmer 2s ease-in-out infinite;
+}
+
+.dark .dash-shimmer-bar {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(116, 143, 252, 0.04) 25%,
+    rgba(139, 92, 246, 0.08) 50%,
+    rgba(116, 143, 252, 0.04) 75%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+}
+
+.dash-glow-bg {
+  animation: dash-glow-pulse 3s ease-in-out infinite;
+}
+
 /* ── Theme transition ── */
 
 .theme-transition,
