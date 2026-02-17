@@ -22,14 +22,14 @@ router = APIRouter(tags=["context"])
 MAX_RAW_CONTENT_LENGTH = 50_000
 
 # Boilerplate phrases to strip (case-insensitive, matched as whole lines)
-BOILERPLATE_PHRASES = [
+BOILERPLATE_PHRASES = frozenset([
     "accept all cookies", "accept cookies", "reject all", "reject cookies",
     "skip to main content", "skip to content", "skip navigation",
     "subscribe to newsletter", "subscribe to our newsletter",
     "cookie policy", "privacy policy", "terms of use", "terms of service",
     "terms and conditions", "manage cookie preferences", "cookie settings",
     "we use cookies", "this site uses cookies",
-]
+])
 
 CLEANUP_PROMPT = (
     "Convert this raw web page text into clean, structured markdown. "
@@ -85,6 +85,7 @@ async def ingest_context(
     )
     session.add(snippet)
     await session.commit()
+    await session.refresh(snippet)
 
     log.info("Context snippet stored", snippet_id=snippet_id, cleaned_length=len(cleaned))
 
@@ -138,12 +139,16 @@ async def dismiss_context(
     log: BoundLogger = Depends(get_request_logger),
 ):
     """Dismiss a context snippet without using it (mark as consumed)."""
-    await session.execute(
+    user_id = "demo-user"
+    result = await session.execute(
         update(ContextSnippet)
         .where(ContextSnippet.id == snippet_id)
+        .where(ContextSnippet.user_id == user_id)
         .values(is_consumed=True)
     )
     await session.commit()
+    if result.rowcount == 0:
+        raise HTTPException(status_code=404, detail="Snippet not found")
     log.info("Context snippet dismissed", snippet_id=snippet_id)
     return {"ok": True}
 

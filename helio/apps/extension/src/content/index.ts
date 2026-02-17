@@ -88,6 +88,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   } else if (message.type === "CHECK_SELECTION") {
     const sel = window.getSelection();
     sendResponse({ hasSelection: !!(sel && !sel.isCollapsed && sel.toString().trim()) });
+  } else if (message.type === "CONTEXT_UPDATED") {
+    // Bridge from background worker → web app: dispatch DOM event so React hook picks it up
+    window.dispatchEvent(new CustomEvent("helio-context-updated"));
+    sendResponse({ ok: true });
   }
   // Return true for async sendResponse
   return true;
