@@ -367,6 +367,78 @@ export default function ChatPage() {
     }
   }, [isScenarioGenerating]);
 
+  /* ── PDF export ── */
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleExport = useCallback(async () => {
+    if (isExporting || !dashboardData) return;
+    setIsExporting(true);
+
+    try {
+      const clientInfo = clientDetail
+        ? {
+            first_name: clientDetail.first_name,
+            last_name: clientDetail.last_name,
+            email: clientDetail.email,
+            ni_number: clientDetail.ni_number,
+            date_of_birth: clientDetail.date_of_birth,
+          }
+        : { first_name: "Client", last_name: "" };
+
+      // Prefer computation data from the latest assistant message
+      const latestComputation = [...messages].reverse().find((m) => m.computationData);
+      const comp = latestComputation?.computationData;
+
+      const taxPosition = comp?.taxPosition || {
+        tax_year: "2024/25",
+        total_income: dashboardData.incomeSummary?.totalIncome || 0,
+        adjusted_net_income: dashboardData.adjustedNetIncome?.amount || 0,
+        taxable_income: 0,
+        income_tax: dashboardData.taxCalculation?.totalIncomeTax || 0,
+        national_insurance:
+          (dashboardData.nationalInsurance?.class1 || 0) +
+          (dashboardData.nationalInsurance?.class2 || 0) +
+          (dashboardData.nationalInsurance?.class4 || 0),
+        dividend_tax: 0,
+        total_tax: dashboardData.taxCalculation?.totalTax || 0,
+        effective_rate: dashboardData.taxCalculation?.effectiveRate || 0,
+        marginal_rate: dashboardData.taxCalculation?.marginalRate || 0,
+        personal_allowance: 12570,
+        pa_status: dashboardData.adjustedNetIncome?.personalAllowanceStatus || "full",
+        hicbc_applies: !!dashboardData.hicbc?.applies,
+        hicbc_charge: dashboardData.hicbc?.charge || 0,
+      };
+
+      const res = await fetch(`${API_BASE}/api/exports/tax-report`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          client: clientInfo,
+          tax_position: taxPosition,
+          dashboard_data: comp?.dashboardData || dashboardData,
+          scenarios: scenariosList.length > 0 ? scenariosList : undefined,
+        }),
+      });
+
+      if (!res.ok) throw new Error(`Export failed: ${res.status}`);
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download =
+        res.headers.get("content-disposition")?.match(/filename="(.+)"/)?.[1] || "helio-tax-report.pdf";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Export failed:", err);
+    } finally {
+      setIsExporting(false);
+    }
+  }, [isExporting, dashboardData, clientDetail, scenariosList, messages]);
+
   /* ── Load clients on mount ── */
   useEffect(() => {
     fetch(`${API_BASE}/api/clients`)
@@ -794,8 +866,12 @@ export default function ChatPage() {
                       <button className="flex-1 text-[10px] font-medium text-brand-500 dark:text-brand-400 hover:bg-brand-50 dark:hover:bg-brand-950/20 py-2 rounded-lg transition-colors text-center">
                         Switch client
                       </button>
-                      <button className="flex-1 text-[10px] font-medium text-slate-500 dark:text-zinc-400 hover:bg-slate-50 dark:hover:bg-zinc-800 py-2 rounded-lg transition-colors text-center">
-                        Export summary
+                      <button
+                        onClick={handleExport}
+                        disabled={isExporting || !dashboardData}
+                        className="flex-1 text-[10px] font-medium text-slate-500 dark:text-zinc-400 hover:bg-slate-50 dark:hover:bg-zinc-800 py-2 rounded-lg transition-colors text-center disabled:opacity-40"
+                      >
+                        {isExporting ? "Exporting..." : "Export summary"}
                       </button>
                     </div>
                   </div>
@@ -1149,8 +1225,12 @@ export default function ChatPage() {
                       </AnimatePresence>
                     </div>
                     <div className="flex items-center gap-1.5">
-                      <button className="text-[11px] font-light text-brand-500 hover:text-brand-600 dark:text-brand-400 dark:hover:text-brand-300 flex items-center gap-1 transition-colors">
-                        Export <IconArrowRight className="w-2.5 h-2.5" />
+                      <button
+                        onClick={handleExport}
+                        disabled={isExporting || !dashboardData}
+                        className="text-[11px] font-light text-brand-500 hover:text-brand-600 dark:text-brand-400 dark:hover:text-brand-300 flex items-center gap-1 transition-colors disabled:opacity-40"
+                      >
+                        {isExporting ? "Exporting..." : "Export"} <IconArrowRight className="w-2.5 h-2.5" />
                       </button>
                       <button
                         onClick={() => setPanelMode(panelMode === "fullscreen" ? "sidebar" : "fullscreen")}
