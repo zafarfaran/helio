@@ -4,6 +4,8 @@ ANI = Total Income - Gross pension contributions - Gift Aid (grossed up)
 Used to determine: PA tapering, HICBC, pension AA taper.
 """
 
+import math
+
 import structlog
 
 from app.tax.constants import get_tax_year_constants
@@ -31,7 +33,8 @@ def calculate_adjusted_net_income(
 
     full_pa = float(it["personal_allowance"])
 
-    # PA taper: for every £2 of ANI above £100k, PA reduces by £1
+    # PA taper: PA reduces by £1 for every complete £2 of ANI above £100k.
+    # HMRC uses floor division — incomplete £2 increments don't count.
     lost_boundary = taper["threshold"] + (full_pa * 2)  # £125,140
 
     if ani <= taper["threshold"]:
@@ -43,7 +46,8 @@ def calculate_adjusted_net_income(
         status = PAStatus.LOST
         in_taper = False
     else:
-        reduction = (ani - taper["threshold"]) * taper["rate"]
+        excess = ani - taper["threshold"]
+        reduction = float(math.floor(excess / 2))
         pa = max(0.0, full_pa - reduction)
         status = PAStatus.TAPERED
         in_taper = True

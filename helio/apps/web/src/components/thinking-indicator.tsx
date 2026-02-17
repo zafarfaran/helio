@@ -34,6 +34,10 @@ const PHASE_CONFIG: Record<
     icon: <IconCalculator className="w-3.5 h-3.5" />,
     label: "Running tax calculations...",
   },
+  computing_tax: {
+    icon: <IconCalculator className="w-3.5 h-3.5" />,
+    label: "Computing tax position...",
+  },
   building_dashboard: {
     icon: <IconChart className="w-3.5 h-3.5" />,
     label: "Generating detailed dashboard...",

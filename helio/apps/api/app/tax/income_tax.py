@@ -65,17 +65,21 @@ def _tax_through_bands(
 
 def _apply_band_extension(
     bands: list[dict],
-    gift_aid_gross: float,
+    extension: float,
 ) -> list[dict]:
-    """Widen basic rate band by grossed-up gift aid amount."""
-    if gift_aid_gross <= 0:
+    """Widen basic rate band by extension amount.
+
+    Used for both grossed-up Gift Aid and gross pension contributions
+    (relief at source), which both extend the basic rate band.
+    """
+    if extension <= 0:
         return bands
 
     extended = []
     for band in bands:
         if band["name"] == "Basic Rate":
             new_band = dict(band)
-            new_band["width"] = band["width"] + gift_aid_gross
+            new_band["width"] = band["width"] + extension
             extended.append(new_band)
         else:
             extended.append(band)
@@ -227,25 +231,33 @@ def calculate_income_tax(
     personal_allowance: float = 12_570,
     is_scottish: bool = False,
     gift_aid: float = 0,
+    pension_contributions: float = 0,
     tax_year: str = "2025/26",
 ) -> IncomeTaxResult:
-    """Calculate income tax with proper income ordering and band stacking."""
+    """Calculate income tax with proper income ordering and band stacking.
+
+    Both Gift Aid and relief-at-source pension contributions extend the
+    basic rate band, giving higher/additional rate relief.
+    """
     c = get_tax_year_constants(tax_year)
     it = c["income_tax"]
 
     # Gross up gift aid for band extension
     gift_aid_gross = gift_aid / 0.8 if gift_aid > 0 else 0.0
 
+    # Total BRB extension: grossed-up Gift Aid + gross pension contributions
+    brb_extension = gift_aid_gross + pension_contributions
+
     # UK bands are always used for savings and dividends
     uk_bands = list(it["bands"])
-    if gift_aid_gross > 0:
-        uk_bands = _apply_band_extension(uk_bands, gift_aid_gross)
+    if brb_extension > 0:
+        uk_bands = _apply_band_extension(uk_bands, brb_extension)
 
     # Non-savings bands: Scottish if applicable, else UK
     if is_scottish:
         ns_bands = list(it["scottish_bands"])
-        if gift_aid_gross > 0:
-            ns_bands = _apply_band_extension(ns_bands, gift_aid_gross)
+        if brb_extension > 0:
+            ns_bands = _apply_band_extension(ns_bands, brb_extension)
     else:
         ns_bands = uk_bands
 

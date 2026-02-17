@@ -86,7 +86,17 @@ ENGINE_TOOLS = [
                 },
                 "pension_contributions": {
                     "type": "number",
-                    "description": "Annual gross pension contributions",
+                    "description": (
+                        "Annual gross personal pension contributions "
+                        "(SIPP / relief at source). Reduces ANI and extends basic rate band."
+                    ),
+                },
+                "employer_contributions": {
+                    "type": "number",
+                    "description": (
+                        "Annual employer pension contributions (including salary sacrifice). "
+                        "Counts toward pension AA but does NOT reduce ANI."
+                    ),
                 },
                 "gift_aid": {
                     "type": "number",
@@ -150,8 +160,9 @@ DASHBOARD_TOOLS = [
     {
         "name": "generate_dashboard",
         "description": (
-            "Generate an interactive dashboard to visualise and analyse UK tax data. "
-            "Use 'reset' mode to create from scratch, 'iterate' to modify existing dashboard."
+            "Manually update the dashboard layout. NOTE: You usually do NOT need this — "
+            "compute_tax_position automatically updates the dashboard with engine results. "
+            "Only use this for non-engine dashboard changes."
         ),
         "input_schema": {
             "type": "object",
@@ -292,10 +303,16 @@ class ClaudeProvider:
                                     result=tool_result,
                                 )
 
-                                # If it's a dashboard tool, yield dashboard update
+                                # Trigger dashboard update from engine or dashboard tool.
+                                # compute_tax_position returns dashboardData directly
+                                # from the engine — no LLM relay needed.
                                 if (
-                                    current_tool_name == "generate_dashboard"
-                                    and tool_result.get("success")
+                                    tool_result.get("success")
+                                    and "dashboardData" in tool_result
+                                    and current_tool_name in (
+                                        "generate_dashboard",
+                                        "compute_tax_position",
+                                    )
                                 ):
                                     yield DashboardUpdateEvent(
                                         data=tool_result["dashboardData"],
@@ -357,6 +374,10 @@ class ClaudeProvider:
                     })
                     # Reset for next round
                     first_token = True
+                    # Emit transitional status so the frontend indicator
+                    # properly switches between phases during the gap
+                    # while the next API call is being prepared
+                    yield StatusEvent(phase=StatusPhase.UNDERSTANDING)
                     logger.info(
                         "Continuing after tool call",
                         round=_round + 1,

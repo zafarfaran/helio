@@ -34,6 +34,7 @@ def compute_full_tax_position(
     income_sources: list[IncomeSource],
     *,
     pension_contributions: float = 0,
+    employer_contributions: float = 0,
     gift_aid: float = 0,
     region: str = "england",
     number_of_children: int = 0,
@@ -42,7 +43,14 @@ def compute_full_tax_position(
     mpaa_triggered: bool = False,
     tax_year: str = "2025/26",
 ) -> TaxPosition:
-    """Compute a complete, deterministic tax position."""
+    """Compute a complete, deterministic tax position.
+
+    pension_contributions: personal contributions (relief at source / SIPP).
+        These reduce ANI and extend the basic rate band.
+    employer_contributions: employer contributions (including salary sacrifice).
+        These do NOT reduce ANI or extend BRB (salary already reduced),
+        but DO count toward pension annual allowance.
+    """
 
     is_scottish = region.lower() == "scotland"
 
@@ -67,6 +75,7 @@ def compute_full_tax_position(
     )
 
     # ── 2. ANI ───────────────────────────────────────────────────────────
+    # Only personal pension contributions reduce ANI (not employer/sacrifice)
     ani_result = calculate_adjusted_net_income(
         total_income,
         pension_contributions=pension_contributions,
@@ -75,6 +84,7 @@ def compute_full_tax_position(
     )
 
     # ── 3. Income Tax ────────────────────────────────────────────────────
+    # Personal pension contributions extend BRB (like Gift Aid)
     it_result = calculate_income_tax(
         non_savings_income=non_savings,
         savings_income=savings,
@@ -82,6 +92,7 @@ def compute_full_tax_position(
         personal_allowance=ani_result.personal_allowance,
         is_scottish=is_scottish,
         gift_aid=gift_aid,
+        pension_contributions=pension_contributions,
         tax_year=tax_year,
     )
 
@@ -119,14 +130,18 @@ def compute_full_tax_position(
         )
 
     # ── 6. Pension AA ────────────────────────────────────────────────────
+    # Both personal and employer contributions count toward the AA.
+    # For the taper test:
+    #   threshold_income = total_income - personal_contributions
+    #   adjusted_income  = threshold_income + personal_contributions + employer_contributions
+    #                    = total_income + employer_contributions
+    total_pension = pension_contributions + employer_contributions
     pension_aa_result: PensionAAResult | None = None
-    if pension_contributions > 0:
-        # threshold_income = total_income (before pension deduction)
-        # adjusted_income = total_income + employer contributions (simplified: same as total)
+    if total_pension > 0:
         pension_aa_result = calculate_pension_aa(
-            adjusted_income=total_income,
+            adjusted_income=total_income + employer_contributions,
             threshold_income=total_income - pension_contributions,
-            current_year_contributions=pension_contributions,
+            current_year_contributions=total_pension,
             contributions_by_year=pension_contributions_by_year,
             mpaa_triggered=mpaa_triggered,
             tax_year=tax_year,
@@ -136,7 +151,7 @@ def compute_full_tax_position(
     observations = detect_observations(
         ani_result, it_result, ni_result, hicbc_result, pension_aa_result,
         total_income=total_income,
-        pension_contributions=pension_contributions,
+        pension_contributions=total_pension,
     )
 
     # ── 8. Summary ───────────────────────────────────────────────────────
@@ -187,19 +202,15 @@ def _compute_marginal_rate(
     it_result,
     ni_result,
 ) -> float:
-    """Compute marginal rate, special-casing the 60% trap."""
+    """Compute marginal rate, special-casing the 60% trap.
+
+    The 60% trap (£100k-£125,140) is 40% higher rate + 20% effective
+    PA loss.  NI is added on top: employees above UEL pay 2% NI → 62%;
+    self-employed pay 2% Class 4 → 62%.
+    """
     ani = ani_result.adjusted_net_income
 
-    # 60% trap: £100k-£125,140 where 40% tax + 20% effective PA loss = 60%
-    if 100_000 < ani < 125_140:
-        return 60.0
-
-    # Otherwise: highest income tax band rate + NI rate
-    it_marginal = 0.20  # default basic
-    if it_result.non_savings_bands:
-        it_marginal = it_result.non_savings_bands[-1].rate
-
-    # Add employee NI marginal rate
+    # Determine employee NI marginal rate (used in all cases)
     ni_marginal = 0.0
     if ni_result.class_1:
         if ni_result.class_1.earnings <= ni_result.class_1.upper_earnings_limit:
@@ -211,5 +222,14 @@ def _compute_marginal_rate(
             ni_marginal = ni_result.class_4.main_rate
         else:
             ni_marginal = ni_result.class_4.upper_rate
+
+    # 60% trap: 40% tax + 20% effective PA loss + NI
+    if 100_000 < ani < 125_140:
+        return round_currency((0.60 + ni_marginal) * 100)
+
+    # Otherwise: highest income tax band rate + NI rate
+    it_marginal = 0.20  # default basic
+    if it_result.non_savings_bands:
+        it_marginal = it_result.non_savings_bands[-1].rate
 
     return round_currency((it_marginal + ni_marginal) * 100)

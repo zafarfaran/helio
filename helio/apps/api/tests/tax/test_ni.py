@@ -43,11 +43,11 @@ def test_class_1_above_uel():
 
 
 def test_class_1_employer():
-    """£30k earnings — employer NI.
-    (30000 - 9100) * 0.138 = 2884.20
+    """£30k earnings — employer NI (2025/26: 15% above £5,000).
+    (30000 - 5000) * 0.15 = 3750.00
     """
     r = calculate_class_1_ni(30_000)
-    assert r.total_employer_ni == 2_884.20
+    assert r.total_employer_ni == 3_750.00
 
 
 # ── Class 4 ──────────────────────────────────────────────────────────────────

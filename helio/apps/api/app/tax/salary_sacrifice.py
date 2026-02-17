@@ -29,29 +29,31 @@ def analyse_salary_sacrifice(
     Computes current and proposed tax positions, returns the diff.
     """
     other = other_income_sources or []
-    is_scottish = region.lower() == "scotland"
 
-    # Current position: salary with existing sacrifice as pension
+    # Current position: salary already reduced by sacrifice.
+    # Sacrifice is an EMPLOYER contribution — do NOT pass as
+    # pension_contributions (which reduces ANI again). Instead use
+    # employer_contributions so it counts toward pension AA only.
     current_sources = [
         IncomeSource(IncomeType.EMPLOYMENT, gross_salary - current_sacrifice, "Employment"),
         *other,
     ]
     current = compute_full_tax_position(
         income_sources=current_sources,
-        pension_contributions=current_sacrifice,
+        employer_contributions=current_sacrifice,
         region=region,
         number_of_children=number_of_children,
         claims_child_benefit=claims_child_benefit,
     )
 
-    # Proposed position: salary with new sacrifice as pension
+    # Proposed position: salary with new sacrifice
     proposed_sources = [
         IncomeSource(IncomeType.EMPLOYMENT, gross_salary - sacrifice_amount, "Employment"),
         *other,
     ]
     proposed = compute_full_tax_position(
         income_sources=proposed_sources,
-        pension_contributions=sacrifice_amount,
+        employer_contributions=sacrifice_amount,
         region=region,
         number_of_children=number_of_children,
         claims_child_benefit=claims_child_benefit,

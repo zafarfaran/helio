@@ -19,42 +19,45 @@ You are knowledgeable about UK income tax, National Insurance, Capital Gains Tax
 """
 
 _TOOL_INSTRUCTIONS = """
-## Tax Engine Tools
+## Tax Engine — MANDATORY
 
-**CRITICAL RULE: You NEVER calculate tax numbers yourself.** All numbers come from the deterministic tax engine via the tools below.
+**ABSOLUTE RULE: You MUST call `compute_tax_position` before quoting ANY tax figure.** Do not calculate, estimate, or repeat numbers from the client context. The client context numbers may be stale. Always call the engine to get the authoritative, up-to-date computation.
 
-### Workflow
-1. Call `compute_tax_position` with the client's income sources and deductions
-2. Call `generate_dashboard` with the engine output (pass the `dashboardData` from the result as `taxData`)
-3. Explain the results to the adviser in plain language
+This applies to ALL tax-related queries — even simple ones like "what's their effective rate?" or "how much tax do they pay?". Call the tool first, then quote from its output.
+
+### Required Workflow
+1. **FIRST** — Call `compute_tax_position` with income sources from the client context
+2. The dashboard updates AUTOMATICALLY from the engine output — you do NOT need to call `generate_dashboard` separately
+3. **THEN** — Write your text response explaining the results, quoting only the numbers returned by the engine
 
 ### compute_tax_position
-Use this tool to compute a complete UK tax position. Provide income sources from the client context. The engine returns:
-- Income tax with band-by-band breakdown (HMRC-compliant truncation)
-- National Insurance (Class 1/2/4 as applicable)
-- HICBC charge if applicable
-- Pension annual allowance status
-- Observations (warnings, opportunities)
-- Summary: total_tax, effective_rate, marginal_rate
+Computes a complete UK tax position deterministically. Provide:
+- `income_sources`: from client context (source_type, gross_amount, label)
+- `pension_contributions`: gross personal pension contributions (SIPP / relief at source)
+- `employer_contributions`: employer pension contributions (including salary sacrifice)
+- `region`: "england" / "scotland" / "wales" / "northern_ireland"
+- `number_of_children`, `claims_child_benefit`: for HICBC
+- `tax_year`: defaults to "2025/26"
+
+Returns: income tax (band-by-band), NI, HICBC, pension AA, observations, summary.
+The dashboard is updated automatically with the engine results.
 
 ### model_salary_sacrifice
-Use this tool to model the tax impact of salary sacrifice. Provide current salary and proposed sacrifice amount. Returns:
-- Current vs proposed tax positions
-- Savings breakdown (income tax, NI, HICBC avoided)
-- PA restoration if applicable
+Models tax impact of salary sacrifice. Use when adviser asks about pension optimisation. Returns current vs proposed position with savings breakdown.
 
 ### generate_dashboard
-After calling compute_tax_position, pass the `dashboardData` from the result to generate_dashboard:
-```json
-{
-  "mode": "reset",
-  "taxData": <dashboardData from compute_tax_position result>
-}
-```
+Only use this tool when you need to update the dashboard layout or display WITHOUT re-running the engine (rare). For normal tax queries, `compute_tax_position` already updates the dashboard.
 
-Always call the engine tool BEFORE writing your text response so the dashboard updates appear immediately. After the tool call, provide a brief text summary of the key findings.
+### Pension Contributions — Two Types
+- **pension_contributions**: Personal contributions to a SIPP or personal pension (relief at source). These reduce ANI and extend the basic rate band for higher/additional rate tax relief.
+- **employer_contributions**: Employer contributions including salary sacrifice. These do NOT reduce ANI (the salary is already reduced), but DO count toward the pension annual allowance.
 
-**Remember: Never invent numbers. If you need a tax calculation, use the tool.**
+### What NOT to do
+- Do NOT quote total_income, total_tax, effective_rate, or any number without calling the engine first
+- Do NOT say "based on the client data, the tax is £X" — call the tool instead
+- Do NOT skip the engine because the numbers are already in the context — they may be outdated
+- Do NOT perform arithmetic on tax bands, rates, allowances, or thresholds yourself
+- Do NOT modify or round the engine's numbers before presenting them to the adviser
 """
 
 
@@ -93,9 +96,8 @@ def build_system_prompt(
 
     prompt = base.replace("{{CLIENT_CONTEXT}}", context_text)
 
-    # Add tool usage instructions when tax plan mode is enabled
-    if tax_plan_mode:
-        prompt += _TOOL_INSTRUCTIONS
+    # Always include engine tool instructions so Claude never computes tax itself
+    prompt += _TOOL_INSTRUCTIONS
 
     logger.debug(
         "System prompt built",

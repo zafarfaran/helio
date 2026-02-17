@@ -5,6 +5,8 @@ HICBC applies when ANI exceeds £60,000. The charge equals
 reaching 100% at £80,000.
 """
 
+import math
+
 import structlog
 
 from app.tax.constants import get_tax_year_constants
@@ -60,8 +62,8 @@ def calculate_hicbc(
     if adjusted_net_income <= start:
         clawback_pct = 0.0
     else:
-        # 1% for every £200 over threshold
-        clawback_pct = min(100.0, (adjusted_net_income - start) / 200.0)
+        # 1% for every complete £200 over threshold (HMRC floors to whole %)
+        clawback_pct = min(100.0, float(math.floor((adjusted_net_income - start) / 200.0)))
 
     charge = round_currency(benefit * clawback_pct / 100.0)
     net = round_currency(benefit - charge)

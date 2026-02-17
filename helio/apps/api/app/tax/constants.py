@@ -40,8 +40,8 @@ TAX_YEARS: dict = {
                 "upper_earnings_limit": 50_270,
                 "employee_main_rate": 0.08,
                 "employee_upper_rate": 0.02,
-                "employer_secondary_threshold": 9_100,
-                "employer_rate": 0.138,
+                "employer_secondary_threshold": 5_000,
+                "employer_rate": 0.15,
             },
             "class_2": {
                 "weekly_rate": 3.45,
