@@ -3,7 +3,8 @@
   "name": "Helio — Tax Planning Assistant",
   "description": "UK tax planning companion for financial advisers",
   "version": "0.0.1",
-  "permissions": ["storage", "activeTab"],
+  "permissions": ["storage", "activeTab", "tabs"],
+  "host_permissions": ["http://localhost:8000/*"],
   "action": {
     "default_popup": "src/popup/index.html",
     "default_title": "Helio"

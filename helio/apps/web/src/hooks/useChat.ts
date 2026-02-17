@@ -4,12 +4,49 @@ import { useState, useCallback, useRef } from "react";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+export interface TaxComputationData {
+  taxPosition: {
+    tax_year: string;
+    total_income: number;
+    adjusted_net_income: number;
+    taxable_income: number;
+    income_tax: number;
+    national_insurance: number;
+    dividend_tax: number;
+    total_tax: number;
+    effective_rate: number;
+    marginal_rate: number;
+    personal_allowance: number;
+    pa_status: string;
+    hicbc_applies: boolean;
+    hicbc_charge: number;
+  };
+  dashboardData: {
+    incomeSummary: { totalIncome: number; sources: { type: string; label: string; amount: number }[] };
+    taxCalculation: {
+      totalIncomeTax: number;
+      totalTax: number;
+      effectiveRate: number;
+      marginalRate: number;
+      incomeTaxByBand: { band: string; amount: number; rate: number; tax: number }[];
+    };
+    nationalInsurance: { class1: number; class2: number; class4: number };
+    adjustedNetIncome: { amount: number; personalAllowanceStatus: string };
+    allowancesTracker: { allowances: { name: string; annualLimit: number; used: number; remaining: number; status: string }[] };
+    observations: { type: string; title: string; description: string; potentialSaving: number; action: string }[];
+    hicbc?: { applies: boolean; childBenefitAnnual: number; clawbackPercentage: number; charge: number; netBenefit: number };
+  };
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
 export interface ChatMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
   timestamp: string;
   insights?: { label: string; value: string; color: string }[];
+  computationData?: TaxComputationData;
 }
 
 export type StatusPhase =
@@ -18,6 +55,7 @@ export type StatusPhase =
   | "analyzing_income"
   | "checking_allowances"
   | "calculating"
+  | "computing_tax"
   | "building_dashboard"
   | "searching_notes"
   | "generating_response"
@@ -29,6 +67,7 @@ const STATUS_MESSAGES: Record<StatusPhase, string> = {
   analyzing_income: "Analysing income sources...",
   checking_allowances: "Checking allowance status...",
   calculating: "Running tax calculations...",
+  computing_tax: "Computing tax position...",
   building_dashboard: "Building dashboard...",
   searching_notes: "Searching meeting notes...",
   generating_response: "Generating response...",
@@ -48,7 +87,7 @@ export function useChat(clientId: string, taxPlanMode: boolean = false) {
   const dashboardTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const sendMessage = useCallback(
-    async (content: string) => {
+    async (content: string, contextSnippetIds?: string[]) => {
       if (!content.trim() || isStreaming) return;
 
       // Add user message
@@ -86,6 +125,7 @@ export function useChat(clientId: string, taxPlanMode: boolean = false) {
             client_id: clientId,
             message: content,
             tax_plan_mode: taxPlanMode,
+            context_snippet_ids: contextSnippetIds || undefined,
           }),
           signal: controller.signal,
         });
@@ -134,12 +174,28 @@ export function useChat(clientId: string, taxPlanMode: boolean = false) {
                   setIsDashboardGenerating(true);
                 }
               } else if (eventType === "tool_call") {
-                if (data.tool === "generate_dashboard") {
+                if (data.tool === "compute_tax_position" || data.tool === "model_salary_sacrifice") {
+                  setStatus("computing_tax");
+                  setStatusMessage("Computing tax position...");
+                } else if (data.tool === "generate_dashboard") {
                   setIsDashboardGenerating(true);
                   setStatus("building_dashboard");
                   setStatusMessage("Generating detailed dashboard...");
                 }
               } else if (eventType === "tool_result") {
+                // Capture tax engine computation data and attach to assistant message
+                if (
+                  (data.tool === "compute_tax_position" || data.tool === "model_salary_sacrifice") &&
+                  data.result?.success
+                ) {
+                  setMessages((prev) =>
+                    prev.map((m) =>
+                      m.id === assistantId
+                        ? { ...m, computationData: { taxPosition: data.result.taxPosition, dashboardData: data.result.dashboardData } }
+                        : m
+                    )
+                  );
+                }
                 // Extract dashboard data from tool_result (fallback)
                 if (data.tool === "generate_dashboard" && data.result?.dashboardData) {
                   setDashboardData(data.result.dashboardData);

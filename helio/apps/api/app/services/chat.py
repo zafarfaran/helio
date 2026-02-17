@@ -160,6 +160,7 @@ class ChatService:
         client_id: str,
         content: str,
         tax_plan_mode: bool = False,
+        context_snippet_ids: list[str] | None = None,
     ) -> AsyncGenerator[StreamEvent, None]:
         """Send a user message and stream the LLM assistant response.
 
@@ -206,6 +207,14 @@ class ChatService:
         # 5. Build system prompt with client context
         system_prompt = build_system_prompt(client_context, tax_plan_mode=tax_plan_mode)
 
+        # 5b. Load and inject context snippets if provided
+        external_context = ""
+        if context_snippet_ids:
+            external_context = await self._load_and_consume_snippets(context_snippet_ids)
+
+        if external_context:
+            system_prompt += external_context
+
         # 6. Format messages for LLM
         llm_messages = [{"role": m.role, "content": m.content} for m in history]
 
@@ -222,13 +231,13 @@ class ChatService:
             history_length=len(llm_messages),
             has_client_context=client_context is not None,
         )
-        # Always provide base tools; add dashboard tools in tax plan mode
+        # Always provide all tools — engine tools must always be available
+        # so Claude never attempts to calculate tax numbers itself
         from app.services.llm.claude import BASE_TOOLS, DASHBOARD_TOOLS, ENGINE_TOOLS
 
         tools = list(BASE_TOOLS)
-        if tax_plan_mode:
-            tools.extend(ENGINE_TOOLS)
-            tools.extend(DASHBOARD_TOOLS)
+        tools.extend(ENGINE_TOOLS)
+        tools.extend(DASHBOARD_TOOLS)
 
         tool_context = {"client_id": client_id}
         async for event in provider.stream_chat(
@@ -413,3 +422,35 @@ class ChatService:
             meeting_note_count=len(meeting_notes),
         )
         return context
+
+    async def _load_and_consume_snippets(self, snippet_ids: list[str]) -> str:
+        """Load context snippets, mark as consumed, return formatted context."""
+        from app.db.models import ContextSnippet
+
+        result = await self.session.execute(
+            select(ContextSnippet)
+            .where(ContextSnippet.id.in_(snippet_ids))
+            .where(ContextSnippet.is_consumed == False)  # noqa: E712
+        )
+        snippets = list(result.scalars().all())
+
+        if not snippets:
+            return ""
+
+        # Mark as consumed
+        for s in snippets:
+            s.is_consumed = True
+        await self.session.commit()
+
+        # Format for the system prompt
+        lines = ["\n\n## External Web Context\n"]
+        lines.append("The adviser has captured the following web page(s) for reference:\n")
+        for s in snippets:
+            lines.append(f"### {s.source_title}")
+            lines.append(f"**Source:** {s.source_url}")
+            lines.append(f"**Captured:** {s.capture_type.replace('_', ' ')}\n")
+            lines.append(s.cleaned_markdown)
+            lines.append("")
+
+        logger.info("Context snippets injected", count=len(snippets), ids=snippet_ids)
+        return "\n".join(lines)

@@ -1,4 +1,4 @@
-"""SQLAlchemy ORM models — 8-table prototype schema for Helio MVP."""
+"""SQLAlchemy ORM models — 9-table prototype schema for Helio MVP."""
 
 from datetime import datetime, timezone
 from uuid import uuid4
@@ -181,7 +181,27 @@ class Document(Base):
     uploader = relationship("User", foreign_keys=[uploaded_by])
 
 
-# ─── 6. Conversation ──────────────────────────────────────────────────────
+# ─── 6. ContextSnippet ────────────────────────────────────────────────────
+
+
+class ContextSnippet(Base):
+    """Web page content captured by the browser extension."""
+
+    __tablename__ = "context_snippets"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False)
+    source_url: Mapped[str] = mapped_column(String, nullable=False)
+    source_title: Mapped[str] = mapped_column(String, nullable=False, default="")
+    raw_content: Mapped[str] = mapped_column(Text, nullable=False)
+    cleaned_markdown: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    capture_type: Mapped[str] = mapped_column(String, nullable=False, default="full_page")
+    status: Mapped[str] = mapped_column(String, nullable=False, default="processing")
+    is_consumed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+
+
+# ─── 7. Conversation ──────────────────────────────────────────────────────
 
 
 class Conversation(Base):
@@ -207,7 +227,7 @@ class Conversation(Base):
     messages = relationship("Message", back_populates="conversation", order_by="Message.created_at")
 
 
-# ─── 7. Message ────────────────────────────────────────────────────────────
+# ─── 8. Message ────────────────────────────────────────────────────────────
 
 
 class Message(Base):
@@ -229,7 +249,7 @@ class Message(Base):
     conversation = relationship("Conversation", back_populates="messages")
 
 
-# ─── 8. Observation ────────────────────────────────────────────────────────
+# ─── 9. Observation ────────────────────────────────────────────────────────
 
 
 class Observation(Base):
@@ -254,7 +274,7 @@ class Observation(Base):
     client = relationship("Client", back_populates="observations")
 
 
-# ─── 9. MeetingNote ───────────────────────────────────────────────────────
+# ─── 10. MeetingNote ──────────────────────────────────────────────────────
 
 
 class MeetingNote(Base):

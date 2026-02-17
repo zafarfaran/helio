@@ -5,8 +5,11 @@ import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { ThemeToggle } from "@/components/theme-provider";
 import { useChat } from "@/hooks/useChat";
+import { useContextSnippets } from "@/hooks/useContextSnippets";
+import { ContextPills } from "@/components/context-pills";
 import { ThinkingIndicator } from "@/components/thinking-indicator";
 import { MarkdownRenderer } from "@/components/markdown-renderer";
+import { TaxComputationBreakdown } from "@/components/tax-computation-breakdown";
 import {
   HelioLogo,
   IconSend,
@@ -48,6 +51,7 @@ interface Message {
   content: string;
   timestamp: string;
   insights?: Insight[];
+  computationData?: import("@/hooks/useChat").TaxComputationData;
 }
 
 interface Insight {
@@ -272,6 +276,8 @@ export default function ChatPage() {
     clearMessages,
   } = useChat(selectedClientId, taxPlanMode);
 
+  const { snippets: contextSnippets, dismiss: dismissSnippet, consumeAll: consumeAllSnippets } = useContextSnippets();
+
   /* ── UI state ── */
   const [input, setInput] = useState("");
   const [panelOpen, setPanelOpen] = useState(true);
@@ -455,7 +461,7 @@ export default function ChatPage() {
 
     const BAND_COLORS = ["bg-brand-500", "bg-violet-500", "bg-amber-500", "bg-red-400", "bg-emerald-500"];
     const tc = dashboardData.taxCalculation;
-    const total = tc.totalIncomeTax || tc.totalTax || 1;
+    const total = tc.totalTax || tc.totalIncomeTax || 1;
     const items: { label: string; amount: string; detail: string; pct: number; color: string }[] = [];
 
     if (tc.incomeTaxByBand && Array.isArray(tc.incomeTaxByBand)) {
@@ -516,7 +522,7 @@ export default function ChatPage() {
 
   // Panel data — from AI-generated dashboardData only
   const totalIncome = dashboardData?.incomeSummary?.totalIncome ?? null;
-  const totalTax = dashboardData?.taxCalculation?.totalIncomeTax ?? dashboardData?.taxCalculation?.totalTax ?? null;
+  const totalTax = dashboardData?.taxCalculation?.totalTax ?? dashboardData?.taxCalculation?.totalIncomeTax ?? null;
   const effectiveRate = dashboardData?.taxCalculation?.effectiveRate ?? null;
   const marginalRate = dashboardData?.taxCalculation?.marginalRate ?? null;
   const netIncome = totalIncome != null && totalTax != null ? totalIncome - totalTax : null;
@@ -539,7 +545,8 @@ export default function ChatPage() {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       if (input.trim() && !isStreaming) {
-        sendMessage(input);
+        const snippetIds = consumeAllSnippets();
+        sendMessage(input, snippetIds.length > 0 ? snippetIds : undefined);
         setInput("");
         // Reset textarea height
         if (textareaRef.current) {
@@ -547,17 +554,18 @@ export default function ChatPage() {
         }
       }
     }
-  }, [input, isStreaming, sendMessage]);
+  }, [input, isStreaming, sendMessage, consumeAllSnippets]);
 
   const handleSendClick = useCallback(() => {
     if (input.trim() && !isStreaming) {
-      sendMessage(input);
+      const snippetIds = consumeAllSnippets();
+      sendMessage(input, snippetIds.length > 0 ? snippetIds : undefined);
       setInput("");
       if (textareaRef.current) {
         textareaRef.current.style.height = "auto";
       }
     }
-  }, [input, isStreaming, sendMessage]);
+  }, [input, isStreaming, sendMessage, consumeAllSnippets]);
 
   return (
     <div className="h-screen flex flex-col bg-[#fafbfc] dark:bg-[#0a0a0c]">
@@ -834,10 +842,10 @@ export default function ChatPage() {
                   <ChatMessage message={msg} />
                 </motion.div>
               ))}
-              {(status !== "idle" || isDashboardGenerating) && (
+              {status !== "idle" && status !== "complete" && (
                 <ThinkingIndicator
-                  status={isDashboardGenerating ? "building_dashboard" : status}
-                  statusMessage={isDashboardGenerating ? "Generating detailed dashboard..." : statusMessage}
+                  status={status}
+                  statusMessage={statusMessage}
                 />
               )}
               <div ref={messagesEndRef} />
@@ -875,6 +883,9 @@ export default function ChatPage() {
                   </motion.div>
                 )}
               </AnimatePresence>
+
+              {/* Context pills from web extension */}
+              <ContextPills snippets={contextSnippets} onDismiss={dismissSnippet} />
 
               {/* Main input container */}
               <div className={`relative rounded-2xl transition-all duration-300 ${
@@ -1484,6 +1495,11 @@ const ChatMessage = memo(function ChatMessage({ message }: { message: Message })
             <span className="text-[11px] font-medium text-slate-900 dark:text-white">Helio</span>
             <span className="text-[10px] font-light text-slate-400 dark:text-zinc-600">{message.timestamp}</span>
           </div>
+
+          {/* Tax computation breakdown (collapsible) — above text so it doesn't get pushed down */}
+          {message.computationData && (
+            <TaxComputationBreakdown data={message.computationData} />
+          )}
 
           {/* Message body — markdown rendered */}
           <MarkdownRenderer content={message.content} />
