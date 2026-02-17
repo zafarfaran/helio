@@ -3,12 +3,18 @@
 from app.core.logging import get_logger
 from app.services.tools.dashboard import execute_generate_dashboard
 from app.services.tools.meeting_notes import execute_search_meeting_notes
+from app.services.tools.tax_engine import (
+    execute_compute_tax_position,
+    execute_model_salary_sacrifice,
+)
 
 logger = get_logger(__name__)
 
 TOOL_EXECUTORS: dict = {
     "generate_dashboard": execute_generate_dashboard,
     "search_meeting_notes": execute_search_meeting_notes,
+    "compute_tax_position": execute_compute_tax_position,
+    "model_salary_sacrifice": execute_model_salary_sacrifice,
 }
 
 

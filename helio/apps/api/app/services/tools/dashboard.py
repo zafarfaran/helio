@@ -12,7 +12,7 @@ async def execute_generate_dashboard(tool_input: dict, *, context: dict | None =
     we validate the basic shape and return it as the dashboard payload.
     """
     mode = tool_input.get("mode", "reset")
-    tax_data = tool_input.get("relevantTaxData", {})
+    tax_data = tool_input.get("taxData") or tool_input.get("relevantTaxData", {})
 
     if not tax_data:
         logger.warning("generate_dashboard called with empty relevantTaxData")

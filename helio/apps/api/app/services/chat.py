@@ -223,10 +223,11 @@ class ChatService:
             has_client_context=client_context is not None,
         )
         # Always provide base tools; add dashboard tools in tax plan mode
-        from app.services.llm.claude import BASE_TOOLS, DASHBOARD_TOOLS
+        from app.services.llm.claude import BASE_TOOLS, DASHBOARD_TOOLS, ENGINE_TOOLS
 
         tools = list(BASE_TOOLS)
         if tax_plan_mode:
+            tools.extend(ENGINE_TOOLS)
             tools.extend(DASHBOARD_TOOLS)
 
         tool_context = {"client_id": client_id}

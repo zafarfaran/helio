@@ -16,8 +16,25 @@ from app.db.models import (
     TaxProfile,
     User,
 )
+from app.tax.engine import compute_full_tax_position
+from app.tax.types import IncomeSource, IncomeType
 
 logger = get_logger(__name__)
+
+
+def _compute_sarah_position():
+    """Run the deterministic engine for Sarah Mitchell's demo data."""
+    return compute_full_tax_position(
+        income_sources=[
+            IncomeSource(IncomeType.EMPLOYMENT, 145_000, "Employment"),
+            IncomeSource(IncomeType.DIVIDENDS, 32_500, "Dividends"),
+            IncomeSource(IncomeType.RENTAL, 18_000, "Rental"),
+        ],
+        pension_contributions=18_000,
+        region="england",
+        number_of_children=2,
+        claims_child_benefit=True,
+    )
 
 
 async def seed_if_empty(session: AsyncSession) -> None:
@@ -28,6 +45,9 @@ async def seed_if_empty(session: AsyncSession) -> None:
         return
 
     logger.info("Seeding database with demo data")
+
+    # Compute Sarah's tax position deterministically
+    pos = _compute_sarah_position()
 
     # ── User ────────────────────────────────────────────────────────────
     user = User(
@@ -60,150 +80,116 @@ async def seed_if_empty(session: AsyncSession) -> None:
     )
     session.add(client)
 
-    # ── TaxProfile (2025/26) ────────────────────────────────────────────
+    # ── TaxProfile (2025/26) — engine-computed ─────────────────────────
     tax_profile = TaxProfile(
         id="tp-sarah-2526",
         client_id="client-sarah",
         tax_year="2025/26",
-        total_income=195500.0,
-        adjusted_net_income=183930.0,
-        taxable_income=183930.0,
-        income_tax=42432.0,
-        national_insurance=5486.0,
-        dividend_tax=4069.0,
-        total_tax=52847.0,
-        effective_rate=27.0,
-        marginal_rate=40.0,
-        personal_allowance=0.0,
-        pa_status="lost",
-        in_pa_taper_zone=True,
-        hicbc_applies=True,
-        pension_taper_applies=False,
+        total_income=pos.total_income,
+        adjusted_net_income=pos.adjusted_net_income,
+        taxable_income=pos.taxable_income,
+        income_tax=pos.income_tax,
+        national_insurance=pos.national_insurance,
+        dividend_tax=pos.dividend_tax,
+        total_tax=pos.total_tax,
+        effective_rate=pos.effective_rate,
+        marginal_rate=pos.marginal_rate,
+        personal_allowance=pos.personal_allowance,
+        pa_status=pos.pa_status,
+        in_pa_taper_zone=pos.in_pa_taper_zone,
+        hicbc_applies=pos.hicbc_applies,
+        pension_taper_applies=pos.pension_taper_applies,
         income_sources=[
             {
-                "source_type": "employment",
-                "label": "Employment",
-                "gross_amount": 145000,
-            },
-            {
-                "source_type": "dividends",
-                "label": "Dividends",
-                "gross_amount": 32500,
-            },
-            {
-                "source_type": "rental",
-                "label": "Rental",
-                "gross_amount": 18000,
-            },
+                "source_type": s.source_type.value,
+                "label": s.label or s.source_type.value.replace("_", " ").title(),
+                "gross_amount": s.gross_amount,
+            }
+            for s in pos.income_sources
         ],
         pension_data={
-            "contributions": 18000,
-            "aa_remaining": 42000,
-            "annual_allowance": 60000,
+            "contributions": 18_000,
+            "aa_remaining": pos.pension_aa_result.remaining if pos.pension_aa_result else 42_000,
+            "annual_allowance": pos.pension_aa_result.annual_allowance if pos.pension_aa_result else 60_000,
         },
         allowances=[
             {
                 "type": "personal_allowance",
                 "label": "Personal Allowance",
-                "annual_limit": 12570,
-                "used": 12570,
-                "remaining": 0,
-                "status": "fully_used",
+                "annual_limit": 12_570,
+                "used": 12_570 - pos.personal_allowance,
+                "remaining": pos.personal_allowance,
+                "status": "fully_used" if pos.personal_allowance == 0 else "available",
             },
             {
                 "type": "pension_aa",
                 "label": "Pension Annual Allowance",
-                "annual_limit": 60000,
-                "used": 18000,
-                "remaining": 42000,
+                "annual_limit": 60_000,
+                "used": 18_000,
+                "remaining": pos.pension_aa_result.remaining if pos.pension_aa_result else 42_000,
             },
             {
                 "type": "isa",
                 "label": "ISA Allowance",
-                "annual_limit": 20000,
+                "annual_limit": 20_000,
                 "used": 0,
-                "remaining": 20000,
+                "remaining": 20_000,
             },
             {
                 "type": "dividend",
                 "label": "Dividend Allowance",
                 "annual_limit": 500,
-                "used": 500,
-                "remaining": 0,
+                "used": pos.income_tax_result.dividend_allowance_used,
+                "remaining": 500 - pos.income_tax_result.dividend_allowance_used,
             },
             {
                 "type": "cgt_aea",
                 "label": "CGT Annual Exemption",
-                "annual_limit": 3000,
+                "annual_limit": 3_000,
                 "used": 0,
-                "remaining": 3000,
+                "remaining": 3_000,
             },
         ],
         hicbc={
             "number_of_children": 2,
             "claims_child_benefit": True,
-            "child_benefit_amount": 2212.60,
-            "clawback_percentage": 100,
-            "hicbc_charge": 860,
+            "child_benefit_amount": pos.hicbc_result.child_benefit_annual if pos.hicbc_result else 0,
+            "clawback_percentage": pos.hicbc_result.clawback_percentage if pos.hicbc_result else 0,
+            "hicbc_charge": pos.hicbc_result.hicbc_charge if pos.hicbc_result else 0,
         },
         tax_breakdown=[
-            {"band": "Basic Rate", "amount": 37700, "rate": 0.20, "tax": 7540},
-            {"band": "Higher Rate", "amount": 87430, "rate": 0.40, "tax": 34972},
+            {
+                "band": b.name,
+                "amount": b.income_in_band,
+                "rate": b.rate,
+                "tax": b.tax,
+            }
+            for b in pos.income_tax_result.non_savings_bands
         ],
         ni_breakdown={
             "class1": {
-                "total_employee_ni": 5486,
+                "total_employee_ni": pos.ni_result.class_1.total_employee_ni if pos.ni_result.class_1 else 0,
             },
         },
-        status="draft",
-        data_confidence="low",
+        status="computed",
+        data_confidence="high",
     )
     session.add(tax_profile)
 
-    # ── Observations ────────────────────────────────────────────────────
-    observations = [
-        Observation(
-            id="obs-1",
+    # ── Observations — engine-derived ──────────────────────────────────
+    observations = []
+    for i, obs in enumerate(pos.observations, start=1):
+        observations.append(Observation(
+            id=f"obs-{i}",
             client_id="client-sarah",
             tax_year="2025/26",
-            title="Personal allowance tapered to \u00a30",
-            description="Income exceeds \u00a3125,140 \u2014 full PA taper applies",
-            severity="critical",
-            priority="high",
-            category="personal_allowance",
-        ),
-        Observation(
-            id="obs-2",
-            client_id="client-sarah",
-            tax_year="2025/26",
-            title="\u00a342,000 pension headroom",
-            description="Potential saving of \u00a316,800 at marginal rate",
-            severity="opportunity",
-            priority="high",
-            category="pension",
-            potential_saving=16800.0,
-        ),
-        Observation(
-            id="obs-3",
-            client_id="client-sarah",
-            tax_year="2025/26",
-            title="Unused ISA allowance",
-            description="Shelter dividend income to reduce tax exposure",
-            severity="opportunity",
-            priority="medium",
-            category="isa",
-        ),
-        Observation(
-            id="obs-4",
-            client_id="client-sarah",
-            tax_year="2025/26",
-            title="HICBC applicable",
-            description="Salary sacrifice could eliminate the charge",
-            severity="warning",
-            priority="medium",
-            category="hicbc",
-        ),
-    ]
+            title=obs.title,
+            description=obs.description,
+            severity=obs.severity,
+            priority="high" if obs.severity in ("warning", "critical") else "medium",
+            category=obs.category,
+            potential_saving=obs.potential_saving,
+        ))
     session.add_all(observations)
 
     # ── Meeting Notes ──────────────────────────────────────────────────
@@ -314,9 +300,9 @@ async def seed_if_empty(session: AsyncSession) -> None:
             role="assistant",
             content=(
                 "I've loaded Sarah Mitchell's profile for 2025/26. "
-                "Her current position shows employment income of \u00a3145,000, "
-                "dividend income of \u00a332,500, and rental income of \u00a318,000.\n\n"
-                "Total gross income: \u00a3195,500\n\n"
+                f"Her current position shows employment income of \u00a3145,000, "
+                f"dividend income of \u00a332,500, and rental income of \u00a318,000.\n\n"
+                f"Total gross income: \u00a3{pos.total_income:,.0f}\n\n"
                 "What would you like to explore?"
             ),
         ),
@@ -335,27 +321,24 @@ async def seed_if_empty(session: AsyncSession) -> None:
             role="assistant",
             content=(
                 "Based on Sarah's current position:\n\n"
-                "Total tax liability: \u00a352,847\n"
-                "Effective tax rate: 27.0%\n"
-                "Marginal rate: 40%\n\n"
-                "I've identified 3 key opportunities:\n\n"
-                "1. Pension contribution headroom \u2014 she has \u00a342,000 unused "
-                "annual allowance, which could save up to \u00a316,800\n\n"
-                "2. ISA allowance \u2014 \u00a320,000 unused this tax year. Moving "
-                "dividend-generating assets into an ISA wrapper would reduce "
-                "her dividend tax exposure\n\n"
-                "3. HICBC exposure \u2014 salary sacrifice into pension could "
-                "eliminate the High Income Child Benefit Charge\n\n"
-                "Shall I model any of these scenarios?"
+                f"Total tax liability: \u00a3{pos.total_tax:,.2f}\n"
+                f"Effective tax rate: {pos.effective_rate:.1f}%\n"
+                f"Marginal rate: {pos.marginal_rate:.0f}%\n\n"
+                f"I've identified {len(pos.observations)} key observations:\n\n"
+                + "\n\n".join(
+                    f"{i}. **{o.title}** \u2014 {o.description}"
+                    for i, o in enumerate(pos.observations, 1)
+                )
+                + "\n\nShall I model any scenarios?"
             ),
             insights=[
-                {"label": "Pension", "value": "\u00a316,800", "color": "emerald"},
-                {"label": "ISA", "value": "\u00a31,520", "color": "brand"},
-                {"label": "HICBC", "value": "\u00a3860", "color": "amber"},
+                {"label": "Total Tax", "value": f"\u00a3{pos.total_tax:,.0f}", "color": "brand"},
+                {"label": "Effective", "value": f"{pos.effective_rate:.1f}%", "color": "amber"},
+                {"label": "Marginal", "value": f"{pos.marginal_rate:.0f}%", "color": "emerald"},
             ],
         ),
     ]
     session.add_all(messages)
 
     await session.commit()
-    logger.info("Demo data seeded successfully")
+    logger.info("Demo data seeded successfully (engine-computed)")
