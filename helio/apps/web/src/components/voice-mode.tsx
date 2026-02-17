@@ -237,7 +237,7 @@ export function VoiceMode({ onSend, status, statusMessage, isStreaming }: VoiceM
 
   // Orb visual config
   const isActive = orbState !== "dormant";
-  const orbSize = orbState === "thinking" ? 56 : orbState === "listening" || orbState === "processing" ? 52 : 40;
+  const orbSize = orbState === "thinking" ? 48 : orbState === "listening" || orbState === "processing" ? 44 : 40;
 
   return (
     <div className="absolute bottom-6 right-6 z-40 flex flex-col items-end gap-2.5 pointer-events-none">
@@ -246,10 +246,10 @@ export function VoiceMode({ onSend, status, statusMessage, isStreaming }: VoiceM
         {isActive && displayText && (
           <motion.div
             key={orbState + displayText.slice(0, 20)}
-            initial={{ opacity: 0, y: 8, scale: 0.9 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 4, scale: 0.95 }}
-            transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 4 }}
+            transition={{ duration: 0.3, delay: 0.15, ease: [0.16, 1, 0.3, 1] }}
             className="pointer-events-auto"
           >
             <div
@@ -278,16 +278,16 @@ export function VoiceMode({ onSend, status, statusMessage, isStreaming }: VoiceM
               <motion.div
                 key="ring1"
                 initial={{ scale: 1, opacity: 0 }}
-                animate={{ scale: 2.2, opacity: [0.4, 0] }}
-                transition={{ duration: 1.8, repeat: Infinity, ease: "easeOut" }}
-                className="absolute inset-0 rounded-full bg-brand-400/20"
+                animate={{ scale: 1.8, opacity: [0.3, 0] }}
+                transition={{ duration: 2, repeat: Infinity, ease: "easeOut", delay: 0.3 }}
+                className="absolute inset-0 rounded-full bg-brand-400/15"
               />
               <motion.div
                 key="ring2"
                 initial={{ scale: 1, opacity: 0 }}
-                animate={{ scale: 2.6, opacity: [0.2, 0] }}
-                transition={{ duration: 1.8, repeat: Infinity, ease: "easeOut", delay: 0.5 }}
-                className="absolute inset-0 rounded-full bg-violet-400/15"
+                animate={{ scale: 2.2, opacity: [0.15, 0] }}
+                transition={{ duration: 2, repeat: Infinity, ease: "easeOut", delay: 0.8 }}
+                className="absolute inset-0 rounded-full bg-violet-400/10"
               />
             </>
           )}
@@ -316,7 +316,7 @@ export function VoiceMode({ onSend, status, statusMessage, isStreaming }: VoiceM
           transition={
             orbState === "error"
               ? { duration: 0.4, ease: "easeInOut" }
-              : { type: "spring", stiffness: 300, damping: 25 }
+              : { duration: 0.4, ease: [0.16, 1, 0.3, 1] }
           }
           className={`relative rounded-full cursor-default transition-shadow duration-500 ${
             orbState === "error"
@@ -353,10 +353,10 @@ export function VoiceMode({ onSend, status, statusMessage, isStreaming }: VoiceM
               {orbState === "dormant" ? (
                 <motion.div
                   key="dormant"
-                  initial={{ opacity: 0, scale: 0.5 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.5 }}
-                  transition={{ duration: 0.15 }}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.25 }}
                   className="flex items-center justify-center"
                 >
                   <span className="text-[10px] font-mono font-medium text-white/50 tracking-wider">V</span>
@@ -364,10 +364,10 @@ export function VoiceMode({ onSend, status, statusMessage, isStreaming }: VoiceM
               ) : orbState === "listening" || orbState === "processing" ? (
                 <motion.div
                   key="mic"
-                  initial={{ opacity: 0, scale: 0.5 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.5 }}
-                  transition={{ duration: 0.15 }}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.25 }}
                 >
                   <IconMic className="w-5 h-5 text-white/80" />
                 </motion.div>
@@ -377,6 +377,7 @@ export function VoiceMode({ onSend, status, statusMessage, isStreaming }: VoiceM
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
+                  transition={{ duration: 0.25 }}
                   className="flex gap-[3px] items-center"
                 >
                   {[0, 1, 2].map((i) => (
