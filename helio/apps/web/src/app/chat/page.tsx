@@ -375,13 +375,18 @@ export default function ChatPage() {
     setIsExporting(true);
 
     try {
-      const clientInfo = clientDetail
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const cd = clientDetail as any;
+      const clientInfo = cd
         ? {
-            first_name: clientDetail.first_name,
-            last_name: clientDetail.last_name,
-            email: clientDetail.email,
-            ni_number: clientDetail.ni_number,
-            date_of_birth: clientDetail.date_of_birth,
+            first_name: cd.first_name,
+            last_name: cd.last_name,
+            email: cd.email,
+            ni_number: cd.ni_number,
+            utr: cd.utr,
+            date_of_birth: cd.date_of_birth,
+            region: cd.region,
+            employment_status: cd.employment_status,
           }
         : { first_name: "Client", last_name: "" };
 

@@ -409,7 +409,8 @@ def generate_tax_report(
     st = _styles()
     now = datetime.now(timezone.utc)
     generated_date = now.strftime("%d %B %Y, %H:%M UTC")
-    tax_year = tax_position.get("taxYear", dashboard_data.get("taxYear", "2024/25"))
+    tax_year = tax_position.get("tax_year", tax_position.get("taxYear", dashboard_data.get("tax_year", "2024/25")))
+    client_name = f"{client.get('first_name', '')} {client.get('last_name', '')}".strip() or client.get("name", "Client")
 
     # ------------------------------------------------------------------
     # Document setup
@@ -436,7 +437,7 @@ def generate_tax_report(
         rightMargin=MARGIN,
         topMargin=MARGIN,
         bottomMargin=MARGIN,
-        title=f"Helio Tax Advisory Report - {client.get('name', 'Client')}",
+        title=f"Helio Tax Advisory Report - {client_name}",
         author="Helio",
     )
     doc.addPageTemplates([cover_template, body_template])
@@ -451,7 +452,7 @@ def generate_tax_report(
     story.append(Spacer(1, 1.5 * cm))
     story.append(Paragraph("Tax Advisory Report", st["cover_title"]))
     story.append(Spacer(1, 1 * cm))
-    story.append(Paragraph(client.get("name", ""), st["cover_client"]))
+    story.append(Paragraph(client_name, st["cover_client"]))
     story.append(Spacer(1, 0.6 * cm))
     story.append(Paragraph(f"Tax Year {tax_year}", st["cover_sub"]))
     story.append(Spacer(1, 0.4 * cm))
@@ -470,15 +471,21 @@ def generate_tax_report(
     story.append(Spacer(1, 4 * mm))
 
     client_fields = [
-        ("Name", "name"),
+        ("Name", None),  # handled separately
         ("Email", "email"),
-        ("NI Number", "niNumber"),
+        ("NI Number", "ni_number"),
         ("UTR", "utr"),
-        ("Date of Birth", "dob"),
+        ("Date of Birth", "date_of_birth"),
         ("Region", "region"),
-        ("Employment Status", "employmentStatus"),
+        ("Employment Status", "employment_status"),
     ]
-    client_rows = [(label, str(client[key])) for label, key in client_fields if client.get(key)]
+    client_rows = [("Name", client_name)]
+    for label, key in client_fields:
+        if key is None:
+            continue
+        val = client.get(key)
+        if val:
+            client_rows.append((label, str(val)))
     if client_rows:
         story.append(_kv_table(client_rows, st))
     story.append(Spacer(1, 8 * mm))
@@ -493,9 +500,9 @@ def generate_tax_report(
         story.append(Spacer(1, 4 * mm))
 
         income_rows = [(s.get("label", ""), _fmt(s.get("amount", 0))) for s in sources]
-        total_gross = income_summary.get("totalGrossIncome", sum(
+        total_gross = income_summary.get("totalIncome", income_summary.get("totalGrossIncome", sum(
             s.get("amount", 0) for s in sources
-        ))
+        )))
         income_rows.append(("Total Gross Income", _fmt(total_gross)))
         story.append(_kv_table(income_rows, st, bold_last=True))
         story.append(Spacer(1, 8 * mm))
@@ -505,7 +512,7 @@ def generate_tax_report(
     # ------------------------------------------------------------------
     tax_calc = dashboard_data.get("taxCalculation", {})
     bands = tax_calc.get("incomeTaxByBand", [])
-    non_zero_bands = [b for b in bands if b.get("tax", 0) != 0 or b.get("income", 0) != 0]
+    non_zero_bands = [b for b in bands if b.get("tax", 0) != 0 or b.get("amount", b.get("income", 0)) != 0]
 
     if non_zero_bands:
         story.append(_section_header("Income Tax Breakdown", st))
@@ -516,7 +523,7 @@ def generate_tax_report(
         for b in non_zero_bands:
             band_rows.append([
                 b.get("band", ""),
-                _fmt(b.get("income", 0)),
+                _fmt(b.get("amount", b.get("income", 0))),
                 _pct(b.get("rate", 0)),
                 _fmt(b.get("tax", 0)),
             ])
@@ -548,7 +555,11 @@ def generate_tax_report(
     # 4. NATIONAL INSURANCE
     # ------------------------------------------------------------------
     ni_data = dashboard_data.get("nationalInsurance", {})
-    ni_total = ni_data.get("totalNI", ni_data.get("total", 0))
+    ni_total = (
+        float(ni_data.get("class1", 0) or 0)
+        + float(ni_data.get("class2", 0) or 0)
+        + float(ni_data.get("class4", 0) or 0)
+    )
 
     if ni_total and float(ni_total) > 0:
         story.append(_section_header("National Insurance", st))
@@ -574,24 +585,24 @@ def generate_tax_report(
 
         ani_rows: list[tuple[str, str]] = []
 
-        total_income = ani_data.get("totalIncome")
-        if total_income is not None:
-            ani_rows.append(("Total Income", _fmt(total_income)))
+        tp_total_income = tax_position.get("total_income")
+        if tp_total_income is not None:
+            ani_rows.append(("Total Income", _fmt(tp_total_income)))
 
-        deductions = ani_data.get("deductions")
-        if deductions and float(deductions) > 0:
-            ani_rows.append(("Deductions", _fmt(deductions)))
+        tp_adjusted = tax_position.get("adjusted_net_income", ani_data.get("amount"))
+        if tp_total_income and tp_adjusted and float(tp_total_income) != float(tp_adjusted):
+            deductions = float(tp_total_income) - float(tp_adjusted)
+            ani_rows.append(("Less deductions (pension, Gift Aid)", f"\u2212{_fmt(deductions)}"))
 
-        adjusted = ani_data.get("adjustedNetIncome")
-        if adjusted is not None:
-            ani_rows.append(("Adjusted Net Income", _fmt(adjusted)))
+        if tp_adjusted is not None:
+            ani_rows.append(("Adjusted Net Income", _fmt(tp_adjusted)))
 
-        pa_amount = ani_data.get("personalAllowance", ani_data.get("paAmount"))
-        pa_status = ani_data.get("paStatus", "")
+        pa_amount = tax_position.get("personal_allowance", ani_data.get("personalAllowance"))
+        pa_status = tax_position.get("pa_status", ani_data.get("personalAllowanceStatus", ""))
         if pa_amount is not None:
             pa_label = "Personal Allowance"
             if pa_status:
-                pa_label += f" ({pa_status})"
+                pa_label += f" ({pa_status.capitalize()})"
             ani_rows.append((pa_label, _fmt(pa_amount)))
 
         if ani_rows:
@@ -611,7 +622,7 @@ def generate_tax_report(
         if annual is not None:
             hicbc_rows.append(("Child Benefit (Annual)", _fmt(annual)))
 
-        clawback = hicbc_data.get("clawbackPercent", hicbc_data.get("clawbackRate"))
+        clawback = hicbc_data.get("clawbackPercentage", hicbc_data.get("clawbackPercent"))
         if clawback is not None:
             hicbc_rows.append(("Clawback", _pct(clawback)))
 
@@ -630,30 +641,29 @@ def generate_tax_report(
     # ------------------------------------------------------------------
     # 7. TAX SUMMARY
     # ------------------------------------------------------------------
-    tax_summary = dashboard_data.get("taxSummary", {})
-    # Fall back to computing from parts if taxSummary block is absent
-    income_tax_total = tax_summary.get(
-        "incomeTax",
+    # Use tax_position as primary source; fall back to dashboard_data
+    income_tax_total = tax_position.get(
+        "income_tax",
         tax_calc.get("totalIncomeTax", 0),
     )
-    ni_for_summary = tax_summary.get("nationalInsurance", ni_total or 0)
+    ni_for_summary = tax_position.get("national_insurance", ni_total or 0)
     hicbc_charge = 0
     if hicbc_data.get("applies"):
         hicbc_charge = hicbc_data.get("charge", hicbc_data.get("hicbcCharge", 0)) or 0
-    hicbc_for_summary = tax_summary.get("hicbc", hicbc_charge)
-    total_tax = tax_summary.get(
-        "totalTax",
+    hicbc_for_summary = tax_position.get("hicbc_charge", hicbc_charge)
+    total_tax = tax_position.get(
+        "total_tax",
         (float(income_tax_total or 0)
          + float(ni_for_summary or 0)
          + float(hicbc_for_summary or 0)),
     )
-    effective_rate = tax_summary.get(
-        "effectiveRate",
-        dashboard_data.get("effectiveRate"),
+    effective_rate = tax_position.get(
+        "effective_rate",
+        tax_calc.get("effectiveRate"),
     )
-    marginal_rate = tax_summary.get(
-        "marginalRate",
-        dashboard_data.get("marginalRate"),
+    marginal_rate = tax_position.get(
+        "marginal_rate",
+        tax_calc.get("marginalRate"),
     )
 
     story.append(_section_header("Tax Summary", st))
@@ -719,35 +729,53 @@ def generate_tax_report(
 
         for sc in scenarios:
             sc_name = sc.get("name", "Scenario")
+            sc_desc = sc.get("description", "")
             story.append(Paragraph(f"<b>{sc_name}</b>", st["body_bold"]))
+            if sc_desc:
+                story.append(Spacer(1, 1 * mm))
+                story.append(Paragraph(sc_desc, st["card_body"]))
             story.append(Spacer(1, 3 * mm))
 
             current = sc.get("current", {})
             proposed = sc.get("proposed", {})
+            savings = sc.get("savings", {})
 
+            # Main comparison table — Current vs Proposed vs Saving
             comparison_fields = [
-                ("Gross Salary", "grossSalary"),
-                ("Salary Sacrifice", "salarySacrifice"),
-                ("Income Tax", "incomeTax"),
-                ("National Insurance", "nationalInsurance"),
-                ("HICBC", "hicbc"),
-                ("Total Tax", "totalTax"),
+                ("Gross Salary", "gross_salary", None),
+                ("Salary Sacrifice", "sacrifice", None),
+                ("Income Tax", "income_tax", "income_tax"),
+                ("National Insurance", "national_insurance", "national_insurance"),
+                ("HICBC", "hicbc", "hicbc_avoided"),
+                ("Personal Allowance", "personal_allowance", None),
+                ("Total Tax", "total_tax", "total"),
             ]
 
             comp_rows = []
-            for label, key in comparison_fields:
+            for label, key, sav_key in comparison_fields:
                 cur_val = current.get(key)
                 prop_val = proposed.get(key)
                 if cur_val is None and prop_val is None:
                     continue
                 cur_num = float(cur_val or 0)
                 prop_num = float(prop_val or 0)
-                saving = cur_num - prop_num
+
+                # Use the savings object for the saving column when available
+                if sav_key and savings.get(sav_key) is not None:
+                    sav_num = float(savings[sav_key])
+                    sav_str = _fmt(sav_num) if sav_num > 0 else ""
+                elif key == "personal_allowance":
+                    # PA goes up when sacrifice increases — show the increase
+                    diff = prop_num - cur_num
+                    sav_str = f"+{_fmt(diff, decimals=0)}" if diff > 0 else ""
+                else:
+                    sav_str = ""
+
                 comp_rows.append([
                     label,
                     _fmt(cur_num),
                     _fmt(prop_num),
-                    _fmt(saving),
+                    sav_str,
                 ])
 
             if comp_rows:
@@ -762,10 +790,69 @@ def generate_tax_report(
                         available * 0.24,
                     ],
                     green_col=3,
+                    bold_last=True,
                 ))
 
-            # Extra pension contribution
-            extra_pension = proposed.get("extraPension", sc.get("extraPension"))
+            # Total savings highlight box
+            total_saving = float(savings.get("total", 0))
+            if total_saving > 0:
+                story.append(Spacer(1, 3 * mm))
+                saving_para = Paragraph(
+                    f"<b>Total Annual Tax Saving: {_fmt(total_saving)}</b>",
+                    ParagraphStyle(
+                        "SavingHighlight",
+                        fontName="Helvetica-Bold",
+                        fontSize=12,
+                        leading=16,
+                        textColor=COLOR_GREEN,
+                        alignment=TA_CENTER,
+                    ),
+                )
+                saving_box = Table([[saving_para]], colWidths=[available])
+                saving_box.setStyle(TableStyle([
+                    ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#EBFBEE")),
+                    ("ROUNDEDCORNERS", [4, 4, 4, 4]),
+                    ("TOPPADDING", (0, 0), (-1, -1), 10),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
+                    ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                ]))
+                story.append(saving_box)
+
+            # Savings breakdown (individual components)
+            saving_details: list[str] = []
+            if float(savings.get("income_tax", 0)) > 0:
+                saving_details.append(
+                    f"Income Tax: {_fmt(savings['income_tax'])}"
+                )
+            if float(savings.get("national_insurance", 0)) > 0:
+                saving_details.append(
+                    f"National Insurance: {_fmt(savings['national_insurance'])}"
+                )
+            if float(savings.get("hicbc_avoided", 0)) > 0:
+                saving_details.append(
+                    f"HICBC Avoided: {_fmt(savings['hicbc_avoided'])}"
+                )
+            if saving_details:
+                story.append(Spacer(1, 2 * mm))
+                story.append(Paragraph(
+                    "Savings breakdown: " + " &nbsp;|&nbsp; ".join(saving_details),
+                    st["card_body"],
+                ))
+
+            # Personal allowance change
+            pa_change = sc.get("pa_change", {})
+            pa_restored = float(pa_change.get("restored", 0))
+            if pa_restored > 0:
+                story.append(Spacer(1, 2 * mm))
+                story.append(Paragraph(
+                    f"Personal allowance restored: {_fmt(pa_restored, decimals=0)} "
+                    f"({_fmt(pa_change.get('current', 0), decimals=0)} "
+                    f"\u2192 {_fmt(pa_change.get('proposed', 0), decimals=0)})",
+                    st["body"],
+                ))
+
+            # Extra into pension
+            extra_pension = sc.get("extra_into_pension", 0)
             if extra_pension and float(extra_pension) > 0:
                 story.append(Spacer(1, 2 * mm))
                 story.append(Paragraph(
@@ -773,7 +860,7 @@ def generate_tax_report(
                     st["body"],
                 ))
 
-            story.append(Spacer(1, 6 * mm))
+            story.append(Spacer(1, 8 * mm))
 
     # ------------------------------------------------------------------
     # Build
