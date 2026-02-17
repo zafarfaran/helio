@@ -10,6 +10,7 @@ import { ContextPills } from "@/components/context-pills";
 import { ThinkingIndicator } from "@/components/thinking-indicator";
 import { MarkdownRenderer } from "@/components/markdown-renderer";
 import { TaxComputationBreakdown } from "@/components/tax-computation-breakdown";
+import { VoiceMode } from "@/components/voice-mode";
 import {
   HelioLogo,
   IconSend,
@@ -355,6 +356,7 @@ export default function ChatPage() {
   const [activeTab, setActiveTab] = useState<"overview" | "allowances" | "scenarios" | "observations">("overview");
   const [activeScenarioId, setActiveScenarioId] = useState<string | null>(null);
   const [isListening, setIsListening] = useState(false);
+  const [voiceModeOpen, setVoiceModeOpen] = useState(false);
   const [inputFocused, setInputFocused] = useState(false);
   const [clientMenuOpen, setClientMenuOpen] = useState(false);
   const clientMenuRef = useRef<HTMLDivElement>(null);
@@ -1194,6 +1196,15 @@ export default function ChatPage() {
                       <button className="text-[11px] font-light text-brand-500 hover:text-brand-600 dark:text-brand-400 dark:hover:text-brand-300 flex items-center gap-1 transition-colors">
                         Export <IconArrowRight className="w-2.5 h-2.5" />
                       </button>
+                      {panelMode === "fullscreen" && (
+                        <button
+                          onClick={() => setVoiceModeOpen(true)}
+                          className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 dark:text-zinc-500 hover:text-brand-500 dark:hover:text-brand-400 hover:bg-brand-50/50 dark:hover:bg-brand-950/30 transition-all"
+                          title="Voice mode"
+                        >
+                          <IconMic className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                       <button
                         onClick={() => setPanelMode(panelMode === "fullscreen" ? "sidebar" : "fullscreen")}
                         className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 dark:text-zinc-500 hover:text-brand-500 dark:hover:text-brand-400 hover:bg-brand-50/50 dark:hover:bg-brand-950/30 transition-all"
@@ -1432,6 +1443,20 @@ export default function ChatPage() {
                   </>
                 )}
               </div>
+
+              {/* Voice mode overlay (fullscreen only) */}
+              {panelMode === "fullscreen" && (
+                <VoiceMode
+                  isOpen={voiceModeOpen}
+                  onClose={() => setVoiceModeOpen(false)}
+                  onSend={(text) => {
+                    sendMessage(text);
+                  }}
+                  status={status}
+                  statusMessage={statusMessage}
+                  isStreaming={isStreaming}
+                />
+              )}
             </motion.aside>
           )}
         </AnimatePresence>
