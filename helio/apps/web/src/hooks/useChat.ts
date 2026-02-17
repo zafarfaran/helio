@@ -186,7 +186,7 @@ export function useChat(clientId: string, taxPlanMode: boolean = false) {
               } else if (eventType === "tool_result") {
                 // Capture tax engine computation data and attach to assistant message
                 if (
-                  (data.tool === "compute_tax_position" || data.tool === "model_salary_sacrifice") &&
+                  data.tool === "compute_tax_position" &&
                   data.result?.success
                 ) {
                   setMessages((prev) =>
