@@ -10,7 +10,7 @@ from app.config import get_settings
 from app.core.errors import register_exception_handlers
 from app.core.logging import setup_logging
 from app.core.middleware import RequestContextMiddleware
-from app.routers import chat, clients, context, documents, health
+from app.routers import chat, clients, context, documents, exports, health
 
 
 @asynccontextmanager
@@ -60,3 +60,4 @@ app.include_router(chat.router, prefix="/api")
 app.include_router(clients.router, prefix="/api")
 app.include_router(documents.router, prefix="/api")
 app.include_router(context.router, prefix="/api")
+app.include_router(exports.router, prefix="/api")
