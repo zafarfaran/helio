@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { StatusPhase } from "@/hooks/useChat";
-import { IconMic } from "@/components/icons";
 
 /* ─── Types ─── */
 
@@ -14,7 +13,7 @@ interface VoiceModeProps {
   isStreaming: boolean;
 }
 
-type OrbState = "dormant" | "listening" | "processing" | "thinking" | "error";
+type VoiceState = "dormant" | "listening" | "processing" | "thinking" | "error";
 
 /* ─── SpeechRecognition type shim ─── */
 
@@ -53,10 +52,19 @@ const STATUS_LABELS: Partial<Record<StatusPhase, string>> = {
   generating_response: "Responding...",
 };
 
-/* ─── Floating Voice Widget ─── */
+/* ─── Whisper bar spring ─── */
+
+const SLIDE_TRANSITION = {
+  type: "spring" as const,
+  damping: 28,
+  stiffness: 340,
+  mass: 0.8,
+};
+
+/* ─── Ghost Whisper Voice Bar ─── */
 
 export function VoiceMode({ onSend, status, statusMessage, isStreaming }: VoiceModeProps) {
-  const [orbState, setOrbState] = useState<OrbState>("dormant");
+  const [voiceState, setVoiceState] = useState<VoiceState>("dormant");
   const [interimTranscript, setInterimTranscript] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [supported, setSupported] = useState(true);
@@ -73,26 +81,24 @@ export function VoiceMode({ onSend, status, statusMessage, isStreaming }: VoiceM
     if (!SR) setSupported(false);
   }, []);
 
-  // Derive orb state from chat status (only when we're in thinking mode)
+  // Return to dormant when AI finishes
   useEffect(() => {
-    if (orbState !== "thinking") return;
-
+    if (voiceState !== "thinking") return;
     if (status === "idle" && !isStreaming) {
-      // AI finished — return to dormant
-      setOrbState("dormant");
+      setVoiceState("dormant");
     }
-  }, [status, isStreaming, orbState]);
+  }, [status, isStreaming, voiceState]);
 
   // Auto-clear error
   useEffect(() => {
-    if (orbState === "error") {
+    if (voiceState === "error") {
       if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
-      errorTimerRef.current = setTimeout(() => setOrbState("dormant"), 2500);
+      errorTimerRef.current = setTimeout(() => setVoiceState("dormant"), 2000);
     }
     return () => {
       if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
     };
-  }, [orbState]);
+  }, [voiceState]);
 
   const startRecognition = useCallback(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -110,7 +116,7 @@ export function VoiceMode({ onSend, status, statusMessage, isStreaming }: VoiceM
     recognition.lang = "en-GB";
 
     recognition.onstart = () => {
-      setOrbState("listening");
+      setVoiceState("listening");
       setInterimTranscript("");
       setErrorMessage("");
     };
@@ -129,33 +135,30 @@ export function VoiceMode({ onSend, status, statusMessage, isStreaming }: VoiceM
       }
 
       setInterimTranscript(interim || final);
-
-      if (interim) setOrbState("processing");
+      if (interim) setVoiceState("processing");
     };
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
       if (event.error === "aborted" || event.error === "no-speech") return;
-
-      setOrbState("error");
+      setVoiceState("error");
       setErrorMessage(
         event.error === "not-allowed"
-          ? "Mic access denied"
+          ? "Microphone access denied"
           : "Couldn\u2019t hear that"
       );
     };
 
     recognition.onend = () => {
-      // When recognition ends (from .stop()), gather final text and send
-      if (holdingRef.current) return; // still holding, don't process yet
+      if (holdingRef.current) return;
 
       const text = interimTranscript.trim();
       if (text && !sentRef.current) {
         sentRef.current = true;
-        setOrbState("thinking");
+        setVoiceState("thinking");
         onSend(text);
         setInterimTranscript("");
       } else if (!sentRef.current) {
-        setOrbState("dormant");
+        setVoiceState("dormant");
       }
     };
 
@@ -166,17 +169,16 @@ export function VoiceMode({ onSend, status, statusMessage, isStreaming }: VoiceM
   const stopRecognition = useCallback(() => {
     if (!recognitionRef.current) return;
 
-    // Grab whatever text we have before stopping
     const text = interimTranscript.trim();
     try { recognitionRef.current.stop(); } catch { /* ignore */ }
 
     if (text && !sentRef.current) {
       sentRef.current = true;
-      setOrbState("thinking");
+      setVoiceState("thinking");
       onSend(text);
       setInterimTranscript("");
     } else if (!sentRef.current) {
-      setOrbState("dormant");
+      setVoiceState("dormant");
     }
     recognitionRef.current = null;
   }, [onSend, interimTranscript]);
@@ -188,11 +190,10 @@ export function VoiceMode({ onSend, status, statusMessage, isStreaming }: VoiceM
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key !== "v" && e.key !== "V") return;
       if (e.repeat) return;
-      // Don't capture when typing in an input/textarea
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
-      if (isStreaming) return; // AI is still responding
-      if (orbState === "thinking") return; // still processing previous
+      if (isStreaming) return;
+      if (voiceState === "thinking") return;
 
       holdingRef.current = true;
       startRecognition();
@@ -212,7 +213,7 @@ export function VoiceMode({ onSend, status, statusMessage, isStreaming }: VoiceM
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
     };
-  }, [supported, isStreaming, orbState, startRecognition, stopRecognition]);
+  }, [supported, isStreaming, voiceState, startRecognition, stopRecognition]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -225,202 +226,124 @@ export function VoiceMode({ onSend, status, statusMessage, isStreaming }: VoiceM
 
   if (!supported) return null;
 
+  // ── Completely invisible when dormant ──
+  const isVisible = voiceState !== "dormant";
+
   // Display text
   const displayText =
-    orbState === "error"
+    voiceState === "error"
       ? errorMessage
-      : orbState === "processing" || orbState === "listening"
+      : voiceState === "processing" || voiceState === "listening"
         ? interimTranscript || "Listening..."
-        : orbState === "thinking"
+        : voiceState === "thinking"
           ? statusMessage || STATUS_LABELS[status] || "Thinking..."
           : "";
 
-  // Orb visual config
-  const isActive = orbState !== "dormant";
-  const orbSize = orbState === "thinking" ? 48 : orbState === "listening" || orbState === "processing" ? 44 : 40;
-
   return (
-    <div className="absolute bottom-6 right-6 z-40 pointer-events-none">
-      {/* Single anchor — the orb. Everything else positioned absolutely from here. */}
-      <div className="relative pointer-events-auto">
-        {/* Status text bubble — absolutely positioned above the orb */}
-        <AnimatePresence mode="wait">
-          {isActive && displayText && (
-            <motion.div
-              key={orbState + displayText.slice(0, 20)}
-              initial={{ opacity: 0, y: 4 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.3, delay: 0.15, ease: [0.16, 1, 0.3, 1] }}
-              className="absolute bottom-full right-0 mb-2.5"
-            >
-              <div
-                className={`px-3 py-1.5 rounded-xl backdrop-blur-xl border max-w-[240px] whitespace-nowrap ${
-                  orbState === "error"
-                    ? "bg-red-950/60 border-red-500/20 text-red-300"
-                    : orbState === "thinking"
-                      ? "bg-slate-950/70 border-brand-500/15 text-white/70"
-                      : "bg-slate-950/60 border-white/10 text-white/50"
-                }`}
-              >
-                <p className="text-[11px] font-light leading-snug truncate">
-                  {displayText}
-                </p>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Dormant hint — absolutely positioned below the orb */}
-        <AnimatePresence>
-          {orbState === "dormant" && (
-            <motion.p
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ delay: 0.3, duration: 0.3 }}
-              className="absolute top-full right-0 mt-1.5 text-[9px] font-mono font-light text-slate-400/40 dark:text-zinc-600/40 tracking-wider whitespace-nowrap"
-            >
-              HOLD V TO SPEAK
-            </motion.p>
-          )}
-        </AnimatePresence>
-        {/* Pulse rings — listening state */}
-        <AnimatePresence>
-          {(orbState === "listening" || orbState === "processing") && (
-            <>
-              <motion.div
-                key="ring1"
-                initial={{ scale: 1, opacity: 0 }}
-                animate={{ scale: 1.8, opacity: [0.3, 0] }}
-                transition={{ duration: 2, repeat: Infinity, ease: "easeOut", delay: 0.3 }}
-                className="absolute inset-0 rounded-full bg-brand-400/15"
-              />
-              <motion.div
-                key="ring2"
-                initial={{ scale: 1, opacity: 0 }}
-                animate={{ scale: 2.2, opacity: [0.15, 0] }}
-                transition={{ duration: 2, repeat: Infinity, ease: "easeOut", delay: 0.8 }}
-                className="absolute inset-0 rounded-full bg-violet-400/10"
-              />
-            </>
-          )}
-        </AnimatePresence>
-
-        {/* Thinking glow */}
-        <AnimatePresence>
-          {orbState === "thinking" && (
-            <motion.div
-              key="glow"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="absolute -inset-4 rounded-full orb-glow-shift"
-            />
-          )}
-        </AnimatePresence>
-
-        {/* Main orb body */}
+    <AnimatePresence>
+      {isVisible && (
         <motion.div
-          animate={{
-            width: orbSize,
-            height: orbSize,
-            scale: orbState === "error" ? [1, 0.92, 1.05, 0.97, 1] : 1,
-          }}
-          transition={
-            orbState === "error"
-              ? { duration: 0.4, ease: "easeInOut" }
-              : { duration: 0.4, ease: [0.16, 1, 0.3, 1] }
-          }
-          className={`relative rounded-full cursor-default transition-shadow duration-500 ${
-            orbState === "error"
-              ? "bg-gradient-to-br from-red-500 to-red-600"
-              : orbState === "thinking"
-                ? "bg-gradient-to-br from-brand-500 via-violet-500 to-blue-500"
-                : orbState === "listening" || orbState === "processing"
-                  ? "bg-gradient-to-br from-brand-400 to-violet-500"
-                  : "bg-gradient-to-br from-slate-600 to-slate-700 dark:from-zinc-600 dark:to-zinc-700"
-          } ${
-            orbState === "listening" || orbState === "processing"
-              ? "orb-listening"
-              : orbState === "thinking"
-                ? "orb-thinking"
-                : ""
-          }`}
-          style={{
-            boxShadow:
-              orbState === "error"
-                ? "0 0 30px 8px rgba(239, 68, 68, 0.3)"
-                : orbState === "thinking"
-                  ? "0 0 40px 12px rgba(92, 124, 250, 0.25), 0 0 80px 24px rgba(139, 92, 246, 0.1)"
-                  : orbState === "listening" || orbState === "processing"
-                    ? "0 0 30px 10px rgba(92, 124, 250, 0.2), 0 0 60px 20px rgba(139, 92, 246, 0.08)"
-                    : "0 4px 16px -2px rgba(0, 0, 0, 0.15)",
-          }}
+          key="whisper-bar"
+          initial={{ y: 20, opacity: 0, scale: 0.96 }}
+          animate={{ y: 0, opacity: 1, scale: 1 }}
+          exit={{ y: 12, opacity: 0, scale: 0.98 }}
+          transition={SLIDE_TRANSITION}
+          className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50"
         >
-          {/* Inner shine */}
-          <div className="absolute inset-[3px] rounded-full bg-gradient-to-br from-white/25 to-transparent" />
-
-          {/* Center content */}
-          <div className="absolute inset-0 flex items-center justify-center">
-            <AnimatePresence mode="wait">
-              {orbState === "dormant" ? (
-                <motion.div
-                  key="dormant"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.25 }}
-                  className="flex items-center justify-center"
-                >
-                  <span className="text-[10px] font-mono font-medium text-white/50 tracking-wider">V</span>
-                </motion.div>
-              ) : orbState === "listening" || orbState === "processing" ? (
-                <motion.div
-                  key="mic"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.25 }}
-                >
-                  <IconMic className="w-5 h-5 text-white/80" />
-                </motion.div>
-              ) : orbState === "thinking" ? (
-                <motion.div
-                  key="bars"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.25 }}
-                  className="flex gap-[3px] items-center"
-                >
+          <div
+            className={`
+              flex items-center gap-2.5 px-4 py-2.5
+              rounded-full backdrop-blur-2xl border
+              shadow-lg shadow-black/10
+              min-w-[200px] max-w-[360px]
+              ${voiceState === "error"
+                ? "bg-red-950/70 border-red-500/25"
+                : voiceState === "thinking"
+                  ? "bg-slate-950/75 border-brand-500/20"
+                  : "bg-slate-950/70 border-white/[0.08]"
+              }
+            `}
+          >
+            {/* ── Left indicator ── */}
+            <div className="flex-shrink-0 relative flex items-center justify-center w-5 h-5">
+              {voiceState === "listening" || voiceState === "processing" ? (
+                <>
+                  {/* Pulsing ring */}
+                  <motion.div
+                    animate={{ scale: [1, 1.8, 1.8], opacity: [0.5, 0, 0] }}
+                    transition={{ duration: 1.5, repeat: Infinity, ease: "easeOut" }}
+                    className="absolute inset-0 rounded-full bg-brand-400/30"
+                  />
+                  {/* Core dot */}
+                  <motion.div
+                    animate={{ scale: [1, 1.15, 1] }}
+                    transition={{ duration: 0.8, repeat: Infinity, ease: "easeInOut" }}
+                    className="w-2.5 h-2.5 rounded-full bg-brand-400"
+                  />
+                </>
+              ) : voiceState === "thinking" ? (
+                /* Three animated bars */
+                <div className="flex gap-[2.5px] items-center h-full">
                   {[0, 1, 2].map((i) => (
                     <motion.div
                       key={i}
-                      animate={{ scaleY: [0.3, 1, 0.3] }}
+                      animate={{ scaleY: [0.35, 1, 0.35] }}
                       transition={{
-                        duration: 0.55,
+                        duration: 0.5,
                         repeat: Infinity,
-                        delay: i * 0.12,
+                        delay: i * 0.1,
                         ease: "easeInOut",
                       }}
-                      className="w-[3px] h-4 rounded-full bg-white/70 origin-center"
+                      className="w-[2.5px] h-3.5 rounded-full bg-brand-400/80 origin-center"
                     />
                   ))}
-                </motion.div>
+                </div>
               ) : (
-                <motion.div
-                  key="error"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="w-3 h-3 rounded-sm bg-white/70"
-                />
+                /* Error dot */
+                <div className="w-2.5 h-2.5 rounded-full bg-red-400" />
               )}
-            </AnimatePresence>
+            </div>
+
+            {/* ── Text ── */}
+            <p
+              className={`
+                text-[12px] font-light leading-none truncate flex-1
+                ${voiceState === "error"
+                  ? "text-red-300/90"
+                  : voiceState === "processing"
+                    ? "text-white/70"
+                    : "text-white/50"
+                }
+              `}
+            >
+              {displayText}
+            </p>
+
+            {/* ── Right hint (listening only) ── */}
+            {(voiceState === "listening" || voiceState === "processing") && (
+              <span className="flex-shrink-0 text-[10px] font-mono text-white/20 tracking-wide">
+                V
+              </span>
+            )}
+
+            {/* ── Thinking shimmer overlay ── */}
+            {voiceState === "thinking" && (
+              <motion.div
+                className="absolute inset-0 rounded-full overflow-hidden pointer-events-none"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.3 }}
+              >
+                <motion.div
+                  animate={{ x: ["-100%", "200%"] }}
+                  transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                  className="absolute inset-y-0 w-1/3 bg-gradient-to-r from-transparent via-brand-400/[0.06] to-transparent"
+                />
+              </motion.div>
+            )}
           </div>
         </motion.div>
-      </div>
-    </div>
+      )}
+    </AnimatePresence>
   );
 }
