@@ -8,10 +8,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     """Environment-validated application settings."""
 
-    # Supabase
-    supabase_url: str = "http://localhost:54321"
-    supabase_anon_key: str = ""
-    supabase_service_role_key: str = ""
+    # Database
+    database_url: str = "sqlite+aiosqlite:///./helio.db"
 
     # AI
     anthropic_api_key: str | None = None
