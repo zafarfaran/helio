@@ -234,8 +234,9 @@ def _position_to_dashboard(pos: TaxPosition) -> dict:
     allowances_tracker = {"allowances": allowances}
 
     # Observations
-    observations = [
-        {
+    observations = []
+    for o in pos.observations:
+        obs_dict = {
             "id": o.id,
             "type": o.severity,
             "title": o.title,
@@ -244,8 +245,19 @@ def _position_to_dashboard(pos: TaxPosition) -> dict:
             "potentialSaving": o.potential_saving,
             "action": o.action,
         }
-        for o in pos.observations
-    ]
+        if o.savings_breakdown:
+            sb = o.savings_breakdown
+            obs_dict["savingsBreakdown"] = {
+                "currentState": [{"label": i.label, "value": i.value} for i in sb.current_state],
+                "recommendedAction": [{"label": i.label, "value": i.value} for i in sb.recommended_action],
+                "taxImpact": [{"label": i.label, "annual": i.annual, "monthly": i.monthly} for i in sb.tax_impact],
+                "totalAnnual": sb.total_annual,
+                "totalMonthly": sb.total_monthly,
+                "costNote": sb.cost_note,
+                "effectiveRelief": sb.effective_relief,
+                "modelPrompt": sb.model_prompt,
+            }
+        observations.append(obs_dict)
 
     # HICBC section
     hicbc = None
