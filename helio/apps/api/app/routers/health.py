@@ -14,4 +14,4 @@ async def health(
 ) -> dict[str, str]:
     """Service health check."""
     logger.debug("Health check")
-    return {"status": "ok", "service": "helio-api", "version": "0.0.1"}
+    return {"status": "ok", "service": "helio-api", "version": "0.0.1", "database": "sqlite"}
