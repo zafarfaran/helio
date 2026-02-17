@@ -240,37 +240,51 @@ export function VoiceMode({ onSend, status, statusMessage, isStreaming }: VoiceM
   const orbSize = orbState === "thinking" ? 48 : orbState === "listening" || orbState === "processing" ? 44 : 40;
 
   return (
-    <div className="absolute bottom-6 right-6 z-40 flex flex-col items-end gap-2.5 pointer-events-none">
-      {/* Status text bubble — floats above the orb */}
-      <AnimatePresence mode="wait">
-        {isActive && displayText && (
-          <motion.div
-            key={orbState + displayText.slice(0, 20)}
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 4 }}
-            transition={{ duration: 0.3, delay: 0.15, ease: [0.16, 1, 0.3, 1] }}
-            className="pointer-events-auto"
-          >
-            <div
-              className={`px-3 py-1.5 rounded-xl backdrop-blur-xl border max-w-[240px] ${
-                orbState === "error"
-                  ? "bg-red-950/60 border-red-500/20 text-red-300"
-                  : orbState === "thinking"
-                    ? "bg-slate-950/70 border-brand-500/15 text-white/70"
-                    : "bg-slate-950/60 border-white/10 text-white/50"
-              }`}
-            >
-              <p className="text-[11px] font-light leading-snug truncate">
-                {displayText}
-              </p>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* The orb */}
+    <div className="absolute bottom-6 right-6 z-40 pointer-events-none">
+      {/* Single anchor — the orb. Everything else positioned absolutely from here. */}
       <div className="relative pointer-events-auto">
+        {/* Status text bubble — absolutely positioned above the orb */}
+        <AnimatePresence mode="wait">
+          {isActive && displayText && (
+            <motion.div
+              key={orbState + displayText.slice(0, 20)}
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.3, delay: 0.15, ease: [0.16, 1, 0.3, 1] }}
+              className="absolute bottom-full right-0 mb-2.5"
+            >
+              <div
+                className={`px-3 py-1.5 rounded-xl backdrop-blur-xl border max-w-[240px] whitespace-nowrap ${
+                  orbState === "error"
+                    ? "bg-red-950/60 border-red-500/20 text-red-300"
+                    : orbState === "thinking"
+                      ? "bg-slate-950/70 border-brand-500/15 text-white/70"
+                      : "bg-slate-950/60 border-white/10 text-white/50"
+                }`}
+              >
+                <p className="text-[11px] font-light leading-snug truncate">
+                  {displayText}
+                </p>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Dormant hint — absolutely positioned below the orb */}
+        <AnimatePresence>
+          {orbState === "dormant" && (
+            <motion.p
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ delay: 0.3, duration: 0.3 }}
+              className="absolute top-full right-0 mt-1.5 text-[9px] font-mono font-light text-slate-400/40 dark:text-zinc-600/40 tracking-wider whitespace-nowrap"
+            >
+              HOLD V TO SPEAK
+            </motion.p>
+          )}
+        </AnimatePresence>
         {/* Pulse rings — listening state */}
         <AnimatePresence>
           {(orbState === "listening" || orbState === "processing") && (
@@ -407,21 +421,6 @@ export function VoiceMode({ onSend, status, statusMessage, isStreaming }: VoiceM
           </div>
         </motion.div>
       </div>
-
-      {/* Dormant hint */}
-      <AnimatePresence>
-        {orbState === "dormant" && (
-          <motion.p
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ delay: 0.3, duration: 0.3 }}
-            className="text-[9px] font-mono font-light text-slate-400/40 dark:text-zinc-600/40 tracking-wider mr-1"
-          >
-            HOLD V TO SPEAK
-          </motion.p>
-        )}
-      </AnimatePresence>
     </div>
   );
 }
