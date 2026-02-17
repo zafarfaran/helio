@@ -1078,13 +1078,15 @@ export default function ChatPage() {
             </div>
           </div>
 
-          {/* Floating voice widget (chat area) */}
-          <VoiceMode
-            onSend={(text) => sendMessage(text)}
-            status={status}
-            statusMessage={statusMessage}
-            isStreaming={isStreaming}
-          />
+          {/* Floating voice widget (chat area — hidden when fullscreen panel covers it) */}
+          {panelMode !== "fullscreen" && (
+            <VoiceMode
+              onSend={(text) => sendMessage(text)}
+              status={status}
+              statusMessage={statusMessage}
+              isStreaming={isStreaming}
+            />
+          )}
         </div>
 
         {/* ═══ Intelligence Panel (slide-over / fullscreen) ═══ */}
