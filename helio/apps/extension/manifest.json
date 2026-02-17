@@ -4,6 +4,7 @@
   "description": "UK tax planning companion for financial advisers",
   "version": "0.0.1",
   "permissions": ["storage", "activeTab"],
+  "host_permissions": ["http://localhost:8000/*"],
   "action": {
     "default_popup": "src/popup/index.html",
     "default_title": "Helio"
