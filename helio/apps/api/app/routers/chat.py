@@ -24,6 +24,7 @@ class ChatStreamRequest(BaseModel):
     client_id: str
     message: str
     tax_plan_mode: bool = False
+    context_snippet_ids: list[str] | None = None
 
 
 class CreateConversationRequest(BaseModel):
@@ -65,6 +66,7 @@ async def chat_stream(
             client_id=body.client_id,
             content=body.message,
             tax_plan_mode=body.tax_plan_mode,
+            context_snippet_ids=body.context_snippet_ids,
         ):
             data = json.dumps(asdict(event))
             yield f"event: {event.type}\ndata: {data}\n\n"
