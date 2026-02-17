@@ -158,6 +158,31 @@ class PensionAAResult:
 
 
 @dataclass(frozen=True)
+class SavingsBreakdownItem:
+    label: str
+    value: str
+
+
+@dataclass(frozen=True)
+class TaxImpactItem:
+    label: str
+    annual: float
+    monthly: float
+
+
+@dataclass(frozen=True)
+class SavingsBreakdown:
+    current_state: list[SavingsBreakdownItem]
+    recommended_action: list[SavingsBreakdownItem]
+    tax_impact: list[TaxImpactItem]
+    total_annual: float
+    total_monthly: float
+    cost_note: str | None = None
+    effective_relief: float | None = None
+    model_prompt: str | None = None
+
+
+@dataclass(frozen=True)
 class ObservationItem:
     id: str
     title: str
@@ -166,6 +191,7 @@ class ObservationItem:
     category: str
     potential_saving: float | None = None
     action: str | None = None
+    savings_breakdown: SavingsBreakdown | None = None
 
 
 # ── Master output ────────────────────────────────────────────────────────────
