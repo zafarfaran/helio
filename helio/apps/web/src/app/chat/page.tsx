@@ -345,6 +345,11 @@ export default function ChatPage() {
   /* ── UI state ── */
   const [input, setInput] = useState("");
   const [panelOpen, setPanelOpen] = useState(true);
+  const [panelWidth, setPanelWidth] = useState(520);
+  const [panelMode, setPanelMode] = useState<"sidebar" | "fullscreen">("sidebar");
+  const panelResizing = useRef(false);
+  const panelMinWidth = 420;
+  const panelMaxWidth = 900;
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historySearch, setHistorySearch] = useState("");
   const [activeTab, setActiveTab] = useState<"overview" | "allowances" | "scenarios" | "observations">("overview");
@@ -648,6 +653,43 @@ export default function ChatPage() {
   const handleModelScenario = useCallback((prompt: string) => {
     sendMessage(prompt);
   }, [sendMessage]);
+
+  // Escape key exits fullscreen panel
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && panelMode === "fullscreen") {
+        setPanelMode("sidebar");
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [panelMode]);
+
+  // Panel resize drag handler
+  const handlePanelResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    panelResizing.current = true;
+    const startX = e.clientX;
+    const startWidth = panelWidth;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+
+    const onMove = (ev: MouseEvent) => {
+      if (!panelResizing.current) return;
+      const delta = startX - ev.clientX;
+      const newWidth = Math.min(panelMaxWidth, Math.max(panelMinWidth, startWidth + delta));
+      setPanelWidth(newWidth);
+    };
+    const onUp = () => {
+      panelResizing.current = false;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }, [panelWidth]);
 
   return (
     <div className="h-screen flex flex-col bg-[#fafbfc] dark:bg-[#0a0a0c]">
@@ -1097,19 +1139,31 @@ export default function ChatPage() {
           </div>
         </div>
 
-        {/* ═══ Intelligence Panel (slide-over) ═══ */}
+        {/* ═══ Intelligence Panel (slide-over / fullscreen) ═══ */}
         <AnimatePresence>
           {panelOpen && (
             <motion.aside
               initial={{ width: 0, opacity: 0 }}
-              animate={{ width: 520, opacity: 1 }}
+              animate={{ width: panelMode === "fullscreen" ? "100%" : panelWidth, opacity: 1 }}
               exit={{ width: 0, opacity: 0 }}
               transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-              className="flex-shrink-0 overflow-hidden border-l border-slate-200/70 dark:border-zinc-800/70 bg-white dark:bg-zinc-950"
+              className={`flex-shrink-0 overflow-hidden border-l border-slate-200/70 dark:border-zinc-800/70 bg-white dark:bg-zinc-950 ${
+                panelMode === "fullscreen" ? "absolute inset-0 z-20 border-l-0" : "relative"
+              }`}
+              style={panelMode === "sidebar" ? { willChange: "width" } : undefined}
             >
-              <div className="w-[520px] h-full flex flex-col relative">
+              {/* Resize drag handle (sidebar mode only) */}
+              {panelMode === "sidebar" && (
+                <div
+                  onMouseDown={handlePanelResizeStart}
+                  className="absolute left-0 top-0 bottom-0 w-[5px] z-30 cursor-col-resize group"
+                >
+                  <div className="absolute left-0 top-0 bottom-0 w-[1px] bg-transparent group-hover:bg-brand-400/50 group-active:bg-brand-500 transition-colors duration-150" />
+                </div>
+              )}
+              <div style={{ width: panelMode === "fullscreen" ? "100%" : panelWidth }} className="h-full flex flex-col relative">
                 {/* Panel header */}
-                <div className="flex-shrink-0 px-5 pt-5 pb-4 relative z-10">
+                <div className={`flex-shrink-0 pt-5 pb-4 relative z-10 ${panelMode === "fullscreen" ? "px-10 max-w-5xl mx-auto w-full" : "px-5"}`}>
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-2">
                       <div className={`w-6 h-6 rounded-md bg-gradient-to-br from-brand-400 to-violet-500 flex items-center justify-center transition-shadow duration-500 ${isDashboardGenerating ? "shadow-md shadow-brand-500/30 dark:shadow-brand-400/20" : ""}`}>
@@ -1136,13 +1190,26 @@ export default function ChatPage() {
                         )}
                       </AnimatePresence>
                     </div>
-                    <button className="text-[11px] font-light text-brand-500 hover:text-brand-600 dark:text-brand-400 dark:hover:text-brand-300 flex items-center gap-1 transition-colors">
-                      Export <IconArrowRight className="w-2.5 h-2.5" />
-                    </button>
+                    <div className="flex items-center gap-1.5">
+                      <button className="text-[11px] font-light text-brand-500 hover:text-brand-600 dark:text-brand-400 dark:hover:text-brand-300 flex items-center gap-1 transition-colors">
+                        Export <IconArrowRight className="w-2.5 h-2.5" />
+                      </button>
+                      <button
+                        onClick={() => setPanelMode(panelMode === "fullscreen" ? "sidebar" : "fullscreen")}
+                        className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 dark:text-zinc-500 hover:text-brand-500 dark:hover:text-brand-400 hover:bg-brand-50/50 dark:hover:bg-brand-950/30 transition-all"
+                        title={panelMode === "fullscreen" ? "Exit fullscreen" : "Fullscreen"}
+                      >
+                        {panelMode === "fullscreen" ? (
+                          <IconMinimize className="w-3.5 h-3.5" />
+                        ) : (
+                          <IconMaximize className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                    </div>
                   </div>
 
                   {/* Stat cards */}
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className={`grid gap-2 ${panelMode === "fullscreen" ? "grid-cols-6" : "grid-cols-3"}`}>
                     <MiniStat icon={<IconCalculator className="w-3.5 h-3.5" />} label="Gross income" value={totalIncome != null ? `\u00A3${totalIncome.toLocaleString()}` : "\u2014"} />
                     <MiniStat icon={<IconPieChart className="w-3.5 h-3.5" />} label="Tax liability" value={totalTax != null ? `\u00A3${totalTax.toLocaleString()}` : "\u2014"} accent />
                     <MiniStat icon={<IconWallet className="w-3.5 h-3.5" />} label="Net income" value={netIncome != null ? `\u00A3${netIncome.toLocaleString()}` : "\u2014"} />
@@ -1301,7 +1368,7 @@ export default function ChatPage() {
                 ) : (
                   <>
                     {/* Tabs — underline style */}
-                    <div className="flex-shrink-0 px-5 pb-4 relative z-10">
+                    <div className={`flex-shrink-0 pb-4 relative z-10 ${panelMode === "fullscreen" ? "px-10 max-w-5xl mx-auto w-full" : "px-5"}`}>
                       <div className="flex gap-1 border-b border-slate-100 dark:border-zinc-800/50">
                         {(["overview", "allowances", "scenarios", "observations"] as const).map((tab) => (
                           <button
@@ -1327,7 +1394,7 @@ export default function ChatPage() {
                     </div>
 
                     {/* Tab content — relative container for overlay */}
-                    <div className="flex-1 overflow-y-auto px-5 pb-5 relative">
+                    <div className={`flex-1 overflow-y-auto pb-5 relative ${panelMode === "fullscreen" ? "px-10" : "px-5"}`}>
                       {/* Dot-matrix background texture */}
                       <div
                         className="absolute inset-0 pointer-events-none opacity-[0.025] dark:opacity-[0.04]"
@@ -1343,6 +1410,7 @@ export default function ChatPage() {
                           animate={{ opacity: 1, y: 0 }}
                           exit={{ opacity: 0, y: -6 }}
                           transition={{ duration: 0.2 }}
+                          className={panelMode === "fullscreen" ? "max-w-5xl mx-auto" : ""}
                         >
                           {activeTab === "overview" && (
                             <div className="space-y-5">
@@ -1877,6 +1945,22 @@ function IconCopy({ className }: { className?: string }) {
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
       <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
       <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </svg>
+  );
+}
+
+function IconMaximize({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
+    </svg>
+  );
+}
+
+function IconMinimize({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3" />
     </svg>
   );
 }
