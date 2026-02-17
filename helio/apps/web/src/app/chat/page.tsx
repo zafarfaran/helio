@@ -167,6 +167,8 @@ const severityConfig = {
     border: "border-red-500/20 dark:border-red-500/20",
     text: "text-red-600 dark:text-red-400",
     badge: "bg-red-500/10 text-red-600 dark:text-red-400",
+    accent: "from-red-400 to-rose-500",
+    iconBg: "bg-red-500/10 dark:bg-red-500/15",
   },
   warning: {
     dot: "bg-amber-500",
@@ -174,6 +176,8 @@ const severityConfig = {
     border: "border-amber-500/20 dark:border-amber-500/20",
     text: "text-amber-600 dark:text-amber-400",
     badge: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
+    accent: "from-amber-400 to-orange-400",
+    iconBg: "bg-amber-500/10 dark:bg-amber-500/15",
   },
   opportunity: {
     dot: "bg-emerald-500",
@@ -181,6 +185,8 @@ const severityConfig = {
     border: "border-emerald-500/20 dark:border-emerald-500/20",
     text: "text-emerald-600 dark:text-emerald-400",
     badge: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+    accent: "from-emerald-400 to-teal-400",
+    iconBg: "bg-emerald-500/10 dark:bg-emerald-500/15",
   },
   info: {
     dot: "bg-blue-500",
@@ -188,6 +194,8 @@ const severityConfig = {
     border: "border-blue-500/20 dark:border-blue-500/20",
     text: "text-blue-600 dark:text-blue-400",
     badge: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
+    accent: "from-brand-400 to-violet-400",
+    iconBg: "bg-brand-500/10 dark:bg-brand-500/15",
   },
 };
 
@@ -1197,27 +1205,27 @@ export default function ChatPage() {
                   </div>
                 ) : (
                   <>
-                    {/* Tabs */}
-                    <div className="flex-shrink-0 px-5 pb-3 relative z-10">
-                      <div className="flex gap-0.5 bg-slate-100/80 dark:bg-zinc-800/80 rounded-lg p-0.5">
+                    {/* Tabs — underline style */}
+                    <div className="flex-shrink-0 px-5 pb-4 relative z-10">
+                      <div className="flex gap-1 border-b border-slate-100 dark:border-zinc-800/50">
                         {(["overview", "allowances", "observations"] as const).map((tab) => (
                           <button
                             key={tab}
                             onClick={() => setActiveTab(tab)}
-                            className={`relative flex-1 px-2 py-1.5 text-[11px] font-medium rounded-md transition-all ${
+                            className={`relative px-3 pb-2.5 text-[11px] font-medium transition-colors ${
                               activeTab === tab
                                 ? "text-slate-900 dark:text-white"
                                 : "text-slate-400 dark:text-zinc-500 hover:text-slate-600 dark:hover:text-zinc-300"
                             }`}
                           >
+                            <span className="relative z-10 capitalize">{tab}</span>
                             {activeTab === tab && (
                               <motion.div
-                                layoutId="panel-tab"
-                                className="absolute inset-0 bg-white dark:bg-zinc-700 rounded-md shadow-sm"
+                                layoutId="panel-tab-line"
+                                className="absolute bottom-0 left-1 right-1 h-[2px] rounded-full bg-gradient-to-r from-brand-400 to-violet-400"
                                 transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
                               />
                             )}
-                            <span className="relative z-10 capitalize">{tab}</span>
                           </button>
                         ))}
                       </div>
@@ -1225,6 +1233,14 @@ export default function ChatPage() {
 
                     {/* Tab content — relative container for overlay */}
                     <div className="flex-1 overflow-y-auto px-5 pb-5 relative">
+                      {/* Dot-matrix background texture */}
+                      <div
+                        className="absolute inset-0 pointer-events-none opacity-[0.025] dark:opacity-[0.04]"
+                        style={{
+                          backgroundImage: 'radial-gradient(circle, currentColor 0.5px, transparent 0.5px)',
+                          backgroundSize: '18px 18px',
+                        }}
+                      />
                       <AnimatePresence mode="wait">
                         <motion.div
                           key={activeTab}
@@ -1268,10 +1284,10 @@ function PanelGeneratingSkeleton() {
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-      className="space-y-4 py-2"
+      className="space-y-3 py-2"
     >
       {/* Pulsing status label */}
-      <div className="flex items-center justify-center gap-2 pb-2">
+      <div className="flex items-center justify-center gap-2 pb-1">
         <span className="relative flex h-2 w-2">
           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-400 opacity-50" />
           <span className="relative inline-flex rounded-full h-2 w-2 bg-brand-500" />
@@ -1281,55 +1297,66 @@ function PanelGeneratingSkeleton() {
         </span>
       </div>
 
-      {/* Shimmer bar skeleton (looks like a stacked bar chart loading) */}
-      <div className="h-3 rounded-lg overflow-hidden flex gap-0.5">
-        {[40, 25, 20, 15].map((w, i) => (
-          <div
-            key={i}
-            className="h-full rounded-md dash-shimmer-bar"
-            style={{
-              width: `${w}%`,
-              animationDelay: `${i * 0.2}s`,
-              background: `linear-gradient(90deg, transparent 0%, rgba(92,124,250,${0.08 + i * 0.02}) 50%, transparent 100%)`,
-              backgroundSize: '200% 100%',
-            }}
-          />
-        ))}
+      {/* Shimmer bar skeleton — glass container matching TaxBreakdown */}
+      <div className="rounded-xl border border-slate-200/40 dark:border-zinc-800/30 bg-white/50 dark:bg-zinc-900/30 backdrop-blur-sm p-3">
+        <div className="h-3 rounded-lg overflow-hidden flex gap-0.5">
+          {[40, 25, 20, 15].map((w, i) => (
+            <div
+              key={i}
+              className="h-full rounded-md dash-shimmer-bar relative overflow-hidden"
+              style={{
+                width: `${w}%`,
+                animationDelay: `${i * 0.2}s`,
+                background: `linear-gradient(90deg, transparent 0%, rgba(92,124,250,${0.08 + i * 0.02}) 50%, transparent 100%)`,
+                backgroundSize: '200% 100%',
+              }}
+            >
+              <div className="absolute inset-x-0 top-0 h-1/2 bg-white/20 rounded-t-md" />
+            </div>
+          ))}
+        </div>
       </div>
 
-      {/* Skeleton rows */}
+      {/* Skeleton rows — glass cards with gradient accent bars */}
       {[1, 2, 3, 4].map((_, i) => (
         <motion.div
           key={i}
           initial={{ opacity: 0, x: -6 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ delay: 0.1 + i * 0.08, duration: 0.4 }}
-          className="flex items-center justify-between py-2.5 border-b border-slate-100/60 dark:border-zinc-800/40"
+          className="relative rounded-xl border border-slate-200/40 dark:border-zinc-800/30 bg-white/50 dark:bg-zinc-900/30 backdrop-blur-sm p-3.5 overflow-hidden"
         >
-          <div className="flex items-center gap-2.5">
-            <div className="w-1 h-8 rounded-full dash-shimmer-bar" style={{ animationDelay: `${i * 0.15}s` }} />
+          {/* Shimmer accent bar */}
+          <div
+            className="absolute left-0 top-3 bottom-3 w-[3px] rounded-full dash-shimmer-bar"
+            style={{ animationDelay: `${i * 0.15}s` }}
+          />
+          <div className="flex items-center justify-between pl-3">
             <div className="space-y-1.5">
               <div
-                className="h-2.5 rounded dash-shimmer-bar"
+                className="h-2.5 rounded-md dash-shimmer-bar"
                 style={{ width: `${70 + ((i * 23) % 40)}px`, animationDelay: `${i * 0.2}s` }}
               />
               <div
-                className="h-2 rounded dash-shimmer-bar"
+                className="h-2 rounded-md dash-shimmer-bar"
                 style={{ width: `${40 + ((i * 17) % 25)}px`, animationDelay: `${0.1 + i * 0.2}s` }}
               />
             </div>
+            <div
+              className="h-3 rounded-md dash-shimmer-bar"
+              style={{ width: `${50 + ((i * 13) % 30)}px`, animationDelay: `${0.15 + i * 0.15}s` }}
+            />
           </div>
-          <div
-            className="h-3 rounded dash-shimmer-bar"
-            style={{ width: `${50 + ((i * 13) % 30)}px`, animationDelay: `${0.15 + i * 0.15}s` }}
-          />
         </motion.div>
       ))}
 
-      {/* Skeleton total row */}
-      <div className="flex justify-between items-center pt-2 border-t border-slate-200/50 dark:border-zinc-700/50">
-        <div className="h-3 w-24 rounded dash-shimmer-bar" />
-        <div className="h-4 w-20 rounded dash-shimmer-bar" style={{ animationDelay: '0.3s' }} />
+      {/* Skeleton total — gradient border card */}
+      <div className="relative">
+        <div className="absolute -inset-[1px] rounded-xl bg-gradient-to-r from-brand-400/15 via-violet-400/10 to-brand-400/15 dark:from-brand-500/10 dark:via-violet-500/8 dark:to-brand-500/10 dash-shimmer-bar" style={{ animationDelay: '0.4s' }} />
+        <div className="relative flex justify-between items-center px-4 py-3.5 rounded-xl bg-white/80 dark:bg-zinc-900/60 backdrop-blur-sm">
+          <div className="h-3 w-24 rounded-md dash-shimmer-bar" />
+          <div className="h-4 w-20 rounded-md dash-shimmer-bar" style={{ animationDelay: '0.3s' }} />
+        </div>
       </div>
     </motion.div>
   );
@@ -1501,15 +1528,23 @@ const ChatMessage = memo(function ChatMessage({ message }: { message: Message })
 
 const MiniStat = memo(function MiniStat({ icon, label, value, accent }: { icon: React.ReactNode; label: string; value: string; accent?: boolean }) {
   return (
-    <div className="rounded-lg border border-slate-100 dark:border-zinc-800 bg-slate-50/50 dark:bg-zinc-900/50 p-3">
-      <div className="flex items-center gap-1.5 mb-1.5">
-        <span className="text-slate-400 dark:text-zinc-500">{icon}</span>
-        <span className="text-[10px] font-light text-slate-400 dark:text-zinc-500">{label}</span>
-      </div>
-      <div className={`text-lg font-light font-mono tracking-tight ${
-        accent ? "text-red-600 dark:text-red-400" : "text-slate-900 dark:text-white"
-      }`}>
-        {value}
+    <div className="group relative rounded-xl border border-slate-200/40 dark:border-zinc-800/30 bg-white/50 dark:bg-zinc-900/30 backdrop-blur-sm p-3 overflow-hidden hover:border-brand-200/40 dark:hover:border-brand-700/30 transition-all duration-200">
+      {/* Gradient left accent */}
+      <div className={`absolute left-0 top-2.5 bottom-2.5 w-[2px] rounded-full ${
+        accent
+          ? "bg-gradient-to-b from-red-400 to-rose-500"
+          : "bg-gradient-to-b from-brand-400/60 to-violet-400/60"
+      }`} />
+      <div className="pl-2">
+        <div className="flex items-center gap-1.5 mb-1.5">
+          <span className="text-slate-400 dark:text-zinc-500">{icon}</span>
+          <span className="text-[10px] font-light text-slate-400 dark:text-zinc-500">{label}</span>
+        </div>
+        <div className={`text-lg font-light font-mono tracking-tight tabular-nums ${
+          accent ? "text-red-600 dark:text-red-400" : "text-slate-900 dark:text-white"
+        }`}>
+          {value}
+        </div>
       </div>
     </div>
   );
@@ -1524,30 +1559,36 @@ function TaxBreakdown({ items, totalTax, isGenerating }: { items: { label: strin
     }
     return (
       <div className="text-center py-8">
-        <IconPieChart className="w-8 h-8 text-slate-200 dark:text-zinc-700 mx-auto mb-3" />
+        <div className="w-12 h-12 rounded-2xl bg-slate-100/80 dark:bg-zinc-800/50 flex items-center justify-center mx-auto mb-3">
+          <IconPieChart className="w-5 h-5 text-slate-300 dark:text-zinc-600" />
+        </div>
         <p className="text-[12px] font-medium text-slate-400 dark:text-zinc-500">No tax breakdown yet</p>
-        <p className="text-[11px] font-light text-slate-400/60 dark:text-zinc-600/60 mt-1">Enable Tax Plan mode and ask Helio to analyse</p>
+        <p className="text-[11px] font-light text-slate-400/60 dark:text-zinc-600/60 mt-1">Ask Helio to analyse this client&apos;s tax position</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
-      {/* Visual bar */}
+    <div className="space-y-5">
+      {/* Visual bar — glass container */}
       <div>
-        <div className="flex rounded-lg h-3 overflow-hidden gap-0.5">
-          {items.map((item, i) => (
-            <motion.div
-              key={i}
-              initial={{ width: 0 }}
-              animate={{ width: `${item.pct}%` }}
-              transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1], delay: 0.1 + i * 0.12 }}
-              className={`${item.color} rounded-md`}
-              title={item.label}
-            />
-          ))}
+        <div className="relative rounded-xl bg-slate-100/50 dark:bg-zinc-800/30 p-[3px]">
+          <div className="flex rounded-lg h-3.5 overflow-hidden gap-[2px]">
+            {items.map((item, i) => (
+              <motion.div
+                key={i}
+                initial={{ width: 0 }}
+                animate={{ width: `${item.pct}%` }}
+                transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1], delay: 0.1 + i * 0.12 }}
+                className={`${item.color} rounded-md relative overflow-hidden`}
+                title={item.label}
+              >
+                <div className="absolute inset-x-0 top-0 h-1/2 bg-white/20 rounded-t-md" />
+              </motion.div>
+            ))}
+          </div>
         </div>
-        <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-2">
+        <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-2.5">
           {items.map((item) => (
             <div key={item.label} className="flex items-center gap-1.5">
               <div className={`w-2 h-2 rounded-sm ${item.color}`} />
@@ -1557,32 +1598,36 @@ function TaxBreakdown({ items, totalTax, isGenerating }: { items: { label: strin
         </div>
       </div>
 
-      {/* Breakdown rows */}
-      <div className="space-y-0.5">
+      {/* Breakdown rows — glass cards */}
+      <div className="space-y-1.5">
         {items.map((item, i) => (
           <motion.div
             key={i}
             initial={{ opacity: 0, x: -8 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.15 + i * 0.06, duration: 0.4 }}
-            className="flex items-center justify-between py-2.5 border-b border-slate-100/80 dark:border-zinc-800/50 last:border-0"
+            className="group relative rounded-xl border border-slate-200/40 dark:border-zinc-800/30 bg-white/50 dark:bg-zinc-900/30 backdrop-blur-sm p-3.5 hover:border-brand-200/40 dark:hover:border-brand-700/30 transition-all duration-200 overflow-hidden"
           >
-            <div className="flex items-center gap-2.5">
-              <div className={`w-1 h-8 rounded-full ${item.color}`} />
+            {/* Color accent bar */}
+            <div className={`absolute left-0 top-3 bottom-3 w-[3px] rounded-full ${item.color}`} />
+            <div className="flex items-center justify-between pl-3">
               <div>
                 <span className="text-[12px] font-normal text-slate-700 dark:text-zinc-200 block">{item.label}</span>
                 <span className="text-[10px] font-light text-slate-400 dark:text-zinc-500">{item.detail}</span>
               </div>
+              <span className="text-[13px] font-mono font-medium text-slate-900 dark:text-white tabular-nums">{item.amount}</span>
             </div>
-            <span className="text-[13px] font-mono font-medium text-slate-900 dark:text-white">{item.amount}</span>
           </motion.div>
         ))}
       </div>
 
-      {/* Total */}
-      <div className="flex justify-between items-center pt-2 border-t border-slate-200 dark:border-zinc-700">
-        <span className="text-[12px] font-medium text-slate-900 dark:text-white">Total tax liability</span>
-        <span className="text-base font-mono font-semibold text-slate-900 dark:text-white">{totalTax != null ? `\u00A3${totalTax.toLocaleString()}` : "\u2014"}</span>
+      {/* Total — gradient border card */}
+      <div className="relative">
+        <div className="absolute -inset-[1px] rounded-xl bg-gradient-to-r from-brand-400/25 via-violet-400/15 to-brand-400/25 dark:from-brand-500/15 dark:via-violet-500/10 dark:to-brand-500/15" />
+        <div className="relative flex justify-between items-center px-4 py-3.5 rounded-xl bg-white/80 dark:bg-zinc-900/60 backdrop-blur-sm">
+          <span className="text-[12px] font-medium text-slate-900 dark:text-white">Total tax liability</span>
+          <span className="text-base font-mono font-semibold text-slate-900 dark:text-white tabular-nums">{totalTax != null ? `\u00A3${totalTax.toLocaleString()}` : "\u2014"}</span>
+        </div>
       </div>
     </div>
   );
@@ -1597,24 +1642,30 @@ function AllowancesPanel({ allowances, isGenerating }: { allowances: { label: st
     }
     return (
       <div className="text-center py-8">
-        <IconShield className="w-8 h-8 text-slate-200 dark:text-zinc-700 mx-auto mb-3" />
+        <div className="w-12 h-12 rounded-2xl bg-slate-100/80 dark:bg-zinc-800/50 flex items-center justify-center mx-auto mb-3">
+          <IconShield className="w-5 h-5 text-slate-300 dark:text-zinc-600" />
+        </div>
         <p className="text-[12px] font-medium text-slate-400 dark:text-zinc-500">No allowance data yet</p>
-        <p className="text-[11px] font-light text-slate-400/60 dark:text-zinc-600/60 mt-1">Enable Tax Plan mode and ask Helio to analyse</p>
+        <p className="text-[11px] font-light text-slate-400/60 dark:text-zinc-600/60 mt-1">Ask Helio to analyse this client&apos;s tax position</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-2.5">
       {allowances.map((a, i) => {
         const pct = a.total > 0 ? Math.round((a.used / a.total) * 100) : 0;
         const remaining = a.total - a.used;
         const fmt = (n: number) => n >= 1000 ? `\u00A3${(n / 1000).toFixed(n % 1000 === 0 ? 0 : 1)}k` : `\u00A3${n}`;
-        const barColor =
-          pct >= 100 ? "bg-red-400" :
-          pct >= 75 ? "bg-amber-400" :
-          pct > 0 ? "bg-brand-400" :
-          "bg-slate-200 dark:bg-zinc-700";
+        const barGradient =
+          pct >= 100 ? "from-red-400 to-rose-500" :
+          pct >= 75 ? "from-amber-400 to-orange-400" :
+          pct > 0 ? "from-brand-400 to-violet-400" :
+          "from-slate-200 to-slate-200 dark:from-zinc-700 dark:to-zinc-700";
+        const statusColor =
+          pct >= 100 ? "text-red-500 dark:text-red-400" :
+          pct >= 75 ? "text-amber-500 dark:text-amber-400" :
+          "text-emerald-500 dark:text-emerald-400";
 
         return (
           <motion.div
@@ -1622,8 +1673,9 @@ function AllowancesPanel({ allowances, isGenerating }: { allowances: { label: st
             initial={{ opacity: 0, x: -8 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: i * 0.06, duration: 0.4 }}
+            className="rounded-xl border border-slate-200/40 dark:border-zinc-800/30 bg-white/50 dark:bg-zinc-900/30 backdrop-blur-sm p-4 hover:border-brand-200/40 dark:hover:border-brand-700/30 transition-all duration-200"
           >
-            <div className="flex items-center justify-between mb-1">
+            <div className="flex items-center justify-between mb-2.5">
               <span className="text-[12px] font-normal text-slate-700 dark:text-zinc-200">{a.label}</span>
               <span className={`text-[10px] font-mono font-medium ${
                 remaining === 0 ? "text-red-500 dark:text-red-400" : "text-slate-500 dark:text-zinc-400"
@@ -1631,13 +1683,20 @@ function AllowancesPanel({ allowances, isGenerating }: { allowances: { label: st
                 {remaining === 0 ? "Fully used" : `${fmt(remaining)} left`}
               </span>
             </div>
-            <div className="h-1.5 bg-slate-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+            {/* Progress bar — glass treatment */}
+            <div className="relative h-2 bg-slate-100/80 dark:bg-zinc-800/50 rounded-full overflow-hidden">
               <motion.div
                 initial={{ width: 0 }}
                 animate={{ width: `${Math.max(pct, pct === 0 ? 0 : 3)}%` }}
                 transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1], delay: 0.1 + i * 0.08 }}
-                className={`h-full rounded-full ${barColor}`}
-              />
+                className={`h-full rounded-full bg-gradient-to-r ${barGradient} relative overflow-hidden`}
+              >
+                <div className="absolute inset-x-0 top-0 h-1/2 bg-white/25 rounded-t-full" />
+              </motion.div>
+            </div>
+            {/* Percentage */}
+            <div className="flex justify-end mt-1.5">
+              <span className={`text-[9px] font-mono font-medium ${statusColor}`}>{pct}% used</span>
             </div>
           </motion.div>
         );
@@ -1655,7 +1714,11 @@ function ObservationsPanel({ observations, isGenerating }: { observations: Obser
     }
     return (
       <div className="text-center py-8">
-        <p className="text-[11px] font-light text-slate-400 dark:text-zinc-600">No observations available</p>
+        <div className="w-12 h-12 rounded-2xl bg-slate-100/80 dark:bg-zinc-800/50 flex items-center justify-center mx-auto mb-3">
+          <IconAlertCircle className="w-5 h-5 text-slate-300 dark:text-zinc-600" />
+        </div>
+        <p className="text-[12px] font-medium text-slate-400 dark:text-zinc-500">No observations yet</p>
+        <p className="text-[11px] font-light text-slate-400/60 dark:text-zinc-600/60 mt-1">Ask Helio to analyse this client&apos;s tax position</p>
       </div>
     );
   }
@@ -1667,26 +1730,33 @@ function ObservationsPanel({ observations, isGenerating }: { observations: Obser
         return (
           <motion.div
             key={i}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.07, duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-            className={`rounded-lg border ${config.border} ${config.bg} p-3.5`}
+            initial={{ opacity: 0, x: -8 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: i * 0.06, duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+            className="group relative rounded-xl border border-slate-200/40 dark:border-zinc-800/30 bg-white/50 dark:bg-zinc-900/30 backdrop-blur-sm p-3.5 hover:border-brand-200/40 dark:hover:border-brand-700/30 transition-all duration-200 overflow-hidden"
           >
-            <div className="flex items-start gap-2.5">
-              <span className={`flex-shrink-0 w-5 h-5 rounded-full ${config.badge} flex items-center justify-center mt-0.5`}>
+            {/* Severity gradient accent bar */}
+            <div className={`absolute left-0 top-3 bottom-3 w-[3px] rounded-full bg-gradient-to-b ${config.accent}`} />
+
+            <div className="flex items-start gap-2.5 pl-3">
+              {/* Severity icon */}
+              <span className={`flex-shrink-0 w-6 h-6 rounded-lg ${config.iconBg} flex items-center justify-center mt-0.5`}>
                 {obs.severity === "opportunity" ? (
-                  <IconCheck className="w-2.5 h-2.5" />
+                  <IconCheck className={`w-3 h-3 ${config.text}`} />
                 ) : (
-                  <IconAlertCircle className="w-2.5 h-2.5" />
+                  <IconAlertCircle className={`w-3 h-3 ${config.text}`} />
                 )}
               </span>
+
               <div className="flex-1 min-w-0">
-                <p className="text-[12px] font-medium text-slate-800 dark:text-zinc-100">{obs.title}</p>
-                <p className="text-[11px] font-light text-slate-500 dark:text-zinc-400 mt-0.5">{obs.detail}</p>
+                <div className="flex items-center gap-2 mb-0.5">
+                  <p className="text-[12px] font-normal text-slate-700 dark:text-zinc-200 flex-1">{obs.title}</p>
+                  <span className={`flex-shrink-0 text-[8px] uppercase tracking-widest font-medium px-1.5 py-0.5 rounded-md ${config.iconBg} ${config.text}`}>
+                    {obs.severity}
+                  </span>
+                </div>
+                <p className="text-[11px] font-light text-slate-500 dark:text-zinc-400 leading-relaxed">{obs.detail}</p>
               </div>
-              <span className={`flex-shrink-0 text-[9px] uppercase tracking-wider font-medium px-1.5 py-0.5 rounded ${config.badge}`}>
-                {obs.severity}
-              </span>
             </div>
           </motion.div>
         );
