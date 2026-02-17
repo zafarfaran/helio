@@ -110,7 +110,19 @@ export default function App() {
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
       if (!tab?.id) throw new Error("No active tab");
-      const response = await chrome.tabs.sendMessage(tab.id, { type: captureType });
+
+      // Restricted pages where content scripts can't run
+      const url = tab.url || "";
+      if (url.startsWith("chrome://") || url.startsWith("chrome-extension://") || url.startsWith("about:") || url === "") {
+        throw new Error("Can't capture this page — try a regular website");
+      }
+
+      let response: { success?: boolean; error?: string; content?: string; url?: string; title?: string; captureType?: string };
+      try {
+        response = await chrome.tabs.sendMessage(tab.id, { type: captureType });
+      } catch {
+        throw new Error("Content script not loaded — try refreshing the page");
+      }
       if (!response?.success) throw new Error(response?.error || "Capture failed");
       setState("sending");
       const apiResponse = await chrome.runtime.sendMessage({
