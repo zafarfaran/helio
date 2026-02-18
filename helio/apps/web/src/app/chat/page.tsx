@@ -349,6 +349,8 @@ export default function ChatPage() {
   const [activeScenarioId, setActiveScenarioId] = useState<string | null>(null);
   const [inputFocused, setInputFocused] = useState(false);
   const [clientMenuOpen, setClientMenuOpen] = useState(false);
+  const [clientPickerMode, setClientPickerMode] = useState(false);
+  const [clientSearchQuery, setClientSearchQuery] = useState("");
   const clientMenuRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -498,6 +500,8 @@ export default function ChatPage() {
     function handleClick(e: MouseEvent) {
       if (clientMenuRef.current && !clientMenuRef.current.contains(e.target as Node)) {
         setClientMenuOpen(false);
+        setClientPickerMode(false);
+        setClientSearchQuery("");
       }
     }
     if (clientMenuOpen) document.addEventListener("mousedown", handleClick);
@@ -796,7 +800,10 @@ export default function ChatPage() {
           {/* Client selector + dropdown */}
           <div className="relative" ref={clientMenuRef}>
             <button
-              onClick={() => setClientMenuOpen(!clientMenuOpen)}
+              onClick={() => {
+                if (clientMenuOpen) { setClientPickerMode(false); setClientSearchQuery(""); }
+                setClientMenuOpen(!clientMenuOpen);
+              }}
               className={`flex items-center gap-2.5 px-2.5 py-1.5 -mx-1 rounded-lg transition-colors group ${
                 clientMenuOpen
                   ? "bg-slate-50 dark:bg-zinc-900"
@@ -823,8 +830,119 @@ export default function ChatPage() {
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: -4, scale: 0.97 }}
                   transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-                  className="absolute top-full left-0 mt-1.5 w-64 rounded-xl border border-slate-200/80 dark:border-zinc-800/80 bg-white dark:bg-zinc-900 shadow-xl shadow-slate-200/40 dark:shadow-black/40 z-50 overflow-hidden"
+                  className="absolute top-full left-0 mt-1.5 w-72 rounded-xl border border-slate-200/80 dark:border-zinc-800/80 bg-white dark:bg-zinc-900 shadow-xl shadow-slate-200/40 dark:shadow-black/40 z-50 overflow-hidden"
                 >
+                  <AnimatePresence mode="wait" initial={false}>
+                  {clientPickerMode ? (
+                    /* ── Client Picker View ── */
+                    <motion.div
+                      key="picker"
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: 20 }}
+                      transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+                    >
+                      {/* Picker header */}
+                      <div className="px-3 pt-3 pb-2 border-b border-slate-100 dark:border-zinc-800/70">
+                        <div className="flex items-center gap-2 mb-2.5">
+                          <button
+                            onClick={() => { setClientPickerMode(false); setClientSearchQuery(""); }}
+                            className="w-6 h-6 rounded-md flex items-center justify-center text-slate-400 dark:text-zinc-500 hover:bg-slate-100 dark:hover:bg-zinc-800 hover:text-slate-600 dark:hover:text-zinc-300 transition-colors"
+                          >
+                            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 18l-6-6 6-6" /></svg>
+                          </button>
+                          <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-zinc-500">Switch client</span>
+                        </div>
+                        <div className="relative">
+                          <IconSearch className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-300 dark:text-zinc-600" />
+                          <input
+                            type="text"
+                            placeholder="Search clients..."
+                            value={clientSearchQuery}
+                            onChange={(e) => setClientSearchQuery(e.target.value)}
+                            autoFocus
+                            className="w-full pl-7 pr-3 py-1.5 text-[11px] bg-slate-50 dark:bg-zinc-800/60 border border-slate-200/60 dark:border-zinc-700/50 rounded-lg text-slate-900 dark:text-white placeholder:text-slate-300 dark:placeholder:text-zinc-600 focus:outline-none focus:border-brand-300 dark:focus:border-brand-700 focus:ring-1 focus:ring-brand-200/30 dark:focus:ring-brand-800/20 transition-all"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Client list */}
+                      <div className="max-h-[280px] overflow-y-auto py-1 px-1.5 scrollbar-thin">
+                        {clients
+                          .filter((c) => {
+                            if (!clientSearchQuery.trim()) return true;
+                            const q = clientSearchQuery.toLowerCase();
+                            return `${c.first_name} ${c.last_name} ${c.email}`.toLowerCase().includes(q);
+                          })
+                          .map((c, idx) => {
+                            const isActive = c.id === selectedClientId;
+                            const initials = `${c.first_name?.[0] ?? ""}${c.last_name?.[0] ?? ""}`.toUpperCase();
+                            const grad = getGradient(idx);
+                            return (
+                              <button
+                                key={c.id}
+                                onClick={() => {
+                                  setSelectedClientId(c.id);
+                                  setClientMenuOpen(false);
+                                  setClientPickerMode(false);
+                                  setClientSearchQuery("");
+                                }}
+                                className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left transition-all duration-150 group/client ${
+                                  isActive
+                                    ? "bg-brand-50/80 dark:bg-brand-950/20 ring-1 ring-brand-200/50 dark:ring-brand-800/30"
+                                    : "hover:bg-slate-50 dark:hover:bg-zinc-800/60"
+                                }`}
+                              >
+                                <div className={`w-7 h-7 rounded-lg bg-gradient-to-br ${grad} flex items-center justify-center text-[9px] font-semibold text-white shadow-sm flex-shrink-0`}>
+                                  {initials}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className={`text-[12px] font-medium truncate ${isActive ? "text-brand-700 dark:text-brand-300" : "text-slate-800 dark:text-zinc-200"}`}>
+                                    {c.first_name} {c.last_name}
+                                  </p>
+                                  <div className="flex items-center gap-1.5">
+                                    {c.total_income != null && (
+                                      <span className="text-[9px] font-mono text-slate-400 dark:text-zinc-500">
+                                        {`\u00A3${c.total_income.toLocaleString()}`}
+                                      </span>
+                                    )}
+                                    {c.effective_rate != null && (
+                                      <>
+                                        <span className="text-slate-200 dark:text-zinc-700 text-[7px]">&middot;</span>
+                                        <span className="text-[9px] font-mono text-slate-400 dark:text-zinc-500">{c.effective_rate}%</span>
+                                      </>
+                                    )}
+                                    {!c.total_income && (
+                                      <span className="text-[9px] text-slate-300 dark:text-zinc-600 italic">No tax data</span>
+                                    )}
+                                  </div>
+                                </div>
+                                {isActive && (
+                                  <div className="w-4 h-4 rounded-full bg-brand-500 flex items-center justify-center flex-shrink-0">
+                                    <IconCheck className="w-2.5 h-2.5 text-white" />
+                                  </div>
+                                )}
+                              </button>
+                            );
+                          })}
+                        {clients.filter((c) => {
+                          if (!clientSearchQuery.trim()) return true;
+                          const q = clientSearchQuery.toLowerCase();
+                          return `${c.first_name} ${c.last_name} ${c.email}`.toLowerCase().includes(q);
+                        }).length === 0 && (
+                          <p className="text-center text-[11px] text-slate-300 dark:text-zinc-600 py-6">No clients found</p>
+                        )}
+                      </div>
+                    </motion.div>
+                  ) : (
+                    /* ── Client Info View (original) ── */
+                    <motion.div
+                      key="info"
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -20 }}
+                      transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+                    >
                   {/* Client header */}
                   <div className="px-4 pt-4 pb-3 border-b border-slate-100 dark:border-zinc-800/70">
                     <div className="flex items-center gap-3">
@@ -858,7 +976,7 @@ export default function ChatPage() {
 
                   {/* Menu items */}
                   <div className="py-1.5 px-1.5">
-                    <ClientMenuItem icon={<IconUser className="w-3.5 h-3.5" />} label="View client profile" />
+                    <ClientMenuItem icon={<IconUser className="w-3.5 h-3.5" />} label="View client profile" href="/clients" />
                     <ClientMenuItem icon={<IconFileText className="w-3.5 h-3.5" />} label="Tax documents" badge="12" />
                     <ClientMenuItem icon={<IconChart className="w-3.5 h-3.5" />} label="Scenario history" badge="3" />
                     <ClientMenuItem icon={<IconClock className="w-3.5 h-3.5" />} label="Meeting notes" />
@@ -868,7 +986,10 @@ export default function ChatPage() {
                   {/* Footer actions */}
                   <div className="px-1.5 pb-1.5 pt-0.5 border-t border-slate-100 dark:border-zinc-800/70">
                     <div className="flex gap-1 mt-1.5">
-                      <button className="flex-1 text-[10px] font-medium text-brand-500 dark:text-brand-400 hover:bg-brand-50 dark:hover:bg-brand-950/20 py-2 rounded-lg transition-colors text-center">
+                      <button
+                        onClick={() => setClientPickerMode(true)}
+                        className="flex-1 text-[10px] font-medium text-brand-500 dark:text-brand-400 hover:bg-brand-50 dark:hover:bg-brand-950/20 py-2 rounded-lg transition-colors text-center"
+                      >
                         Switch client
                       </button>
                       <button
@@ -880,6 +1001,9 @@ export default function ChatPage() {
                       </button>
                     </div>
                   </div>
+                    </motion.div>
+                  )}
+                  </AnimatePresence>
                 </motion.div>
               )}
             </AnimatePresence>
@@ -901,6 +1025,10 @@ export default function ChatPage() {
           </button>
 
           <ThemeToggle />
+
+          <Link href="/clients" className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-zinc-800 flex items-center justify-center text-slate-500 dark:text-zinc-400 hover:bg-slate-200 dark:hover:bg-zinc-700 transition-colors" title="Client profiles">
+            <IconFileText className="w-3.5 h-3.5" />
+          </Link>
 
           <Link href="/settings" className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-zinc-800 flex items-center justify-center text-slate-500 dark:text-zinc-400 hover:bg-slate-200 dark:hover:bg-zinc-700 transition-colors">
             <IconUser className="w-3.5 h-3.5" />
@@ -2825,9 +2953,9 @@ function HistoryItem({ thread, delay, onSelect, onDelete }: { thread: HistoryThr
 
 /* ─── Client dropdown menu item ─── */
 
-const ClientMenuItem = memo(function ClientMenuItem({ icon, label, badge, accent }: { icon: React.ReactNode; label: string; badge?: string; accent?: boolean }) {
-  return (
-    <button className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left hover:bg-slate-50 dark:hover:bg-zinc-800/60 transition-colors group/item">
+const ClientMenuItem = memo(function ClientMenuItem({ icon, label, badge, accent, onClick, href }: { icon: React.ReactNode; label: string; badge?: string; accent?: boolean; onClick?: () => void; href?: string }) {
+  const content = (
+    <>
       <span className="text-slate-400 dark:text-zinc-500 group-hover/item:text-brand-500 dark:group-hover/item:text-brand-400 transition-colors">
         {icon}
       </span>
@@ -2841,6 +2969,14 @@ const ClientMenuItem = memo(function ClientMenuItem({ icon, label, badge, accent
           {badge}
         </span>
       )}
-    </button>
+    </>
   );
+
+  const cls = "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left hover:bg-slate-50 dark:hover:bg-zinc-800/60 transition-colors group/item";
+
+  if (href) {
+    return <Link href={href} className={cls}>{content}</Link>;
+  }
+
+  return <button onClick={onClick} className={cls}>{content}</button>;
 });
