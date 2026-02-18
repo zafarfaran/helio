@@ -4,7 +4,7 @@ import re
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, EmailStr, field_validator
+from pydantic import BaseModel, field_validator
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from structlog.stdlib import BoundLogger
@@ -19,13 +19,20 @@ router = APIRouter(tags=["clients"])
 class CreateClientRequest(BaseModel):
     first_name: str
     last_name: str
-    email: EmailStr
+    email: str
     date_of_birth: str
     ni_number: str
     utr: str
     region: Literal["england", "wales", "scotland", "northern_ireland"] = "england"
     employment_status: Literal["employed", "self-employed", "director", "retired", "other"] = "employed"
     notes: str | None = None
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, v: str) -> str:
+        if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", v):
+            raise ValueError("Enter a valid email address")
+        return v.lower()
 
     @field_validator("ni_number")
     @classmethod
