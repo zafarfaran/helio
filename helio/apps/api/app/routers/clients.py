@@ -63,6 +63,8 @@ class ComputeTaxProfileRequest(BaseModel):
     gift_aid: float = 0
     claims_child_benefit: bool = False
     number_of_children: int = 0
+    isa_contributions: float = 0
+    cgt_gains: float = 0
 
     @field_validator("income_sources")
     @classmethod
@@ -384,6 +386,20 @@ async def compute_client_tax_profile(
                 "annual_limit": 500,
                 "used": pos.income_tax_result.dividend_allowance_used,
                 "remaining": 500 - pos.income_tax_result.dividend_allowance_used,
+            },
+            {
+                "type": "isa",
+                "label": "ISA Allowance",
+                "annual_limit": 20_000,
+                "used": body.isa_contributions,
+                "remaining": 20_000 - body.isa_contributions,
+            },
+            {
+                "type": "cgt_aea",
+                "label": "CGT Annual Exemption",
+                "annual_limit": 3_000,
+                "used": body.cgt_gains,
+                "remaining": max(0, 3_000 - body.cgt_gains),
             },
         ],
         hicbc={

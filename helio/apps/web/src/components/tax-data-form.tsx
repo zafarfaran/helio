@@ -36,6 +36,8 @@ const taxDataSchema = z.object({
   gift_aid: z.number().min(0).default(0),
   claims_child_benefit: z.boolean().default(false),
   number_of_children: z.number().int().min(0).default(0),
+  isa_contributions: z.number().min(0).max(20_000, "ISA limit is £20,000").default(0),
+  cgt_gains: z.number().min(0).default(0),
 });
 
 /* ─── Types ─── */
@@ -52,6 +54,7 @@ interface ExistingData {
   income_sources?: Array<{ source_type?: string; type?: string; gross_amount?: number; amount?: number; label?: string }>;
   pension_data?: Record<string, any>;
   hicbc?: Record<string, any>;
+  allowances?: Array<{ type?: string; used?: number }>;
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
@@ -138,6 +141,12 @@ export function TaxDataForm({ clientId, clientRegion, onComputed, existingData }
   const [numChildren, setNumChildren] = useState(
     String(existingData?.hicbc?.number_of_children ?? "0"),
   );
+  const [isaContributions, setIsaContributions] = useState(
+    String(existingData?.allowances?.find((a) => a.type === "isa")?.used ?? "0"),
+  );
+  const [cgtGains, setCgtGains] = useState(
+    String(existingData?.allowances?.find((a) => a.type === "cgt_aea")?.used ?? "0"),
+  );
   const [submitting, setSubmitting] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -183,6 +192,8 @@ export function TaxDataForm({ clientId, clientRegion, onComputed, existingData }
       gift_aid: parseFloat(giftAid) || 0,
       claims_child_benefit: claimsCB,
       number_of_children: claimsCB ? parseInt(numChildren) || 0 : 0,
+      isa_contributions: parseFloat(isaContributions) || 0,
+      cgt_gains: parseFloat(cgtGains) || 0,
     };
 
     /* Validate */
@@ -236,7 +247,7 @@ export function TaxDataForm({ clientId, clientRegion, onComputed, existingData }
     } finally {
       setSubmitting(false);
     }
-  }, [rows, pension, giftAid, claimsCB, numChildren, clientId, onComputed]);
+  }, [rows, pension, giftAid, claimsCB, numChildren, isaContributions, cgtGains, clientId, onComputed]);
 
   const regionLabel =
     clientRegion === "northern_ireland"
@@ -428,6 +439,70 @@ export function TaxDataForm({ clientId, clientRegion, onComputed, existingData }
                 </div>
                 <p className="text-[10px] text-[var(--muted-foreground)]">
                   Net amount of charitable donations
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </motion.div>
+
+      {/* ── Section: Allowances ── */}
+      <motion.div variants={fadeUp}>
+        <div className="rounded-xl bg-[var(--card)] border border-[var(--card-border)] overflow-hidden">
+          <div className="flex items-center gap-2.5 px-5 py-3.5 border-b border-[var(--border-subtle)]">
+            <IconShield className="w-[14px] h-[14px] text-[var(--accent)]" />
+            <h3 className="text-[13px] font-semibold text-[var(--foreground)] tracking-[-0.01em]">
+              Allowance Usage
+            </h3>
+          </div>
+          <div className="px-5 py-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label htmlFor="tdf-isa" className="block text-[11px] font-medium text-[var(--foreground)]/70 tracking-wide">
+                  ISA Contributions
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[11px] text-[var(--muted)] font-mono">
+                    £
+                  </span>
+                  <input
+                    id="tdf-isa"
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="0"
+                    value={isaContributions}
+                    onChange={(e) =>
+                      setIsaContributions(e.target.value.replace(/[^0-9.]/g, ""))
+                    }
+                    className={`${inputMono} pl-7`}
+                  />
+                </div>
+                <p className="text-[10px] text-[var(--muted-foreground)]">
+                  Amount contributed this tax year (limit £20,000)
+                </p>
+              </div>
+              <div className="space-y-1">
+                <label htmlFor="tdf-cgt" className="block text-[11px] font-medium text-[var(--foreground)]/70 tracking-wide">
+                  Capital Gains
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[11px] text-[var(--muted)] font-mono">
+                    £
+                  </span>
+                  <input
+                    id="tdf-cgt"
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="0"
+                    value={cgtGains}
+                    onChange={(e) =>
+                      setCgtGains(e.target.value.replace(/[^0-9.]/g, ""))
+                    }
+                    className={`${inputMono} pl-7`}
+                  />
+                </div>
+                <p className="text-[10px] text-[var(--muted-foreground)]">
+                  Net gains this tax year (AEA £3,000)
                 </p>
               </div>
             </div>

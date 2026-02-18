@@ -778,6 +778,7 @@ export default function ClientsPage() {
                       income_sources: tp.income_sources,
                       pension_data: tp.pension_data as Record<string, unknown> | undefined,
                       hicbc: tp.hicbc as Record<string, unknown> | undefined,
+                      allowances: tp.allowances as Array<{ type?: string; used?: number }> | undefined,
                     }}
                   />
                 )}
