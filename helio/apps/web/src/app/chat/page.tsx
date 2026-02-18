@@ -801,17 +801,19 @@ export default function ChatPage() {
           {/* History toggle */}
           <button
             onClick={() => setHistoryOpen(!historyOpen)}
-            className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition-all text-[11px] font-medium ${
               historyOpen
                 ? "bg-brand-50 dark:bg-brand-950/30 text-brand-600 dark:text-brand-400"
-                : "text-slate-400 dark:text-zinc-500 hover:bg-slate-100 dark:hover:bg-zinc-800"
+                : "text-slate-400 dark:text-zinc-500 hover:bg-slate-100 dark:hover:bg-zinc-800 hover:text-slate-600 dark:hover:text-zinc-300"
             }`}
             title={historyOpen ? "Close history" : "Chat history"}
           >
-            <IconPanelLeft className="w-4 h-4" />
+            <IconClock className="w-3.5 h-3.5" />
+            <span>History</span>
+            {conversations.filter((c) => c.unread).length > 0 && (
+              <span className="w-1.5 h-1.5 rounded-full bg-brand-500 animate-pulse" />
+            )}
           </button>
-
-          <div className="h-4 w-px bg-slate-200 dark:bg-zinc-800" />
 
           {/* Client selector + dropdown */}
           <div className="relative" ref={clientMenuRef}>
