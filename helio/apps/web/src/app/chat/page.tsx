@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, memo, useMemo, useCallback } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
-import { ThemeToggle } from "@/components/theme-provider";
+import { useTheme } from "@/components/theme-provider";
 import { useChat } from "@/hooks/useChat";
 import { useContextSnippets } from "@/hooks/useContextSnippets";
 import { ContextPills } from "@/components/context-pills";
@@ -38,6 +38,7 @@ import {
   IconTrash,
   IconFileText,
   IconBell,
+  IconSettings,
 } from "@/components/icons";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -308,6 +309,8 @@ function formatConversationTime(dateStr: string): string {
    ═══════════════════════════════════════════════════ */
 
 export default function ChatPage() {
+  const { theme, toggle: toggleTheme } = useTheme();
+
   /* ── Live data state ── */
   const [selectedClientId, setSelectedClientId] = useState<string>("client-sarah");
   const [clients, setClients] = useState<ClientSummary[]>([]);
@@ -351,7 +354,9 @@ export default function ChatPage() {
   const [clientMenuOpen, setClientMenuOpen] = useState(false);
   const [clientPickerMode, setClientPickerMode] = useState(false);
   const [clientSearchQuery, setClientSearchQuery] = useState("");
+  const [settingsMenuOpen, setSettingsMenuOpen] = useState(false);
   const clientMenuRef = useRef<HTMLDivElement>(null);
+  const settingsMenuRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -507,6 +512,17 @@ export default function ChatPage() {
     if (clientMenuOpen) document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, [clientMenuOpen]);
+
+  /* ── Close settings menu on outside click ── */
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (settingsMenuRef.current && !settingsMenuRef.current.contains(e.target as Node)) {
+        setSettingsMenuOpen(false);
+      }
+    }
+    if (settingsMenuOpen) document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [settingsMenuOpen]);
 
   /* ── New chat handler ── */
   const handleNewChat = useCallback(async () => {
@@ -1024,15 +1040,87 @@ export default function ChatPage() {
             <IconPanelRight className="w-4 h-4" />
           </button>
 
-          <ThemeToggle />
+          {/* Settings dropdown */}
+          <div className="relative" ref={settingsMenuRef}>
+            <button
+              onClick={() => setSettingsMenuOpen(!settingsMenuOpen)}
+              className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${
+                settingsMenuOpen
+                  ? "bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-200"
+                  : "text-slate-400 dark:text-zinc-500 hover:bg-slate-100 dark:hover:bg-zinc-800 hover:text-slate-600 dark:hover:text-zinc-300"
+              }`}
+              title="Settings"
+            >
+              <motion.div animate={{ rotate: settingsMenuOpen ? 45 : 0 }} transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}>
+                <IconSettings className="w-4 h-4" />
+              </motion.div>
+            </button>
 
-          <Link href="/clients" className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-zinc-800 flex items-center justify-center text-slate-500 dark:text-zinc-400 hover:bg-slate-200 dark:hover:bg-zinc-700 transition-colors" title="Client profiles">
-            <IconFileText className="w-3.5 h-3.5" />
-          </Link>
+            <AnimatePresence>
+              {settingsMenuOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: -4, scale: 0.97 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -4, scale: 0.97 }}
+                  transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+                  className="absolute top-full right-0 mt-1.5 w-52 rounded-xl border border-slate-200/80 dark:border-zinc-800/80 bg-white dark:bg-zinc-900 shadow-xl shadow-slate-200/40 dark:shadow-black/40 z-50 overflow-hidden"
+                >
+                  <div className="py-1.5 px-1.5">
+                    {/* Theme toggle row */}
+                    <button
+                      onClick={toggleTheme}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left hover:bg-slate-50 dark:hover:bg-zinc-800/60 transition-colors group/item"
+                    >
+                      <span className="text-slate-400 dark:text-zinc-500 group-hover/item:text-brand-500 dark:group-hover/item:text-brand-400 transition-colors">
+                        {theme === "light" ? (
+                          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="12" cy="12" r="5" /><line x1="12" y1="1" x2="12" y2="3" /><line x1="12" y1="21" x2="12" y2="23" /><line x1="4.22" y1="4.22" x2="5.64" y2="5.64" /><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" /><line x1="1" y1="12" x2="3" y2="12" /><line x1="21" y1="12" x2="23" y2="12" /><line x1="4.22" y1="19.78" x2="5.64" y2="18.36" /><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+                          </svg>
+                        ) : (
+                          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+                          </svg>
+                        )}
+                      </span>
+                      <span className="flex-1 text-[11px] font-normal text-slate-700 dark:text-zinc-300">
+                        {theme === "light" ? "Dark mode" : "Light mode"}
+                      </span>
+                      <span className="text-[9px] font-mono text-slate-300 dark:text-zinc-600 tracking-tight">
+                        {theme === "light" ? "Light" : "Dark"}
+                      </span>
+                    </button>
 
-          <Link href="/settings" className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-zinc-800 flex items-center justify-center text-slate-500 dark:text-zinc-400 hover:bg-slate-200 dark:hover:bg-zinc-700 transition-colors">
-            <IconUser className="w-3.5 h-3.5" />
-          </Link>
+                    {/* Divider */}
+                    <div className="my-1 mx-2 border-t border-slate-100 dark:border-zinc-800/70" />
+
+                    {/* Client profiles */}
+                    <Link
+                      href="/clients"
+                      onClick={() => setSettingsMenuOpen(false)}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left hover:bg-slate-50 dark:hover:bg-zinc-800/60 transition-colors group/item"
+                    >
+                      <span className="text-slate-400 dark:text-zinc-500 group-hover/item:text-brand-500 dark:group-hover/item:text-brand-400 transition-colors">
+                        <IconFileText className="w-3.5 h-3.5" />
+                      </span>
+                      <span className="flex-1 text-[11px] font-normal text-slate-700 dark:text-zinc-300">Client profiles</span>
+                    </Link>
+
+                    {/* Account / Settings */}
+                    <Link
+                      href="/settings"
+                      onClick={() => setSettingsMenuOpen(false)}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left hover:bg-slate-50 dark:hover:bg-zinc-800/60 transition-colors group/item"
+                    >
+                      <span className="text-slate-400 dark:text-zinc-500 group-hover/item:text-brand-500 dark:group-hover/item:text-brand-400 transition-colors">
+                        <IconUser className="w-3.5 h-3.5" />
+                      </span>
+                      <span className="flex-1 text-[11px] font-normal text-slate-700 dark:text-zinc-300">Account</span>
+                    </Link>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
         </div>
       </header>
 
