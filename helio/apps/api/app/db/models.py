@@ -89,6 +89,30 @@ class Client(Base):
     region: Mapped[str] = mapped_column(String, nullable=False, default="england")
     employment_status: Mapped[str] = mapped_column(String, default="employed")
     metadata_: Mapped[dict | None] = mapped_column("metadata", JSON, default=dict)
+
+    # Contact
+    phone: Mapped[str | None] = mapped_column(String)
+    address_line_1: Mapped[str | None] = mapped_column(String)
+    address_line_2: Mapped[str | None] = mapped_column(String)
+    city: Mapped[str | None] = mapped_column(String)
+    postcode: Mapped[str | None] = mapped_column(String)
+
+    # Personal
+    marital_status: Mapped[str | None] = mapped_column(String)
+    number_of_children: Mapped[int] = mapped_column(Integer, default=0)
+    claims_child_benefit: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    # Spouse / partner (self-referencing FK)
+    spouse_id: Mapped[str | None] = mapped_column(ForeignKey("clients.id"))
+
+    # Professional
+    employer_name: Mapped[str | None] = mapped_column(String)
+    company_name: Mapped[str | None] = mapped_column(String)
+    company_number: Mapped[str | None] = mapped_column(String)
+
+    # Notes
+    notes: Mapped[str | None] = mapped_column(Text)
+
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
 
@@ -99,6 +123,12 @@ class Client(Base):
     conversations = relationship("Conversation", back_populates="client")
     observations = relationship("Observation", back_populates="client")
     meeting_notes = relationship("MeetingNote", back_populates="client", order_by="MeetingNote.meeting_date.desc()")
+    spouse = relationship(
+        "Client",
+        foreign_keys=[spouse_id],
+        remote_side="Client.id",
+        uselist=False,
+    )
 
 
 # ─── 4. TaxProfile ─────────────────────────────────────────────────────────
