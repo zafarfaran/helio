@@ -555,6 +555,7 @@ export default function ClientsPage() {
   useEffect(() => {
     if (!selectedId) return;
     let cancelled = false;
+    setShowTaxForm(false);
     setDetailLoading(true);
     (async () => {
       try {
