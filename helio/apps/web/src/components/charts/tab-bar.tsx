@@ -24,25 +24,25 @@ export function TabBar({
   onChange: (id: TabId) => void;
 }) {
   return (
-    <div className="flex items-center gap-1 mb-8 border-b border-[var(--border-subtle)]">
+    <div className="flex items-center gap-1.5 mb-8 p-1 rounded-2xl bg-[var(--glass)] backdrop-blur-md border border-[var(--glass-border)] w-fit">
       {TABS.map((tab) => (
         <button
           key={tab.id}
           onClick={() => onChange(tab.id)}
-          className={`relative px-4 py-2.5 text-[12px] font-medium transition-colors ${
+          className={`relative px-4 py-2 text-[12px] font-medium rounded-xl transition-all duration-250 ${
             active === tab.id
               ? "text-[var(--foreground)]"
               : "text-[var(--muted)] hover:text-[var(--foreground)]/80"
           }`}
         >
-          {tab.label}
           {active === tab.id && (
             <motion.div
-              layoutId="tab-underline"
-              className="absolute bottom-0 left-2 right-2 h-[2px] rounded-full bg-[var(--accent)]"
+              layoutId="tab-pill"
+              className="absolute inset-0 rounded-xl bg-[var(--glass-hover)] border border-[var(--glass-border-hover)] shadow-[0_0_20px_-4px_var(--accent-glow)]"
               transition={{ type: "spring", stiffness: 400, damping: 30 }}
             />
           )}
+          <span className="relative z-10">{tab.label}</span>
         </button>
       ))}
     </div>

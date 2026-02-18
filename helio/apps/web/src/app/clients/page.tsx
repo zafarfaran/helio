@@ -279,8 +279,8 @@ function ClientRow({ client, active, onSelect }: { client: ClientSummary; active
         />
       )}
 
-      <div className={`flex items-center gap-3 px-4 py-3 rounded-r-xl ml-1 transition-colors duration-150 ${
-        active ? "bg-[var(--accent)]/[0.06]" : "hover:bg-[var(--surface)]"
+      <div className={`flex items-center gap-3 px-4 py-3 rounded-xl ml-1 transition-all duration-200 ${
+        active ? "bg-[var(--accent)]/[0.08] shadow-[0_0_20px_-6px_var(--accent-glow)]" : "hover:bg-[var(--glass)]"
       }`}>
         <div
           className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-[11px] font-semibold text-white"
@@ -320,15 +320,17 @@ function Metric({ label, value, sub, icon: Icon }: {
 }) {
   return (
     <motion.div variants={fadeUp} className="group">
-      <div className="rounded-xl bg-[var(--card)] border border-[var(--card-border)] p-5 h-full transition-shadow duration-300 hover:shadow-md hover:shadow-black/[0.03] dark:hover:shadow-black/20">
-        <div className="flex items-center gap-2 mb-4">
-          <div className="w-7 h-7 rounded-lg bg-[var(--surface)] flex items-center justify-center">
-            <Icon className="w-3.5 h-3.5 text-[var(--muted)]" />
+      <div className="glass-metric rounded-2xl p-5 h-full luminous-border">
+        <div className="relative z-10">
+          <div className="flex items-center gap-2 mb-4">
+            <div className="w-7 h-7 rounded-lg bg-[var(--accent)]/[0.08] flex items-center justify-center">
+              <Icon className="w-3.5 h-3.5 text-[var(--accent)]" />
+            </div>
+            <span className="text-[10px] font-semibold text-[var(--muted)] tracking-[0.08em] uppercase">{label}</span>
           </div>
-          <span className="text-[11px] font-medium text-[var(--muted)] tracking-wide uppercase">{label}</span>
+          <p className="text-[24px] font-semibold font-mono tracking-tight text-[var(--foreground)] leading-none">{value}</p>
+          {sub && <p className="text-[11px] text-[var(--muted)] mt-2.5 leading-snug">{sub}</p>}
         </div>
-        <p className="text-[22px] font-semibold font-mono tracking-tight text-[var(--foreground)] leading-none">{value}</p>
-        {sub && <p className="text-[11px] text-[var(--muted)] mt-2 leading-snug">{sub}</p>}
       </div>
     </motion.div>
   );
@@ -344,9 +346,11 @@ function Card({ title, icon: Icon, children, className }: {
 }) {
   return (
     <motion.div variants={fadeUp} className={className}>
-      <div className="rounded-xl bg-[var(--card)] border border-[var(--card-border)] overflow-hidden h-full">
-        <div className="flex items-center gap-2.5 px-5 py-3.5 border-b border-[var(--border-subtle)]">
-          <Icon className="w-[14px] h-[14px] text-[var(--accent)]" />
+      <div className="glass-card rounded-2xl overflow-hidden h-full luminous-border">
+        <div className="flex items-center gap-2.5 px-5 py-3.5 border-b border-[var(--glass-border)]">
+          <div className="w-5 h-5 rounded-md bg-[var(--accent)]/[0.1] flex items-center justify-center">
+            <Icon className="w-3 h-3 text-[var(--accent)]" />
+          </div>
           <h3 className="text-[13px] font-semibold text-[var(--foreground)] tracking-[-0.01em]">{title}</h3>
         </div>
         <div className="px-5 py-4">{children}</div>
@@ -461,7 +465,7 @@ function ObsItem({ obs, onDelete }: { obs: Observation; onDelete?: (id: string) 
   const s = SEV[obs.severity] || SEV.info;
 
   return (
-    <motion.div variants={fadeUp} className={`group/obs rounded-lg border-l-[3px] ${s.border} ${s.bg} px-4 py-3.5`}>
+    <motion.div variants={fadeUp} className={`group/obs rounded-xl border-l-[3px] ${s.border} backdrop-blur-md bg-[var(--glass)] border border-[var(--glass-border)] px-4 py-3.5`}>
       <div className="flex items-start gap-2.5">
         <div className={`mt-0.5 ${s.icon} flex-shrink-0`}>
           {obs.severity === "opportunity" ? <IconLightbulb className="w-3.5 h-3.5" />
@@ -535,16 +539,19 @@ function IntelligenceTab({
     <div className="space-y-5">
       {/* Savings banner */}
       {totalSavings > 0 && (
-        <div className="rounded-xl bg-gradient-to-r from-emerald-50 to-emerald-100/50 dark:from-emerald-500/[0.08] dark:to-emerald-500/[0.04] border border-emerald-200/50 dark:border-emerald-500/15 p-5">
-          <p className="text-[11px] font-medium text-emerald-600/70 dark:text-emerald-400/60 uppercase tracking-wide mb-1">Total Potential Savings</p>
-          <p className="text-[24px] font-semibold font-mono text-emerald-700 dark:text-emerald-400 leading-none">
-            £{totalSavings.toLocaleString("en-GB", { maximumFractionDigits: 0 })}
-          </p>
+        <div className="rounded-2xl backdrop-blur-xl border border-emerald-500/[0.12] p-5 relative overflow-hidden" style={{ background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.06), rgba(16, 185, 129, 0.02))' }}>
+          <div className="absolute -top-12 -left-12 w-32 h-32 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+          <div className="relative z-10">
+            <p className="text-[10px] font-semibold text-emerald-500/60 dark:text-emerald-400/50 uppercase tracking-[0.08em] mb-1.5">Total Potential Savings</p>
+            <p className="text-[28px] font-semibold font-mono text-emerald-600 dark:text-emerald-400 leading-none">
+              £{totalSavings.toLocaleString("en-GB", { maximumFractionDigits: 0 })}
+            </p>
+          </div>
         </div>
       )}
 
       {/* Filter pills */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1.5 p-1 rounded-xl bg-[var(--glass)] backdrop-blur-md border border-[var(--glass-border)] w-fit">
         {(["all", "opportunity", "warning", "critical", "info"] as const).map((key) => {
           const count = counts[key];
           if (key !== "all" && count === 0) return null;
@@ -552,10 +559,10 @@ function IntelligenceTab({
             <button
               key={key}
               onClick={() => setFilter(key)}
-              className={`text-[11px] font-medium px-3 py-1.5 rounded-full transition-colors ${
+              className={`text-[11px] font-medium px-3 py-1.5 rounded-lg transition-all ${
                 filter === key
-                  ? "bg-[var(--accent)] text-white"
-                  : "bg-[var(--surface)] text-[var(--muted)] hover:text-[var(--foreground)]"
+                  ? "bg-[var(--accent)]/[0.15] text-[var(--accent)] border border-[var(--accent)]/[0.2] shadow-[0_0_12px_-3px_var(--accent-glow)]"
+                  : "text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--glass)]"
               }`}
             >
               {key === "all" ? "All" : key.charAt(0).toUpperCase() + key.slice(1)}
@@ -573,7 +580,7 @@ function IntelligenceTab({
           ))}
         </motion.div>
       ) : (
-        <div className="rounded-xl border border-dashed border-[var(--border)] p-10 text-center">
+        <div className="rounded-2xl border border-dashed border-[var(--glass-border)] bg-[var(--glass)] backdrop-blur-sm p-10 text-center">
           <p className="text-[13px] text-[var(--muted)]">No observations match this filter</p>
         </div>
       )}
@@ -732,13 +739,16 @@ export default function ClientsPage() {
   const curIdx = clients.findIndex((c) => c.id === selectedId);
 
   return (
-    <div className="h-screen flex bg-[var(--background)]">
+    <div className="h-screen flex dashboard-mesh">
+      {/* Background orbs */}
+      <div className="orb-accent-1" style={{ top: '10%', left: '15%' }} />
+      <div className="orb-accent-2" style={{ top: '60%', right: '10%' }} />
 
       {/* ═══════════ SIDEBAR ═══════════ */}
-      <aside className="w-[264px] flex-shrink-0 border-r border-[var(--border)] flex flex-col">
+      <aside className="w-[264px] flex-shrink-0 glass-sidebar flex flex-col relative z-10">
 
         {/* Brand bar */}
-        <div className="h-14 flex items-center justify-between px-5 border-b border-[var(--border-subtle)]">
+        <div className="h-14 flex items-center justify-between px-5 border-b border-[var(--glass-border)]">
           <Link href="/" className="text-[var(--foreground)] hover:text-[var(--accent)] transition-colors">
             <HelioLogo className="h-[18px]" />
           </Link>
@@ -764,7 +774,7 @@ export default function ClientsPage() {
               placeholder="Search clients..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-7 pr-3 py-1.5 text-[12px] bg-[var(--surface)] border border-[var(--border-subtle)] rounded-lg text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] focus:outline-none focus:border-[var(--accent)]/30 focus:ring-1 focus:ring-[var(--accent)]/15 transition-all"
+              className="w-full pl-7 pr-3 py-1.5 text-[12px] bg-[var(--glass)] backdrop-blur-sm border border-[var(--glass-border)] rounded-xl text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] focus:outline-none focus:border-[var(--accent)]/30 focus:ring-1 focus:ring-[var(--accent)]/15 transition-all"
             />
           </div>
         </div>
@@ -785,7 +795,7 @@ export default function ClientsPage() {
         </div>
 
         {/* Sidebar footer */}
-        <div className="px-5 py-3 border-t border-[var(--border-subtle)]">
+        <div className="px-5 py-3 border-t border-[var(--glass-border)]">
           <Link href="/chat" className="flex items-center gap-2 text-[11px] text-[var(--muted)] hover:text-[var(--accent)] transition-colors">
             <IconMessage className="w-3 h-3" /> Back to chat
           </Link>
@@ -793,7 +803,7 @@ export default function ClientsPage() {
       </aside>
 
       {/* ═══════════ MAIN ═══════════ */}
-      <main className="flex-1 overflow-y-auto bg-[var(--surface)]/30">
+      <main className="flex-1 overflow-y-auto relative z-10">
         <div className="max-w-[860px] mx-auto px-10 py-10">
           <AnimatePresence mode="wait">
             {detailLoading || !detail ? (
@@ -813,7 +823,7 @@ export default function ClientsPage() {
                 <div className="flex items-start justify-between mb-10">
                   <div className="flex items-center gap-5">
                     <div
-                      className="w-[52px] h-[52px] rounded-2xl flex items-center justify-center text-white text-lg font-semibold shadow-lg"
+                      className="w-[52px] h-[52px] rounded-2xl flex items-center justify-center text-white text-lg font-semibold shadow-[0_8px_30px_-4px_rgba(0,0,0,0.3)] ring-1 ring-white/10"
                       style={{ background: `linear-gradient(135deg, ${c1}, ${c2})` }}
                     >
                       {detail.first_name[0]}{detail.last_name[0]}
@@ -822,12 +832,12 @@ export default function ClientsPage() {
                       <h1 className="text-[24px] font-semibold text-[var(--foreground)] tracking-[-0.025em] leading-none">{name}</h1>
                       <div className="flex items-center gap-2 mt-2">
                         {detail.employment_status && (
-                          <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-[3px] rounded-md bg-[var(--accent)]/10 text-[var(--accent)]">
+                          <span className="text-[10px] font-semibold uppercase tracking-wider px-2.5 py-[3px] rounded-lg bg-[var(--accent)]/[0.08] text-[var(--accent)] border border-[var(--accent)]/[0.12]">
                             {detail.employment_status}
                           </span>
                         )}
                         {detail.region && (
-                          <span className="text-[10px] font-medium uppercase tracking-wider px-2 py-[3px] rounded-md bg-[var(--surface)] text-[var(--muted)] border border-[var(--border-subtle)]">
+                          <span className="text-[10px] font-medium uppercase tracking-wider px-2.5 py-[3px] rounded-lg bg-[var(--glass)] text-[var(--muted)] border border-[var(--glass-border)] backdrop-blur-sm">
                             {detail.region}
                           </span>
                         )}
@@ -871,7 +881,7 @@ export default function ClientsPage() {
                             const next = curIdx + dir;
                             if (clients[next]) setSelectedId(clients[next].id);
                           }}
-                          className="w-7 h-7 rounded-lg border border-[var(--border)] flex items-center justify-center text-[var(--muted)] hover:text-[var(--foreground)] hover:border-[var(--accent)]/30 transition-colors disabled:opacity-25 disabled:pointer-events-none"
+                          className="w-7 h-7 rounded-lg bg-[var(--glass)] border border-[var(--glass-border)] flex items-center justify-center text-[var(--muted)] hover:text-[var(--foreground)] hover:border-[var(--glass-border-hover)] hover:bg-[var(--glass-hover)] transition-all disabled:opacity-25 disabled:pointer-events-none backdrop-blur-sm"
                         >
                           <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d={d} /></svg>
                         </button>
@@ -1080,13 +1090,15 @@ export default function ClientsPage() {
 
                 {/* Empty state — prompt to enter tax data */}
                 {!tp && !showTaxForm && (
-                  <div className="rounded-xl border border-dashed border-[var(--border)] p-14 text-center">
-                    <IconFileText className="w-7 h-7 mx-auto text-[var(--muted)] mb-3" />
-                    <p className="text-[14px] font-medium text-[var(--muted)] mb-1">No tax profile</p>
-                    <p className="text-[12px] text-[var(--muted-foreground)] mb-4">Enter income data to calculate this client&apos;s tax position.</p>
+                  <div className="rounded-2xl border border-dashed border-[var(--glass-border)] bg-[var(--glass)] backdrop-blur-md p-14 text-center">
+                    <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-[var(--accent)]/[0.06] border border-[var(--accent)]/[0.1] flex items-center justify-center">
+                      <IconFileText className="w-6 h-6 text-[var(--accent)]/60" />
+                    </div>
+                    <p className="text-[14px] font-medium text-[var(--foreground)]/70 mb-1">No tax profile</p>
+                    <p className="text-[12px] text-[var(--muted)] mb-5">Enter income data to calculate this client&apos;s tax position.</p>
                     <button
                       onClick={() => setShowTaxForm(true)}
-                      className="inline-flex items-center gap-1.5 text-[12px] font-medium text-[var(--accent)] hover:text-[var(--accent-hover)] transition-colors"
+                      className="inline-flex items-center gap-1.5 text-[12px] font-medium text-[var(--accent)] hover:text-[var(--accent-hover)] transition-all px-4 py-2 rounded-xl bg-[var(--accent)]/[0.08] border border-[var(--accent)]/[0.12] hover:bg-[var(--accent)]/[0.12] hover:border-[var(--accent)]/[0.2]"
                     >
                       Enter tax data <IconArrowRight className="w-3 h-3" />
                     </button>
