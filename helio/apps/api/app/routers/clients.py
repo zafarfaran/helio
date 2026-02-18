@@ -27,6 +27,23 @@ class CreateClientRequest(BaseModel):
     utr: str
     region: Literal["england", "wales", "scotland", "northern_ireland"] = "england"
     employment_status: Literal["employed", "self-employed", "director", "retired", "other"] = "employed"
+    # Contact
+    phone: str | None = None
+    address_line_1: str | None = None
+    address_line_2: str | None = None
+    city: str | None = None
+    postcode: str | None = None
+    # Personal
+    marital_status: str | None = None
+    number_of_children: int = 0
+    claims_child_benefit: bool = False
+    # Spouse
+    spouse_id: str | None = None
+    # Professional
+    employer_name: str | None = None
+    company_name: str | None = None
+    company_number: str | None = None
+    # Notes
     notes: str | None = None
 
     @field_validator("email")
@@ -119,6 +136,82 @@ async def list_clients(
     return {"clients": clients_out}
 
 
+@router.get("/households")
+async def list_households(
+    session: AsyncSession = Depends(get_db_session),
+    logger: BoundLogger = Depends(get_request_logger),
+):
+    """List all households with members and aggregated tax data."""
+    user_id = "demo-user"
+
+    logger.info("Listing households", user_id=user_id)
+
+    result = await session.execute(
+        select(Household).where(Household.user_id == user_id)
+    )
+    households = list(result.scalars().all())
+
+    households_out = []
+    for hh in households:
+        clients_result = await session.execute(
+            select(Client).where(Client.household_id == hh.id)
+        )
+        clients = list(clients_result.scalars().all())
+
+        members = []
+        total_income = 0.0
+        total_tax = 0.0
+        rate_sum = 0.0
+        rate_count = 0
+
+        for client in clients:
+            tp_result = await session.execute(
+                select(TaxProfile)
+                .where(TaxProfile.client_id == client.id)
+                .order_by(desc(TaxProfile.created_at))
+                .limit(1)
+            )
+            tp = tp_result.scalar_one_or_none()
+
+            income = tp.total_income if tp else None
+            tax = tp.total_tax if tp else None
+            eff_rate = tp.effective_rate if tp else None
+
+            members.append({
+                "id": client.id,
+                "first_name": client.first_name,
+                "last_name": client.last_name,
+                "email": client.email,
+                "employment_status": client.employment_status,
+                "total_income": income,
+                "total_tax": tax,
+                "effective_rate": eff_rate,
+            })
+
+            if income is not None:
+                total_income += income
+            if tax is not None:
+                total_tax += tax
+            if eff_rate is not None:
+                rate_sum += eff_rate
+                rate_count += 1
+
+        households_out.append({
+            "id": hh.id,
+            "name": hh.name,
+            "notes": hh.notes,
+            "member_count": len(members),
+            "members": members,
+            "total_income": total_income,
+            "total_tax": total_tax,
+            "avg_effective_rate": round(rate_sum / rate_count, 1) if rate_count > 0 else None,
+        })
+
+    logger.info("Households listed", count=len(households_out))
+
+    return {"households": households_out}
+
+
 @router.get("/clients/{client_id}")
 async def get_client(
     client_id: str,
@@ -137,6 +230,36 @@ async def get_client(
     if client is None:
         logger.warning("Client not found", client_id=client_id)
         raise HTTPException(status_code=404, detail="Client not found")
+
+    # Load spouse (if linked)
+    spouse_out = None
+    if client.spouse_id:
+        sp_result = await session.execute(
+            select(Client).where(Client.id == client.spouse_id)
+        )
+        sp = sp_result.scalar_one_or_none()
+        if sp:
+            spouse_out = {
+                "id": sp.id,
+                "first_name": sp.first_name,
+                "last_name": sp.last_name,
+                "email": sp.email,
+                "date_of_birth": sp.date_of_birth,
+                "ni_number": sp.ni_number,
+                "employment_status": sp.employment_status,
+                "region": sp.region,
+            }
+
+    # Load household members (other clients in the same household)
+    hh_result = await session.execute(
+        select(Client)
+        .where(Client.household_id == client.household_id)
+        .where(Client.id != client.id)
+    )
+    household_members_out = [
+        {"id": m.id, "first_name": m.first_name, "last_name": m.last_name}
+        for m in hh_result.scalars().all()
+    ]
 
     # Load latest tax profile
     tp_result = await session.execute(
@@ -219,6 +342,25 @@ async def get_client(
         "utr": client.utr,
         "region": client.region,
         "employment_status": client.employment_status,
+        # Contact
+        "phone": client.phone,
+        "address_line_1": client.address_line_1,
+        "address_line_2": client.address_line_2,
+        "city": client.city,
+        "postcode": client.postcode,
+        # Personal
+        "marital_status": client.marital_status,
+        "number_of_children": client.number_of_children,
+        "claims_child_benefit": client.claims_child_benefit,
+        # Spouse (resolved from FK)
+        "spouse": spouse_out,
+        "household_members": household_members_out,
+        # Professional
+        "employer_name": client.employer_name,
+        "company_name": client.company_name,
+        "company_number": client.company_number,
+        # Notes
+        "notes": client.notes,
         "created_at": client.created_at.isoformat() if client.created_at else None,
         "tax_profile": tax_profile_out,
         "observations": observations_out,
@@ -236,17 +378,31 @@ async def create_client(
 
     logger.info("Creating client", first_name=body.first_name, last_name=body.last_name)
 
-    # Create a household for this client
-    household = Household(
-        user_id=user_id,
-        name=f"{body.last_name} Household",
-    )
-    session.add(household)
-    await session.flush()  # Get the household ID
+    # If spouse_id is provided, validate it and reuse their household
+    household_id: str | None = None
+    existing_spouse: Client | None = None
+    if body.spouse_id:
+        sp_result = await session.execute(
+            select(Client).where(Client.id == body.spouse_id)
+        )
+        existing_spouse = sp_result.scalar_one_or_none()
+        if existing_spouse is None:
+            raise HTTPException(status_code=400, detail="spouse_id references a non-existent client")
+        household_id = existing_spouse.household_id
+
+    if not household_id:
+        # Create a new household for this client
+        household = Household(
+            user_id=user_id,
+            name=f"{body.last_name} Household",
+        )
+        session.add(household)
+        await session.flush()
+        household_id = household.id
 
     # Create the client
     client = Client(
-        household_id=household.id,
+        household_id=household_id,
         user_id=user_id,
         first_name=body.first_name,
         last_name=body.last_name,
@@ -256,10 +412,27 @@ async def create_client(
         utr=body.utr,
         region=body.region,
         employment_status=body.employment_status,
-        metadata_={"notes": body.notes} if body.notes else {},
+        phone=body.phone,
+        address_line_1=body.address_line_1,
+        address_line_2=body.address_line_2,
+        city=body.city,
+        postcode=body.postcode,
+        marital_status=body.marital_status,
+        number_of_children=body.number_of_children,
+        claims_child_benefit=body.claims_child_benefit,
+        spouse_id=body.spouse_id,
+        employer_name=body.employer_name,
+        company_name=body.company_name,
+        company_number=body.company_number,
+        notes=body.notes,
     )
     session.add(client)
     await session.flush()
+
+    # Set bidirectional spouse link
+    if body.spouse_id and existing_spouse:
+        existing_spouse.spouse_id = client.id
+        await session.flush()
 
     logger.info("Client created", client_id=client.id)
 
