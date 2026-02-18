@@ -369,9 +369,9 @@ async def compute_client_tax_profile(
                 "type": "personal_allowance",
                 "label": "Personal Allowance",
                 "annual_limit": 12_570,
-                "used": 12_570 - pos.personal_allowance,
-                "remaining": pos.personal_allowance,
-                "status": "fully_used" if pos.personal_allowance == 0 else "available",
+                "used": min(pos.total_income, pos.personal_allowance),
+                "remaining": max(0, pos.personal_allowance - pos.total_income),
+                "status": "fully_used" if pos.total_income >= pos.personal_allowance else "available",
             },
             {
                 "type": "pension_aa",
