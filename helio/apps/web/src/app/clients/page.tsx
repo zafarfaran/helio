@@ -245,23 +245,23 @@ function hicbcCharge(h: HicbcData): number {
   return h.hicbc_charge ?? h.charge ?? 0;
 }
 
-/* ─── Consistent avatar color from name ─── */
+/* ─── Consistent avatar gradient from name ─── */
 
-const AVATAR_COLORS: string[] = [
-  "#78716c", // stone-500
-  "#6b7280", // gray-500
-  "#71717a", // zinc-500
-  "#737373", // neutral-500
-  "#a8a29e", // stone-400
-  "#9ca3af", // gray-400
-  "#a1a1aa", // zinc-400
-  "#64748b", // slate-500
+const AVATAR_PAIRS: [string, string][] = [
+  ["#5c7cfa", "#8b5cf6"], // brand → violet (primary, matches chat)
+  ["#748ffc", "#a78bfa"], // brand-400 → violet-400
+  ["#4c6ef5", "#7c3aed"], // brand-600 → violet-600
+  ["#3b82f6", "#6366f1"], // blue → indigo
+  ["#0ea5e9", "#6366f1"], // sky → indigo
+  ["#14b8a6", "#0ea5e9"], // teal → sky
+  ["#10b981", "#14b8a6"], // emerald → teal
+  ["#8b5cf6", "#ec4899"], // violet → pink
 ];
 
-function avatarColor(name: string): string {
+function avatarGradient(name: string): [string, string] {
   let hash = 0;
   for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+  return AVATAR_PAIRS[Math.abs(hash) % AVATAR_PAIRS.length];
 }
 
 /* ─── Severity styling ─── */
@@ -282,7 +282,7 @@ const SEV: Record<string, { border: string; bg: string; icon: string; badge: str
 
 function ClientRow({ client, active, onSelect }: { client: ClientSummary; active: boolean; onSelect: () => void }) {
   const name = `${client.first_name} ${client.last_name}`;
-  const bg = avatarColor(name);
+  const [g1, g2] = avatarGradient(name);
 
   return (
     <button onClick={onSelect} className={`w-full text-left group relative`}>
@@ -290,17 +290,17 @@ function ClientRow({ client, active, onSelect }: { client: ClientSummary; active
       {active && (
         <motion.div
           layoutId="active-indicator"
-          className="absolute left-0 top-1 bottom-1 w-[3px] rounded-full bg-[var(--accent)]"
+          className="absolute left-0 top-1 bottom-1 w-[3px] rounded-full bg-brand-500"
           transition={{ type: "spring", stiffness: 400, damping: 30 }}
         />
       )}
 
       <div className={`flex items-center gap-3 px-4 py-3 rounded-xl ml-1 transition-all duration-200 ${
-        active ? "bg-[var(--accent)]/[0.08]" : "hover:bg-[var(--surface)]"
+        active ? "bg-brand-50/80 dark:bg-brand-950/20 ring-1 ring-brand-200/50 dark:ring-brand-800/30" : "hover:bg-slate-50 dark:hover:bg-zinc-900/50"
       }`}>
         <div
           className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-[11px] font-semibold text-white"
-          style={{ background: bg }}
+          style={{ background: `linear-gradient(135deg, ${g1}, ${g2})` }}
         >
           {client.first_name[0]}{client.last_name[0]}
         </div>
@@ -338,10 +338,10 @@ function Metric({ label, value, sub, icon: Icon }: {
     <div className="group">
       <div className="refined-card rounded-xl p-5 h-full">
         <div className="flex items-center gap-2 mb-4">
-          <div className="w-7 h-7 rounded-lg bg-[var(--accent)]/[0.08] flex items-center justify-center">
-            <Icon className="w-3.5 h-3.5 text-[var(--accent)]" />
+          <div className="w-7 h-7 rounded-lg bg-brand-50 dark:bg-brand-950/30 flex items-center justify-center">
+            <Icon className="w-3.5 h-3.5 text-brand-500 dark:text-brand-400" />
           </div>
-          <span className="text-[10px] font-semibold text-[var(--muted)] tracking-[0.08em] uppercase">{label}</span>
+          <span className="text-[10px] font-medium text-slate-400 dark:text-zinc-500 tracking-[0.08em] uppercase">{label}</span>
         </div>
         <p className="text-[24px] font-semibold font-mono tracking-tight text-[var(--foreground)] leading-none">{value}</p>
         {sub && <p className="text-[11px] text-[var(--muted)] mt-2.5 leading-snug">{sub}</p>}
@@ -361,9 +361,9 @@ function Card({ title, icon: Icon, children, className }: {
   return (
     <div className={className}>
       <div className="refined-card rounded-xl overflow-hidden h-full">
-        <div className="flex items-center gap-2.5 px-5 py-3.5 border-b border-[var(--border)]">
-          <div className="w-5 h-5 rounded-md bg-[var(--accent)]/[0.1] flex items-center justify-center">
-            <Icon className="w-3 h-3 text-[var(--accent)]" />
+        <div className="flex items-center gap-2.5 px-5 py-3.5 border-b border-slate-100 dark:border-zinc-800/50">
+          <div className="w-5 h-5 rounded-md bg-brand-50 dark:bg-brand-950/30 flex items-center justify-center">
+            <Icon className="w-3 h-3 text-brand-500 dark:text-brand-400" />
           </div>
           <h3 className="text-[13px] font-semibold text-[var(--foreground)] tracking-[-0.01em]">{title}</h3>
         </div>
@@ -379,8 +379,8 @@ function KV({ label, value, mono }: { label: string; value?: string | null; mono
   if (!value) return null;
   return (
     <div className="py-2.5 border-b border-[var(--border-subtle)] last:border-0 flex items-center justify-between gap-4">
-      <span className="text-[12px] text-[var(--muted)] flex-shrink-0">{label}</span>
-      <span className={`text-[12px] text-[var(--foreground)] text-right truncate ${mono ? "font-mono" : "font-medium"}`}>{value}</span>
+      <span className="text-[12px] text-slate-500 dark:text-zinc-400 font-light flex-shrink-0">{label}</span>
+      <span className={`text-[12px] text-slate-900 dark:text-zinc-100 text-right truncate ${mono ? "font-mono" : "font-medium"}`}>{value}</span>
     </div>
   );
 }
@@ -479,7 +479,7 @@ function ObsItem({ obs, onDelete }: { obs: Observation; onDelete?: (id: string) 
   const s = SEV[obs.severity] || SEV.info;
 
   return (
-    <div className={`group/obs rounded-xl border-l-[3px] ${s.border} bg-[var(--card)] border border-[var(--card-border)] px-4 py-3.5`}>
+    <div className={`group/obs rounded-xl border-l-[3px] ${s.border} bg-white/50 dark:bg-zinc-900/30 backdrop-blur-sm border border-slate-200/40 dark:border-zinc-800/30 px-4 py-3.5`}>
       <div className="flex items-start gap-2.5">
         <div className={`mt-0.5 ${s.icon} flex-shrink-0`}>
           {obs.severity === "opportunity" ? <IconLightbulb className="w-3.5 h-3.5" />
@@ -564,7 +564,7 @@ function IntelligenceTab({
       )}
 
       {/* Filter pills */}
-      <div className="flex items-center gap-1.5 p-1 rounded-xl bg-[var(--surface)] border border-[var(--border)] w-fit">
+      <div className="flex items-center gap-1.5 p-1 rounded-xl bg-white/50 dark:bg-zinc-900/30 backdrop-blur-sm border border-slate-200/40 dark:border-zinc-800/30 w-fit">
         {(["all", "opportunity", "warning", "critical", "info"] as const).map((key) => {
           const count = counts[key];
           if (key !== "all" && count === 0) return null;
@@ -574,8 +574,8 @@ function IntelligenceTab({
               onClick={() => setFilter(key)}
               className={`text-[11px] font-medium px-3 py-1.5 rounded-lg transition-all ${
                 filter === key
-                  ? "bg-[var(--accent)]/[0.15] text-[var(--accent)] border border-[var(--accent)]/[0.2]"
-                  : "text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--surface)]"
+                  ? "bg-brand-50 dark:bg-brand-950/30 text-brand-600 dark:text-brand-400 border border-brand-200/40 dark:border-brand-800/30"
+                  : "text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-slate-50 dark:hover:bg-zinc-900/50"
               }`}
             >
               {key === "all" ? "All" : key.charAt(0).toUpperCase() + key.slice(1)}
@@ -593,7 +593,7 @@ function IntelligenceTab({
           ))}
         </div>
       ) : (
-        <div className="rounded-2xl border border-dashed border-[var(--border)] bg-[var(--surface)] p-10 text-center">
+        <div className="rounded-2xl border border-dashed border-slate-200/40 dark:border-zinc-800/30 bg-white/30 dark:bg-zinc-900/20 backdrop-blur-sm p-10 text-center">
           <p className="text-[13px] text-[var(--muted)]">No observations match this filter</p>
         </div>
       )}
@@ -756,7 +756,7 @@ export default function ClientsPage() {
       <aside className="w-[264px] flex-shrink-0 refined-sidebar flex flex-col relative z-10">
 
         {/* Brand bar */}
-        <div className="h-14 flex items-center justify-between px-5 border-b border-[var(--border)]">
+        <div className="h-14 flex items-center justify-between px-5 border-b border-slate-200/70 dark:border-zinc-800/70">
           <Link href="/" className="text-[var(--foreground)] hover:text-[var(--accent)] transition-colors">
             <HelioLogo className="h-[18px]" />
           </Link>
@@ -769,7 +769,7 @@ export default function ClientsPage() {
             <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--muted)] flex-1">Clients</span>
             <button
               onClick={() => setShowAddPanel(true)}
-              className="w-6 h-6 rounded-lg bg-[var(--accent)] flex items-center justify-center text-white hover:bg-[var(--accent-hover)] transition-colors"
+              className="w-6 h-6 rounded-lg bg-brand-500 hover:bg-brand-600 flex items-center justify-center text-white transition-colors"
               title="Add client"
             >
               <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14" /></svg>
@@ -782,7 +782,7 @@ export default function ClientsPage() {
               placeholder="Search clients..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-7 pr-3 py-1.5 text-[12px] bg-[var(--surface)] border border-[var(--border)] rounded-xl text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]/20 transition-all"
+              className="w-full pl-7 pr-3 py-1.5 text-[12px] font-light bg-slate-50/50 dark:bg-zinc-900/50 border border-slate-200/60 dark:border-zinc-800/60 rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400/50 dark:placeholder:text-zinc-600/50 focus:outline-none focus:border-brand-400/50 dark:focus:border-brand-600/50 focus:ring-1 focus:ring-brand-200/30 dark:focus:ring-brand-800/20 transition-all"
             />
           </div>
         </div>
@@ -803,8 +803,8 @@ export default function ClientsPage() {
         </div>
 
         {/* Sidebar footer */}
-        <div className="px-5 py-3 border-t border-[var(--border)]">
-          <Link href="/chat" className="flex items-center gap-2 text-[11px] text-[var(--muted)] hover:text-[var(--accent)] transition-colors">
+        <div className="px-5 py-3 border-t border-slate-200/70 dark:border-zinc-800/70">
+          <Link href="/chat" className="flex items-center gap-2 text-[11px] text-slate-400 dark:text-zinc-500 hover:text-brand-500 dark:hover:text-brand-400 transition-colors">
             <IconMessage className="w-3 h-3" /> Back to chat
           </Link>
         </div>
@@ -831,8 +831,8 @@ export default function ClientsPage() {
                 <div className="flex items-start justify-between mb-10">
                   <div className="flex items-center gap-5">
                     <div
-                      className="w-[52px] h-[52px] rounded-2xl flex items-center justify-center text-white text-lg font-semibold shadow-sm"
-                      style={{ background: avatarColor(name) }}
+                      className="w-[52px] h-[52px] rounded-2xl flex items-center justify-center text-white text-lg font-semibold shadow-sm shadow-brand-500/20"
+                      style={{ background: `linear-gradient(135deg, ${avatarGradient(name)[0]}, ${avatarGradient(name)[1]})` }}
                     >
                       {detail.first_name[0]}{detail.last_name[0]}
                     </div>
@@ -840,12 +840,12 @@ export default function ClientsPage() {
                       <h1 className="text-[24px] font-semibold text-[var(--foreground)] tracking-[-0.025em] leading-none">{name}</h1>
                       <div className="flex items-center gap-2 mt-2">
                         {detail.employment_status && (
-                          <span className="text-[10px] font-semibold uppercase tracking-wider px-2.5 py-[3px] rounded-lg bg-[var(--accent)]/[0.08] text-[var(--accent)] border border-[var(--accent)]/[0.12]">
+                          <span className="text-[10px] font-semibold uppercase tracking-wider px-2.5 py-[3px] rounded-lg bg-brand-50 dark:bg-brand-950/30 text-brand-600 dark:text-brand-400 border border-brand-200/40 dark:border-brand-800/30">
                             {detail.employment_status}
                           </span>
                         )}
                         {detail.region && (
-                          <span className="text-[10px] font-medium uppercase tracking-wider px-2.5 py-[3px] rounded-lg bg-[var(--surface)] text-[var(--muted)] border border-[var(--border)]">
+                          <span className="text-[10px] font-medium uppercase tracking-wider px-2.5 py-[3px] rounded-lg bg-slate-50 dark:bg-zinc-900/50 text-slate-500 dark:text-zinc-400 border border-slate-200/40 dark:border-zinc-800/30">
                             {detail.region}
                           </span>
                         )}
@@ -861,7 +861,7 @@ export default function ClientsPage() {
                     {tp && !showTaxForm && (
                       <button
                         onClick={() => setShowTaxForm(true)}
-                        className="text-[11px] font-medium text-[var(--accent)] hover:text-[var(--accent-hover)] transition-colors"
+                        className="text-[11px] font-medium text-brand-500 dark:text-brand-400 hover:text-brand-600 dark:hover:text-brand-300 transition-colors"
                       >
                         Edit tax data
                       </button>
@@ -869,7 +869,7 @@ export default function ClientsPage() {
                     {showTaxForm && (
                       <button
                         onClick={() => setShowTaxForm(false)}
-                        className="text-[11px] font-medium text-[var(--muted)] hover:text-[var(--foreground)] transition-colors"
+                        className="text-[11px] font-medium text-slate-400 dark:text-zinc-500 hover:text-slate-700 dark:hover:text-zinc-300 transition-colors"
                       >
                         Cancel edit
                       </button>
@@ -889,7 +889,7 @@ export default function ClientsPage() {
                             const next = curIdx + dir;
                             if (clients[next]) setSelectedId(clients[next].id);
                           }}
-                          className="w-7 h-7 rounded-lg bg-[var(--surface)] border border-[var(--border)] flex items-center justify-center text-[var(--muted)] hover:text-[var(--foreground)] hover:border-[var(--border)] hover:bg-[var(--surface-elevated)] transition-all disabled:opacity-25 disabled:pointer-events-none"
+                          className="w-7 h-7 rounded-lg bg-white dark:bg-zinc-900 border border-slate-200/60 dark:border-zinc-800/60 flex items-center justify-center text-slate-400 dark:text-zinc-500 hover:text-slate-700 dark:hover:text-zinc-300 hover:border-slate-300 dark:hover:border-zinc-700 transition-all disabled:opacity-25 disabled:pointer-events-none"
                         >
                           <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d={d} /></svg>
                         </button>
@@ -962,7 +962,7 @@ export default function ClientsPage() {
                                   <div className="mt-3 pt-3 border-t border-[var(--border-subtle)]">
                                     <button
                                       onClick={() => setSelectedId(detail.spouse!.id)}
-                                      className="inline-flex items-center gap-1.5 text-[12px] font-medium text-[var(--accent)] hover:text-[var(--accent-hover)] transition-colors"
+                                      className="inline-flex items-center gap-1.5 text-[12px] font-medium text-brand-500 dark:text-brand-400 hover:text-brand-600 dark:hover:text-brand-300 transition-colors"
                                     >
                                       View full profile <IconArrowRight className="w-3 h-3" />
                                     </button>
