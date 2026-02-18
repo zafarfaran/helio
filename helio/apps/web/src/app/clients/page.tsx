@@ -6,6 +6,16 @@ import { motion, AnimatePresence } from "framer-motion";
 import { ThemeToggle } from "@/components/theme-provider";
 import { AddClientPanel } from "@/components/add-client-panel";
 import { TaxDataForm } from "@/components/tax-data-form";
+import { TabBar, TabId } from "@/components/charts/tab-bar";
+import { TaxDonutChart } from "@/components/charts/tax-donut-chart";
+import { WaterfallChart } from "@/components/charts/waterfall-chart";
+import { NetIncomeBar } from "@/components/charts/net-income-bar";
+import { IncomeBarChart } from "@/components/charts/income-bar-chart";
+import { TaxBandsChart } from "@/components/charts/tax-bands-chart";
+import { NIDonutChart } from "@/components/charts/ni-donut-chart";
+import { AllowancesRadialChart } from "@/components/charts/allowances-radial-chart";
+import { SavingsBanner } from "@/components/charts/savings-banner";
+import { MeetingNotesTimeline } from "@/components/charts/meeting-notes-timeline";
 import {
   HelioLogo,
   IconUser,
@@ -21,6 +31,7 @@ import {
   IconZap,
   IconMessage,
   IconFileText,
+  IconTrash,
 } from "@/components/icons";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -446,11 +457,11 @@ function AllowanceBar({ a }: { a: Allowance }) {
 
 /* ── Observation item ── */
 
-function ObsItem({ obs }: { obs: Observation }) {
+function ObsItem({ obs, onDelete }: { obs: Observation; onDelete?: (id: string) => void }) {
   const s = SEV[obs.severity] || SEV.info;
 
   return (
-    <motion.div variants={fadeUp} className={`rounded-lg border-l-[3px] ${s.border} ${s.bg} px-4 py-3.5`}>
+    <motion.div variants={fadeUp} className={`group/obs rounded-lg border-l-[3px] ${s.border} ${s.bg} px-4 py-3.5`}>
       <div className="flex items-start gap-2.5">
         <div className={`mt-0.5 ${s.icon} flex-shrink-0`}>
           {obs.severity === "opportunity" ? <IconLightbulb className="w-3.5 h-3.5" />
@@ -481,8 +492,92 @@ function ObsItem({ obs }: { obs: Observation }) {
             </div>
           )}
         </div>
+        {onDelete && (
+          <button
+            onClick={() => onDelete(obs.id)}
+            className="flex-shrink-0 opacity-0 group-hover/obs:opacity-100 transition-opacity p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/20 text-slate-300 dark:text-zinc-600 hover:text-red-500 dark:hover:text-red-400"
+            title="Delete observation"
+          >
+            <IconTrash className="w-3.5 h-3.5" />
+          </button>
+        )}
       </div>
     </motion.div>
+  );
+}
+
+/* ── Intelligence tab (with filters) ── */
+
+function IntelligenceTab({
+  observations,
+  totalSavings,
+  onDelete,
+}: {
+  observations: Observation[];
+  totalSavings: number;
+  onDelete: (id: string) => void;
+}) {
+  const [filter, setFilter] = useState<string>("all");
+
+  const filtered = filter === "all"
+    ? observations
+    : observations.filter((o) => o.severity === filter);
+
+  const counts: Record<string, number> = {
+    all: observations.length,
+    opportunity: observations.filter((o) => o.severity === "opportunity").length,
+    warning: observations.filter((o) => o.severity === "warning").length,
+    critical: observations.filter((o) => o.severity === "critical" || o.severity === "danger").length,
+    info: observations.filter((o) => o.severity === "info").length,
+  };
+
+  return (
+    <div className="space-y-5">
+      {/* Savings banner */}
+      {totalSavings > 0 && (
+        <div className="rounded-xl bg-gradient-to-r from-emerald-50 to-emerald-100/50 dark:from-emerald-500/[0.08] dark:to-emerald-500/[0.04] border border-emerald-200/50 dark:border-emerald-500/15 p-5">
+          <p className="text-[11px] font-medium text-emerald-600/70 dark:text-emerald-400/60 uppercase tracking-wide mb-1">Total Potential Savings</p>
+          <p className="text-[24px] font-semibold font-mono text-emerald-700 dark:text-emerald-400 leading-none">
+            £{totalSavings.toLocaleString("en-GB", { maximumFractionDigits: 0 })}
+          </p>
+        </div>
+      )}
+
+      {/* Filter pills */}
+      <div className="flex items-center gap-2">
+        {(["all", "opportunity", "warning", "critical", "info"] as const).map((key) => {
+          const count = counts[key];
+          if (key !== "all" && count === 0) return null;
+          return (
+            <button
+              key={key}
+              onClick={() => setFilter(key)}
+              className={`text-[11px] font-medium px-3 py-1.5 rounded-full transition-colors ${
+                filter === key
+                  ? "bg-[var(--accent)] text-white"
+                  : "bg-[var(--surface)] text-[var(--muted)] hover:text-[var(--foreground)]"
+              }`}
+            >
+              {key === "all" ? "All" : key.charAt(0).toUpperCase() + key.slice(1)}
+              <span className="ml-1 opacity-60">{count}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Observation list */}
+      {filtered.length > 0 ? (
+        <motion.div variants={stagger} initial="initial" animate="animate" className="space-y-3">
+          {filtered.map((o) => (
+            <ObsItem key={o.id} obs={o} onDelete={onDelete} />
+          ))}
+        </motion.div>
+      ) : (
+        <div className="rounded-xl border border-dashed border-[var(--border)] p-10 text-center">
+          <p className="text-[13px] text-[var(--muted)]">No observations match this filter</p>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -522,6 +617,7 @@ export default function ClientsPage() {
   const [search, setSearch] = useState("");
   const [showAddPanel, setShowAddPanel] = useState(false);
   const [showTaxForm, setShowTaxForm] = useState(false);
+  const [activeTab, setActiveTab] = useState<TabId>("overview");
 
   const handleClientAdded = (newClient: ClientSummary) => {
     setClients((prev) => [newClient, ...prev]);
@@ -562,6 +658,7 @@ export default function ClientsPage() {
     if (!selectedId) return;
     let cancelled = false;
     setShowTaxForm(false);
+    setActiveTab("overview");
     setDetailLoading(true);
     (async () => {
       try {
@@ -598,6 +695,17 @@ export default function ClientsPage() {
     );
   }, [clients, search]);
 
+  /* Delete observation handler */
+  const handleDeleteObservation = useCallback(async (obsId: string) => {
+    if (!selectedId) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/clients/${selectedId}/observations/${obsId}`, { method: "DELETE" });
+      if (res.ok) refetchDetail();
+    } catch (err) {
+      console.error("Failed to delete observation:", err);
+    }
+  }, [selectedId, refetchDetail]);
+
   /* Derived */
   const tp = detail?.tax_profile;
   const obs = detail?.observations?.filter((o) => !o.is_dismissed) || [];
@@ -613,6 +721,13 @@ export default function ClientsPage() {
   const dobStr = detail?.date_of_birth
     ? new Date(detail.date_of_birth).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })
     : null;
+
+  // Chart-derived values
+  const totalSavings = obs.reduce((sum, o) => sum + (o.potential_saving || 0), 0);
+  const opportunityCount = obs.filter((o) => o.severity === "opportunity").length;
+  const warningCount = obs.filter((o) => o.severity === "warning").length;
+  const netIncome = tp ? tp.total_income - tp.total_tax : 0;
+  const hicbcChargeAmt = tp?.hicbc ? (tp.hicbc.hicbc_charge ?? tp.hicbc.charge ?? 0) : 0;
 
   const curIdx = clients.findIndex((c) => c.id === selectedId);
 
@@ -765,16 +880,6 @@ export default function ClientsPage() {
                   </div>
                 </div>
 
-                {/* ── Metrics ── */}
-                {tp && !showTaxForm && (
-                  <motion.div variants={stagger} initial="initial" animate="animate" className="grid grid-cols-4 gap-5 mb-8">
-                    <Metric label="Total Income" value={fmt(tp.total_income)} sub={sources.length > 1 ? `${sources.length} income sources` : undefined} icon={IconWallet} />
-                    <Metric label="Total Tax" value={fmtFull(tp.total_tax)} sub={`Income tax ${fmt(tp.income_tax)}`} icon={IconCalculator} />
-                    <Metric label="Effective Rate" value={fmtPct(tp.effective_rate)} sub="Overall tax burden" icon={IconChart} />
-                    <Metric label="Marginal Rate" value={fmtPct(tp.marginal_rate)} sub="Next pound earned" icon={IconTrendingUp} />
-                  </motion.div>
-                )}
-
                 {/* ── Tax data form for editing existing profile ── */}
                 {tp && showTaxForm && (
                   <TaxDataForm
@@ -790,120 +895,188 @@ export default function ClientsPage() {
                   />
                 )}
 
-                {/* ── Sections ── */}
-                {!showTaxForm && <motion.div variants={stagger} initial="initial" animate="animate" className="space-y-5">
+                {/* ── Tabs ── */}
+                {tp && !showTaxForm && (
+                  <>
+                    <TabBar active={activeTab} onChange={setActiveTab} />
 
-                  {/* Row 1: Personal + Income */}
-                  <div className="grid grid-cols-2 gap-5">
-                    <Card title="Client Details" icon={IconUser}>
-                      <KV label="Email" value={detail.email} />
-                      <KV label="NI Number" value={detail.ni_number} mono />
-                      <KV label="UTR" value={detail.utr} mono />
-                      <KV label="Date of Birth" value={dobStr} />
-                      <KV label="Region" value={detail.region} />
-                      <KV label="Employment" value={detail.employment_status} />
-                    </Card>
-
-                    {sources.length > 0 ? (
-                      <Card title="Income Sources" icon={IconWallet}>
-                        <div className="space-y-1">
-                          {sources.map((s, i) => <SourceBar key={i} source={s} total={tp?.total_income || 0} delay={i} />)}
-                        </div>
-                        <div className="mt-3 pt-3 border-t border-[var(--border-subtle)] flex items-center justify-between">
-                          <span className="text-[12px] font-medium text-[var(--foreground)]">Total Gross Income</span>
-                          <span className="text-[14px] font-mono font-semibold text-[var(--foreground)]">{fmt(tp?.total_income)}</span>
-                        </div>
-                      </Card>
-                    ) : (
-                      <Card title="Income Sources" icon={IconWallet}>
-                        <p className="text-[12px] text-[var(--muted)] py-4 text-center">No income sources recorded</p>
-                      </Card>
-                    )}
-                  </div>
-
-                  {/* Tax bands */}
-                  {bands.length > 0 && (
-                    <Card title="Income Tax by Band" icon={IconCalculator}>
-                      <div className="divide-y divide-[var(--border-subtle)]">
-                        {bands.map((b, i) => <BandRow key={i} band={b} maxAmt={maxBandAmt} delay={i} />)}
-                      </div>
-                      <div className="mt-4 pt-4 border-t border-[var(--border)] flex items-center justify-between">
-                        <span className="text-[13px] font-semibold text-[var(--foreground)]">Total Income Tax</span>
-                        <span className="text-[16px] font-mono font-bold text-[var(--foreground)]">{fmtFull(tp?.income_tax)}</span>
-                      </div>
-                    </Card>
-                  )}
-
-                  {/* Row 2: NI + Allowances */}
-                  {((ni && ni.total > 0) || allowances.length > 0) && (
-                  <div className="grid grid-cols-2 gap-5">
-                    {ni && ni.total > 0 && (
-                      <Card title="National Insurance" icon={IconShield}>
-                        <div className="space-y-0">
-                          {ni.class1 > 0 && (
-                            <div className="py-2.5 border-b border-[var(--border-subtle)] flex items-center justify-between">
-                              <span className="text-[12px] text-[var(--foreground)]">Class 1 (Employee)</span>
-                              <span className="text-[12px] font-mono font-medium text-[var(--foreground)]">{fmtFull(ni.class1)}</span>
+                    <AnimatePresence mode="wait">
+                      {/* ══ OVERVIEW TAB ══ */}
+                      {activeTab === "overview" && (
+                        <motion.div
+                          key="overview"
+                          initial={{ opacity: 0, y: 8 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -8 }}
+                          transition={{ duration: 0.25, ease }}
+                        >
+                          <motion.div variants={stagger} initial="initial" animate="animate" className="space-y-5">
+                            {/* Metric cards */}
+                            <div className="grid grid-cols-4 gap-5">
+                              <Metric label="Total Income" value={fmt(tp.total_income)} sub={sources.length > 1 ? `${sources.length} income sources` : undefined} icon={IconWallet} />
+                              <Metric label="Total Tax" value={fmtFull(tp.total_tax)} sub={`Income tax ${fmt(tp.income_tax)}`} icon={IconCalculator} />
+                              <Metric label="Effective Rate" value={fmtPct(tp.effective_rate)} sub="Overall tax burden" icon={IconChart} />
+                              <Metric label="Marginal Rate" value={fmtPct(tp.marginal_rate)} sub="Next pound earned" icon={IconTrendingUp} />
                             </div>
-                          )}
-                          {ni.class2 > 0 && (
-                            <div className="py-2.5 border-b border-[var(--border-subtle)] flex items-center justify-between">
-                              <span className="text-[12px] text-[var(--foreground)]">Class 2 (Self-employed)</span>
-                              <span className="text-[12px] font-mono font-medium text-[var(--foreground)]">{fmtFull(ni.class2)}</span>
+
+                            {/* Net income takeaway */}
+                            <NetIncomeBar
+                              grossIncome={tp.total_income}
+                              totalTax={tp.income_tax + (tp.dividend_tax || 0)}
+                              nationalInsurance={tp.national_insurance}
+                              netIncome={netIncome}
+                            />
+
+                            {/* Charts row: Donut + Waterfall */}
+                            <div className="grid grid-cols-2 gap-5">
+                              <Card title="Tax Composition" icon={IconChart}>
+                                <TaxDonutChart
+                                  incomeTax={tp.income_tax}
+                                  nationalInsurance={tp.national_insurance}
+                                  dividendTax={tp.dividend_tax}
+                                  hicbcCharge={hicbcChargeAmt}
+                                />
+                              </Card>
+                              <Card title="Income to Net Flow" icon={IconTrendingUp}>
+                                <WaterfallChart
+                                  grossIncome={tp.total_income}
+                                  personalAllowance={tp.personal_allowance || 12570}
+                                  taxableIncome={tp.taxable_income || 0}
+                                  incomeTax={tp.income_tax}
+                                  nationalInsurance={tp.national_insurance}
+                                  dividendTax={tp.dividend_tax}
+                                  netIncome={netIncome}
+                                />
+                              </Card>
                             </div>
-                          )}
-                          {ni.class4 > 0 && (
-                            <div className="py-2.5 border-b border-[var(--border-subtle)] flex items-center justify-between">
-                              <span className="text-[12px] text-[var(--foreground)]">Class 4 (Self-employed)</span>
-                              <span className="text-[12px] font-mono font-medium text-[var(--foreground)]">{fmtFull(ni.class4)}</span>
+
+                            {/* Savings banner (links to intelligence tab) */}
+                            <SavingsBanner
+                              totalSavings={totalSavings}
+                              opportunityCount={opportunityCount}
+                              warningCount={warningCount}
+                              onViewIntelligence={() => setActiveTab("intelligence")}
+                            />
+                          </motion.div>
+                        </motion.div>
+                      )}
+
+                      {/* ══ BREAKDOWN TAB ══ */}
+                      {activeTab === "breakdown" && (
+                        <motion.div
+                          key="breakdown"
+                          initial={{ opacity: 0, y: 8 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -8 }}
+                          transition={{ duration: 0.25, ease }}
+                        >
+                          <motion.div variants={stagger} initial="initial" animate="animate" className="space-y-5">
+                            {/* Client details + Income sources */}
+                            <div className="grid grid-cols-2 gap-5">
+                              <Card title="Client Details" icon={IconUser}>
+                                <KV label="Email" value={detail.email} />
+                                <KV label="NI Number" value={detail.ni_number} mono />
+                                <KV label="UTR" value={detail.utr} mono />
+                                <KV label="Date of Birth" value={dobStr} />
+                                <KV label="Region" value={detail.region} />
+                                <KV label="Employment" value={detail.employment_status} />
+                              </Card>
+
+                              {sources.length > 0 ? (
+                                <Card title="Income Sources" icon={IconWallet}>
+                                  <IncomeBarChart sources={sources} totalIncome={tp.total_income} />
+                                  <div className="mt-3 pt-3 border-t border-[var(--border-subtle)] flex items-center justify-between">
+                                    <span className="text-[12px] font-medium text-[var(--foreground)]">Total Gross Income</span>
+                                    <span className="text-[14px] font-mono font-semibold text-[var(--foreground)]">{fmt(tp.total_income)}</span>
+                                  </div>
+                                </Card>
+                              ) : (
+                                <Card title="Income Sources" icon={IconWallet}>
+                                  <p className="text-[12px] text-[var(--muted)] py-4 text-center">No income sources recorded</p>
+                                </Card>
+                              )}
                             </div>
-                          )}
-                          <div className="pt-3 flex items-center justify-between">
-                            <span className="text-[12px] font-semibold text-[var(--foreground)]">Total NI</span>
-                            <span className="text-[14px] font-mono font-bold text-[var(--foreground)]">{fmtFull(ni.total)}</span>
-                          </div>
-                        </div>
-                      </Card>
-                    )}
 
-                    {allowances.length > 0 && (
-                      <Card title="Allowances" icon={IconShield}>
-                        <div className="space-y-1">
-                          {allowances.map((a, i) => <AllowanceBar key={i} a={a} />)}
-                        </div>
-                      </Card>
-                    )}
-                  </div>
-                  )}
+                            {/* Tax bands chart */}
+                            {bands.length > 0 && (
+                              <Card title="Income Tax by Band" icon={IconCalculator}>
+                                <TaxBandsChart bands={bands} />
+                                <div className="mt-4 pt-4 border-t border-[var(--border)] flex items-center justify-between">
+                                  <span className="text-[13px] font-semibold text-[var(--foreground)]">Total Income Tax</span>
+                                  <span className="text-[16px] font-mono font-bold text-[var(--foreground)]">{fmtFull(tp.income_tax)}</span>
+                                </div>
+                              </Card>
+                            )}
 
-                  {/* HICBC */}
-                  {(tp?.hicbc_applies || tp?.hicbc?.applies) && tp?.hicbc && (
-                    <Card title="High Income Child Benefit Charge" icon={IconAlertCircle}>
-                      <div className="grid grid-cols-3 gap-5">
-                        {[
-                          { label: "Child Benefit", value: fmtFull(hicbcBenefit(tp.hicbc)), color: "" },
-                          { label: "Clawback", value: `${hicbcClawback(tp.hicbc)}%`, color: "text-amber-600 dark:text-amber-400" },
-                          { label: "HICBC Charge", value: fmtFull(hicbcCharge(tp.hicbc)), color: "text-red-600 dark:text-red-400" },
-                        ].map(({ label, value, color }) => (
-                          <div key={label}>
-                            <p className="text-[10px] font-medium uppercase tracking-wider text-[var(--muted)] mb-1">{label}</p>
-                            <p className={`text-[15px] font-mono font-semibold ${color || "text-[var(--foreground)]"}`}>{value}</p>
-                          </div>
-                        ))}
-                      </div>
-                    </Card>
-                  )}
+                            {/* NI + Allowances */}
+                            {((ni && ni.total > 0) || allowances.length > 0) && (
+                              <div className="grid grid-cols-2 gap-5">
+                                {ni && ni.total > 0 && (
+                                  <Card title="National Insurance" icon={IconShield}>
+                                    <NIDonutChart class1={ni.class1} class2={ni.class2} class4={ni.class4} total={ni.total} />
+                                  </Card>
+                                )}
+                                {allowances.length > 0 && (
+                                  <Card title="Allowances" icon={IconShield}>
+                                    <AllowancesRadialChart allowances={allowances} />
+                                  </Card>
+                                )}
+                              </div>
+                            )}
 
-                  {/* Observations */}
-                  {obs.length > 0 && (
-                    <Card title="Tax Intelligence" icon={IconLightbulb}>
-                      <motion.div variants={stagger} initial="initial" animate="animate" className="space-y-3">
-                        {obs.map((o) => <ObsItem key={o.id} obs={o} />)}
-                      </motion.div>
-                    </Card>
-                  )}
+                            {/* HICBC */}
+                            {(tp.hicbc_applies || tp.hicbc?.applies) && tp.hicbc && (
+                              <Card title="High Income Child Benefit Charge" icon={IconAlertCircle}>
+                                <div className="grid grid-cols-3 gap-5">
+                                  {[
+                                    { label: "Child Benefit", value: fmtFull(hicbcBenefit(tp.hicbc)), color: "" },
+                                    { label: "Clawback", value: `${hicbcClawback(tp.hicbc)}%`, color: "text-amber-600 dark:text-amber-400" },
+                                    { label: "HICBC Charge", value: fmtFull(hicbcCharge(tp.hicbc)), color: "text-red-600 dark:text-red-400" },
+                                  ].map(({ label, value, color }) => (
+                                    <div key={label}>
+                                      <p className="text-[10px] font-medium uppercase tracking-wider text-[var(--muted)] mb-1">{label}</p>
+                                      <p className={`text-[15px] font-mono font-semibold ${color || "text-[var(--foreground)]"}`}>{value}</p>
+                                    </div>
+                                  ))}
+                                </div>
+                              </Card>
+                            )}
+                          </motion.div>
+                        </motion.div>
+                      )}
 
-                </motion.div>}
+                      {/* ══ INTELLIGENCE TAB ══ */}
+                      {activeTab === "intelligence" && (
+                        <motion.div
+                          key="intelligence"
+                          initial={{ opacity: 0, y: 8 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -8 }}
+                          transition={{ duration: 0.25, ease }}
+                        >
+                          <IntelligenceTab
+                            observations={obs}
+                            totalSavings={totalSavings}
+                            onDelete={handleDeleteObservation}
+                          />
+                        </motion.div>
+                      )}
+
+                      {/* ══ NOTES TAB ══ */}
+                      {activeTab === "notes" && (
+                        <motion.div
+                          key="notes"
+                          initial={{ opacity: 0, y: 8 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -8 }}
+                          transition={{ duration: 0.25, ease }}
+                        >
+                          <MeetingNotesTimeline clientId={detail.id} />
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </>
+                )}
 
                 {/* Empty state — prompt to enter tax data */}
                 {!tp && !showTaxForm && (
