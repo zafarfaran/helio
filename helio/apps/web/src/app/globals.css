@@ -4,61 +4,61 @@
 
 @layer base {
   :root {
-    --background: #fafaf9;
-    --foreground: #1c1917;
-    --muted: #78716c;
-    --muted-foreground: #a8a29e;
-    --border: #e7e5e4;
-    --border-subtle: #f5f5f4;
-    --accent: #4f6478;
-    --accent-hover: #3d5066;
-    --accent-light: #f0f3f6;
-    --accent-glow: rgba(79, 100, 120, 0.1);
-    --surface: #f5f5f4;
+    --background: #ffffff;
+    --foreground: #0a0a0b;
+    --muted: #64748b;
+    --muted-foreground: #94a3b8;
+    --border: #e2e8f0;
+    --border-subtle: #f1f5f9;
+    --accent: #5c7cfa;
+    --accent-hover: #4c6ef5;
+    --accent-light: #eef2ff;
+    --accent-glow: rgba(92, 124, 250, 0.15);
+    --surface: #f8fafc;
     --surface-elevated: #ffffff;
-    --success: #16a34a;
-    --warning: #d97706;
-    --danger: #dc2626;
-    --info: #2563eb;
+    --success: #22c55e;
+    --warning: #f59e0b;
+    --danger: #ef4444;
+    --info: #3b82f6;
     --card: #ffffff;
-    --card-border: #e7e5e4;
-    --nav-bg: #fafaf9;
+    --card-border: rgba(226, 232, 240, 0.6);
+    --nav-bg: rgba(255, 255, 255, 0.8);
 
     /* Chart tokens — light */
-    --chart-tooltip-bg: rgba(255, 255, 255, 0.95);
-    --chart-tooltip-border: #e7e5e4;
-    --chart-grid: rgba(120, 113, 108, 0.1);
-    --chart-axis: #a8a29e;
-    --chart-cursor: rgba(79, 100, 120, 0.06);
+    --chart-tooltip-bg: rgba(255, 255, 255, 0.92);
+    --chart-tooltip-border: rgba(200, 200, 220, 0.4);
+    --chart-grid: rgba(100, 116, 139, 0.1);
+    --chart-axis: #94a3b8;
+    --chart-cursor: rgba(92, 124, 250, 0.06);
   }
 
   .dark {
-    --background: #1c1917;
-    --foreground: #e7e5e4;
-    --muted: #a8a29e;
-    --muted-foreground: #78716c;
-    --border: #292524;
-    --border-subtle: #1c1917;
-    --accent: #7d9ab5;
-    --accent-hover: #9bb4ca;
-    --accent-light: rgba(125, 154, 181, 0.1);
-    --accent-glow: rgba(125, 154, 181, 0.15);
-    --surface: #292524;
-    --surface-elevated: #44403c;
-    --success: #16a34a;
-    --warning: #d97706;
-    --danger: #dc2626;
-    --info: #2563eb;
-    --card: #292524;
-    --card-border: #44403c;
-    --nav-bg: #1c1917;
+    --background: #0a0a0f;
+    --foreground: #e8e8f0;
+    --muted: #6e6e82;
+    --muted-foreground: #4a4a5e;
+    --border: rgba(255, 255, 255, 0.06);
+    --border-subtle: rgba(255, 255, 255, 0.03);
+    --accent: #748ffc;
+    --accent-hover: #91a7ff;
+    --accent-light: rgba(92, 124, 250, 0.1);
+    --accent-glow: rgba(92, 124, 250, 0.25);
+    --surface: rgba(255, 255, 255, 0.02);
+    --surface-elevated: rgba(255, 255, 255, 0.04);
+    --success: #22c55e;
+    --warning: #f59e0b;
+    --danger: #ef4444;
+    --info: #3b82f6;
+    --card: rgba(255, 255, 255, 0.03);
+    --card-border: rgba(255, 255, 255, 0.07);
+    --nav-bg: rgba(10, 10, 15, 0.7);
 
     /* Chart tokens — dark */
-    --chart-tooltip-bg: rgba(28, 25, 23, 0.95);
-    --chart-tooltip-border: #44403c;
-    --chart-grid: rgba(168, 162, 158, 0.08);
-    --chart-axis: #78716c;
-    --chart-cursor: rgba(125, 154, 181, 0.06);
+    --chart-tooltip-bg: rgba(15, 15, 22, 0.92);
+    --chart-tooltip-border: rgba(255, 255, 255, 0.08);
+    --chart-grid: rgba(255, 255, 255, 0.04);
+    --chart-axis: #5a5a6e;
+    --chart-cursor: rgba(116, 143, 252, 0.06);
   }
 
   * {
@@ -197,24 +197,44 @@
   background: rgba(161, 161, 170, 0.3);
 }
 
-/* ── Refined card system ── */
+/* ── Card system (matches chat page) ── */
 
 .refined-card {
-  background: var(--card);
-  border: 1px solid var(--card-border);
+  background: rgba(255, 255, 255, 0.5);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(226, 232, 240, 0.4);
   border-radius: 12px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
-  transition: box-shadow 0.15s ease, border-color 0.15s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.dark .refined-card {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.07);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
 .refined-card:hover {
+  border-color: rgba(226, 232, 240, 0.6);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-  border-color: var(--border);
+}
+
+.dark .refined-card:hover {
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 .refined-sidebar {
-  background: var(--surface);
-  border-right: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-right: 1px solid rgba(226, 232, 240, 0.7);
+}
+
+.dark .refined-sidebar {
+  background: rgba(10, 10, 15, 0.6);
+  border-right-color: rgba(255, 255, 255, 0.06);
 }
 
 /* ── Card hover depth ── */
