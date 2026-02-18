@@ -159,8 +159,9 @@ export default function SettingsPage() {
               ))}
             </div>
 
+
             {/* Sidebar footer */}
-            <div className="mt-8 mx-3 p-3 rounded-lg bg-gradient-to-br from-brand-50 to-violet-50 dark:from-brand-950/20 dark:to-violet-950/20 border border-brand-100/50 dark:border-brand-900/20">
+            <div className="mt-4 mx-3 p-3 rounded-lg bg-gradient-to-br from-brand-50 to-violet-50 dark:from-brand-950/20 dark:to-violet-950/20 border border-brand-100/50 dark:border-brand-900/20">
               <p className="text-[11px] font-medium text-slate-700 dark:text-zinc-200 mb-1">
                 Pro Plan
               </p>

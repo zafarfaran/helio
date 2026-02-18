@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -56,8 +56,10 @@ export type StatusPhase =
   | "checking_allowances"
   | "calculating"
   | "computing_tax"
+  | "modelling_scenario"
   | "building_dashboard"
   | "searching_notes"
+  | "saving_observation"
   | "generating_response"
   | "complete";
 
@@ -68,14 +70,39 @@ const STATUS_MESSAGES: Record<StatusPhase, string> = {
   checking_allowances: "Checking allowance status...",
   calculating: "Running tax calculations...",
   computing_tax: "Computing tax position...",
+  modelling_scenario: "Modelling salary sacrifice scenario...",
   building_dashboard: "Building dashboard...",
   searching_notes: "Searching meeting notes...",
+  saving_observation: "Generating observations...",
   generating_response: "Generating response...",
   complete: "",
 };
 
+/* ── localStorage helpers for auto-persist ── */
+const STORAGE_PREFIX = "helio:chat:";
+
+function persistKey(clientId: string, key: string): string {
+  return `${STORAGE_PREFIX}${clientId}:${key}`;
+}
+
+function saveToStorage(key: string, value: unknown): void {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch { /* quota exceeded or SSR — ignore */ }
+}
+
+function loadFromStorage<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return fallback;
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
+}
+
 /* eslint-disable @typescript-eslint/no-explicit-any */
-export function useChat(clientId: string, taxPlanMode: boolean = false) {
+export function useChat(clientId: string, taxPlanMode: boolean = false, onObservationSaved?: () => void) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [status, setStatus] = useState<StatusPhase>("idle");
   const [statusMessage, setStatusMessage] = useState("");
@@ -87,6 +114,36 @@ export function useChat(clientId: string, taxPlanMode: boolean = false) {
   const [isScenarioGenerating, setIsScenarioGenerating] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const dashboardTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const restoredRef = useRef(false);
+
+  /* ── Restore persisted state on mount / client change ── */
+  useEffect(() => {
+    restoredRef.current = false;
+    const savedMessages = loadFromStorage<ChatMessage[]>(persistKey(clientId, "messages"), []);
+    const savedConvId = loadFromStorage<string | null>(persistKey(clientId, "conversationId"), null);
+    const savedDashboard = loadFromStorage<any>(persistKey(clientId, "dashboard"), null);
+    const savedScenarios = loadFromStorage<any[]>(persistKey(clientId, "scenarios"), []);
+
+    if (savedMessages.length > 0) setMessages(savedMessages);
+    if (savedConvId) setConversationId(savedConvId);
+    if (savedDashboard) setDashboardData(savedDashboard);
+    if (savedScenarios.length > 0) setScenarios(savedScenarios);
+
+    // Mark restored so the persist effect below doesn't immediately overwrite with empty state
+    requestAnimationFrame(() => { restoredRef.current = true; });
+  }, [clientId]);
+
+  /* ── Auto-persist when state changes (debounced) ── */
+  useEffect(() => {
+    if (!restoredRef.current || isStreaming) return;
+    const timer = setTimeout(() => {
+      saveToStorage(persistKey(clientId, "messages"), messages);
+      saveToStorage(persistKey(clientId, "conversationId"), conversationId);
+      saveToStorage(persistKey(clientId, "dashboard"), dashboardData);
+      saveToStorage(persistKey(clientId, "scenarios"), scenarios);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [clientId, messages, conversationId, dashboardData, scenarios, isStreaming]);
 
   const sendMessage = useCallback(
     async (content: string, contextSnippetIds?: string[]) => {
@@ -175,17 +232,24 @@ export function useChat(clientId: string, taxPlanMode: boolean = false) {
                   }
                   setIsDashboardGenerating(true);
                 }
+                if (phase === "modelling_scenario") {
+                  setIsScenarioGenerating(true);
+                }
               } else if (eventType === "tool_call") {
-                if (data.tool === "compute_tax_position" || data.tool === "model_salary_sacrifice") {
+                if (data.tool === "compute_tax_position") {
                   setStatus("computing_tax");
                   setStatusMessage("Computing tax position...");
-                  if (data.tool === "model_salary_sacrifice") {
-                    setIsScenarioGenerating(true);
-                  }
+                } else if (data.tool === "model_salary_sacrifice") {
+                  setStatus("modelling_scenario");
+                  setStatusMessage("Modelling salary sacrifice scenario...");
+                  setIsScenarioGenerating(true);
                 } else if (data.tool === "generate_dashboard") {
                   setIsDashboardGenerating(true);
                   setStatus("building_dashboard");
                   setStatusMessage("Generating detailed dashboard...");
+                } else if (data.tool === "save_observation") {
+                  setStatus("saving_observation");
+                  setStatusMessage("Generating observations...");
                 }
               } else if (eventType === "tool_result") {
                 // Capture tax engine computation data and attach to assistant message
@@ -220,6 +284,10 @@ export function useChat(clientId: string, taxPlanMode: boolean = false) {
                 // Extract dashboard data from tool_result (fallback)
                 if (data.tool === "generate_dashboard" && data.result?.dashboardData) {
                   setDashboardData(data.result.dashboardData);
+                }
+                // Notify when an AI observation is saved
+                if (data.tool === "save_observation" && data.result?.success) {
+                  onObservationSaved?.();
                 }
                 // NOTE: Do NOT clear isDashboardGenerating here — tool_call,
                 // tool_result, and dashboard_update arrive in the same chunk.
@@ -273,7 +341,7 @@ export function useChat(clientId: string, taxPlanMode: boolean = false) {
         abortRef.current = null;
       }
     },
-    [clientId, conversationId, isStreaming, taxPlanMode]
+    [clientId, conversationId, isStreaming, taxPlanMode, onObservationSaved]
   );
 
   const stopStreaming = useCallback(() => {
@@ -319,7 +387,16 @@ export function useChat(clientId: string, taxPlanMode: boolean = false) {
   const clearMessages = useCallback(() => {
     setMessages([]);
     setConversationId(null);
-  }, []);
+    setDashboardData(null);
+    setScenarios([]);
+    // Clear persisted state for this client
+    try {
+      localStorage.removeItem(persistKey(clientId, "messages"));
+      localStorage.removeItem(persistKey(clientId, "conversationId"));
+      localStorage.removeItem(persistKey(clientId, "dashboard"));
+      localStorage.removeItem(persistKey(clientId, "scenarios"));
+    } catch { /* SSR guard */ }
+  }, [clientId]);
 
   return {
     messages,

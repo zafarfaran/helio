@@ -23,13 +23,30 @@
     --card: #ffffff;
     --card-border: rgba(228, 231, 236, 0.6);
     --nav-bg: rgba(255, 255, 255, 0.8);
+
+    /* Glass tokens — light */
+    --glass: rgba(255, 255, 255, 0.6);
+    --glass-hover: rgba(255, 255, 255, 0.75);
+    --glass-border: rgba(200, 200, 220, 0.3);
+    --glass-border-hover: rgba(200, 200, 220, 0.5);
+    --glass-blur: 20px;
+    --glass-glow: rgba(92, 124, 250, 0.06);
+    --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.04), 0 0 0 1px rgba(255, 255, 255, 0.6) inset;
+    --glass-shadow-lg: 0 16px 64px rgba(0, 0, 0, 0.06), 0 0 0 1px rgba(255, 255, 255, 0.7) inset;
+
+    /* Chart tokens — light */
+    --chart-tooltip-bg: rgba(255, 255, 255, 0.92);
+    --chart-tooltip-border: rgba(200, 200, 220, 0.4);
+    --chart-grid: rgba(100, 116, 139, 0.1);
+    --chart-axis: #94a3b8;
+    --chart-cursor: rgba(92, 124, 250, 0.06);
   }
 
   .dark {
     --background: #06060a;
-    --foreground: #f0f0f5;
-    --muted: #8b8b9e;
-    --muted-foreground: #5a5a6e;
+    --foreground: #e8e8f0;
+    --muted: #6e6e82;
+    --muted-foreground: #4a4a5e;
     --border: rgba(255, 255, 255, 0.06);
     --border-subtle: rgba(255, 255, 255, 0.03);
     --accent: #748ffc;
@@ -42,27 +59,22 @@
     --card-border: rgba(255, 255, 255, 0.07);
     --nav-bg: rgba(6, 6, 10, 0.7);
 
-    /* Glass tokens */
-    --glass: rgba(255, 255, 255, 0.04);
-    --glass-hover: rgba(255, 255, 255, 0.06);
-    --glass-border: rgba(255, 255, 255, 0.08);
-    --glass-border-hover: rgba(255, 255, 255, 0.14);
+    /* Glass tokens — dark */
+    --glass: rgba(255, 255, 255, 0.03);
+    --glass-hover: rgba(255, 255, 255, 0.055);
+    --glass-border: rgba(255, 255, 255, 0.07);
+    --glass-border-hover: rgba(255, 255, 255, 0.13);
     --glass-blur: 20px;
     --glass-glow: rgba(116, 143, 252, 0.08);
-    --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.05) inset;
-    --glass-shadow-lg: 0 16px 64px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.06) inset;
-  }
+    --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+    --glass-shadow-lg: 0 16px 64px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05) inset;
 
-  :root {
-    /* Light-mode glass tokens */
-    --glass: rgba(255, 255, 255, 0.6);
-    --glass-hover: rgba(255, 255, 255, 0.75);
-    --glass-border: rgba(255, 255, 255, 0.5);
-    --glass-border-hover: rgba(255, 255, 255, 0.7);
-    --glass-blur: 20px;
-    --glass-glow: rgba(92, 124, 250, 0.06);
-    --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.04), 0 0 0 1px rgba(255, 255, 255, 0.6) inset;
-    --glass-shadow-lg: 0 16px 64px rgba(0, 0, 0, 0.06), 0 0 0 1px rgba(255, 255, 255, 0.7) inset;
+    /* Chart tokens — dark */
+    --chart-tooltip-bg: rgba(15, 15, 22, 0.92);
+    --chart-tooltip-border: rgba(255, 255, 255, 0.08);
+    --chart-grid: rgba(255, 255, 255, 0.04);
+    --chart-axis: #5a5a6e;
+    --chart-cursor: rgba(116, 143, 252, 0.06);
   }
 
   * {

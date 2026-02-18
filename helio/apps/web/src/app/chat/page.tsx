@@ -186,6 +186,16 @@ interface Conversation {
   unread: boolean;
   created_at: string;
 }
+
+interface MeetingNoteData {
+  id: string;
+  meeting_date: string;
+  subject: string;
+  attendees?: string | null;
+  summary: string;
+  action_items?: string[] | null;
+  tags?: string[] | null;
+}
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
 const QUICK_PROMPTS = [
@@ -311,13 +321,25 @@ function formatConversationTime(dateStr: string): string {
 export default function ChatPage() {
   const { theme, toggle: toggleTheme } = useTheme();
 
-  /* ── Live data state ── */
-  const [selectedClientId, setSelectedClientId] = useState<string>("client-sarah");
+  /* ── Live data state (restored from localStorage where available) ── */
+  const [selectedClientId, setSelectedClientId] = useState<string>(() => {
+    try { return localStorage.getItem("helio:ui:selectedClient") || "client-sarah"; }
+    catch { return "client-sarah"; }
+  });
   const [clients, setClients] = useState<ClientSummary[]>([]);
   const [clientDetail, setClientDetail] = useState<ClientDetail | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [taxPlanMode, setTaxPlanMode] = useState(false);
+
+  /* ── Callback to refresh client detail (e.g. after AI saves an observation) ── */
+  const refreshClientDetail = useCallback(() => {
+    if (!selectedClientId) return;
+    fetch(`${API_BASE}/api/clients/${selectedClientId}`)
+      .then((r) => r.json())
+      .then((data) => setClientDetail(data))
+      .catch((err) => console.error("Failed to refresh client detail:", err));
+  }, [selectedClientId]);
 
   /* ── useChat hook ── */
   const {
@@ -334,13 +356,16 @@ export default function ChatPage() {
     stopStreaming,
     loadMessages,
     clearMessages,
-  } = useChat(selectedClientId, taxPlanMode);
+  } = useChat(selectedClientId, taxPlanMode, refreshClientDetail);
 
   const { snippets: contextSnippets, dismiss: dismissSnippet, consumeAll: consumeAllSnippets } = useContextSnippets();
 
   /* ── UI state ── */
   const [input, setInput] = useState("");
-  const [panelOpen, setPanelOpen] = useState(true);
+  const [panelOpen, setPanelOpen] = useState(() => {
+    try { const v = localStorage.getItem("helio:ui:panelOpen"); return v !== null ? JSON.parse(v) : true; }
+    catch { return true; }
+  });
   const [panelWidth, setPanelWidth] = useState(520);
   const [panelMode, setPanelMode] = useState<"sidebar" | "fullscreen">("sidebar");
   const panelResizing = useRef(false);
@@ -348,13 +373,20 @@ export default function ChatPage() {
   const panelMaxWidth = 900;
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historySearch, setHistorySearch] = useState("");
-  const [activeTab, setActiveTab] = useState<"overview" | "allowances" | "scenarios" | "observations">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "allowances" | "scenarios" | "observations" | "notes">(() => {
+    try {
+      const v = localStorage.getItem("helio:ui:activeTab");
+      if (v && ["overview", "allowances", "scenarios", "observations", "notes"].includes(v)) return v as any;
+    } catch { /* ignore */ }
+    return "overview";
+  });
   const [activeScenarioId, setActiveScenarioId] = useState<string | null>(null);
   const [inputFocused, setInputFocused] = useState(false);
   const [clientMenuOpen, setClientMenuOpen] = useState(false);
   const [clientPickerMode, setClientPickerMode] = useState(false);
   const [clientSearchQuery, setClientSearchQuery] = useState("");
   const [settingsMenuOpen, setSettingsMenuOpen] = useState(false);
+  const [meetingNotes, setMeetingNotes] = useState<MeetingNoteData[]>([]);
   const clientMenuRef = useRef<HTMLDivElement>(null);
   const settingsMenuRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -421,6 +453,18 @@ export default function ChatPage() {
         hicbc_charge: dashboardData.hicbc?.charge || 0,
       };
 
+      // Gather AI observations from clientDetail
+      const aiObservations = (cd?.observations || [])
+        .filter((o: any) => o.source === "ai" && !o.is_dismissed)
+        .map((o: any) => ({
+          title: o.title,
+          description: o.description,
+          severity: o.severity,
+          category: o.category,
+          potential_saving: o.potential_saving,
+          source: "ai",
+        }));
+
       const res = await fetch(`${API_BASE}/api/exports/tax-report`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -429,6 +473,8 @@ export default function ChatPage() {
           tax_position: taxPosition,
           dashboard_data: comp?.dashboardData || dashboardData,
           scenarios: scenariosList.length > 0 ? scenariosList : undefined,
+          ai_observations: aiObservations.length > 0 ? aiObservations : undefined,
+          meeting_notes: meetingNotes.length > 0 ? meetingNotes : undefined,
         }),
       });
 
@@ -449,7 +495,7 @@ export default function ChatPage() {
     } finally {
       setIsExporting(false);
     }
-  }, [isExporting, dashboardData, clientDetail, scenariosList, messages]);
+  }, [isExporting, dashboardData, clientDetail, scenariosList, messages, meetingNotes]);
 
   /* ── Load clients on mount ── */
   useEffect(() => {
@@ -476,7 +522,7 @@ export default function ChatPage() {
     }
   }, [selectedClientId]);
 
-  /* ── Load client detail + conversations when selectedClientId changes ── */
+  /* ── Load client detail + conversations + meeting notes when selectedClientId changes ── */
   useEffect(() => {
     if (!selectedClientId) return;
     // Fetch client detail (for observations, tax profile)
@@ -484,6 +530,11 @@ export default function ChatPage() {
       .then((r) => r.json())
       .then((data) => setClientDetail(data))
       .catch((err) => console.error("Failed to load client detail:", err));
+    // Fetch meeting notes
+    fetch(`${API_BASE}/api/clients/${selectedClientId}/meeting-notes`)
+      .then((r) => r.json())
+      .then((data) => setMeetingNotes(data.meeting_notes || []))
+      .catch((err) => console.error("Failed to load meeting notes:", err));
     // Fetch conversations
     loadConversations();
   }, [selectedClientId, loadConversations]);
@@ -523,6 +574,19 @@ export default function ChatPage() {
     if (settingsMenuOpen) document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, [settingsMenuOpen]);
+
+  /* ── Persist UI preferences to localStorage ── */
+  useEffect(() => {
+    if (isStreaming) return;
+    const timer = setTimeout(() => {
+      try {
+        localStorage.setItem("helio:ui:selectedClient", selectedClientId);
+        localStorage.setItem("helio:ui:activeTab", activeTab);
+        localStorage.setItem("helio:ui:panelOpen", JSON.stringify(panelOpen));
+      } catch { /* quota or SSR — ignore */ }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [selectedClientId, activeTab, panelOpen, isStreaming]);
 
   /* ── New chat handler ── */
   const handleNewChat = useCallback(async () => {
@@ -621,8 +685,8 @@ export default function ChatPage() {
   /* ── Derived data — prefer dashboardData over clientDetail ── */
 
   const observations: Observation[] = useMemo(() => {
-    if (!dashboardData?.observations) return [];
-    return dashboardData.observations.map((obs: any) => ({
+    // Engine observations from dashboardData
+    const engineObs: Observation[] = (dashboardData?.observations || []).map((obs: any) => ({
       id: obs.id || undefined,
       severity: (obs.type || obs.severity || "info") as "critical" | "warning" | "opportunity" | "info",
       title: obs.title,
@@ -632,7 +696,21 @@ export default function ChatPage() {
       action: obs.action || null,
       savingsBreakdown: obs.savingsBreakdown || null,
     }));
-  }, [dashboardData]);
+    // AI observations from clientDetail (DB)
+    const aiObs: Observation[] = (clientDetail?.observations || [])
+      .filter((o: any) => o.source === "ai" && !o.is_dismissed)
+      .map((obs: any) => ({
+        id: obs.id,
+        severity: (obs.severity || "info") as "critical" | "warning" | "opportunity" | "info",
+        title: obs.title,
+        detail: obs.description || "",
+        category: obs.category || undefined,
+        potentialSaving: obs.potential_saving ?? null,
+        action: null,
+        savingsBreakdown: null,
+      }));
+    return [...engineObs, ...aiObs];
+  }, [dashboardData, clientDetail]);
 
   const taxBreakdownItems = useMemo(() => {
     if (!dashboardData?.taxCalculation) return [];
@@ -1118,6 +1196,7 @@ export default function ChatPage() {
                       </span>
                       <span className="flex-1 text-[11px] font-normal text-slate-700 dark:text-zinc-300">Account</span>
                     </Link>
+
                   </div>
                 </motion.div>
               )}
@@ -1629,7 +1708,7 @@ export default function ChatPage() {
                     {/* Tabs — underline style */}
                     <div className={`flex-shrink-0 pb-4 relative z-10 ${panelMode === "fullscreen" ? "px-10 max-w-5xl mx-auto w-full" : "px-5"}`}>
                       <div className="flex gap-1 border-b border-slate-100 dark:border-zinc-800/50">
-                        {(["overview", "allowances", "scenarios", "observations"] as const).map((tab) => (
+                        {(["overview", "allowances", "scenarios", "observations", "notes"] as const).map((tab) => (
                           <button
                             key={tab}
                             onClick={() => setActiveTab(tab)}
@@ -1680,6 +1759,7 @@ export default function ChatPage() {
                           {activeTab === "allowances" && <AllowancesPanel allowances={allowancesData} isGenerating={isDashboardGenerating} />}
                           {activeTab === "scenarios" && <ScenariosPanel scenarios={scenariosList} activeScenarioId={activeScenarioId} onSelectScenario={setActiveScenarioId} onQuickModel={handleModelScenario} isGenerating={isDashboardGenerating} isScenarioGenerating={isScenarioGenerating} />}
                           {activeTab === "observations" && <ObservationsPanel observations={observations} isGenerating={isDashboardGenerating} onModelScenario={handleModelScenario} />}
+                          {activeTab === "notes" && <MeetingNotesPanel meetingNotes={meetingNotes} />}
                         </motion.div>
                       </AnimatePresence>
 
@@ -2725,6 +2805,191 @@ function ObservationsPanel({ observations, isGenerating, onModelScenario }: { ob
         </div>
       )}
     </div>
+  );
+}
+
+/* ─── Meeting Notes Panel ─── */
+
+function MeetingNotesPanel({ meetingNotes }: { meetingNotes: MeetingNoteData[] }) {
+  if (meetingNotes.length === 0) {
+    return (
+      <div className="text-center py-8">
+        <div className="w-12 h-12 rounded-2xl bg-slate-100/80 dark:bg-zinc-800/50 flex items-center justify-center mx-auto mb-3">
+          <IconBookOpen className="w-5 h-5 text-slate-300 dark:text-zinc-600" />
+        </div>
+        <p className="text-[12px] font-medium text-slate-400 dark:text-zinc-500">No meeting notes</p>
+        <p className="text-[11px] font-light text-slate-400/60 dark:text-zinc-600/60 mt-1">Meeting notes for this client will appear here</p>
+      </div>
+    );
+  }
+
+  const totalActions = meetingNotes.reduce((sum, n) => sum + (n.action_items?.length || 0), 0);
+  const allTags = Array.from(new Set(meetingNotes.flatMap((n) => n.tags || [])));
+
+  return (
+    <div className="space-y-4">
+      {/* ── Summary header ── */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+        className="rounded-xl border border-slate-200/40 dark:border-zinc-800/30 bg-white/50 dark:bg-zinc-900/30 backdrop-blur-sm p-4 overflow-hidden"
+      >
+        <div className="grid grid-cols-3 gap-3">
+          <div className="text-center">
+            <p className="text-[20px] font-mono font-medium text-slate-900 dark:text-white tabular-nums">{meetingNotes.length}</p>
+            <p className="text-[9px] font-light text-slate-400 dark:text-zinc-500 mt-0.5">Notes</p>
+          </div>
+          <div className="text-center border-x border-slate-200/30 dark:border-zinc-800/20">
+            <p className="text-[20px] font-mono font-medium text-sky-600 dark:text-sky-400 tabular-nums">{totalActions}</p>
+            <p className="text-[9px] font-light text-slate-400 dark:text-zinc-500 mt-0.5">Action Items</p>
+          </div>
+          <div className="text-center">
+            <p className="text-[20px] font-mono font-medium text-violet-600 dark:text-violet-400 tabular-nums">{allTags.length}</p>
+            <p className="text-[9px] font-light text-slate-400 dark:text-zinc-500 mt-0.5">Topics</p>
+          </div>
+        </div>
+
+        {allTags.length > 0 && (
+          <div className="mt-3 pt-3 border-t border-slate-200/30 dark:border-zinc-800/20 flex flex-wrap gap-1.5">
+            {allTags.slice(0, 8).map((tag) => (
+              <span key={tag} className="text-[9px] font-medium px-2 py-0.5 rounded-full bg-slate-100/80 dark:bg-zinc-800/50 text-slate-500 dark:text-zinc-400">
+                {tag}
+              </span>
+            ))}
+          </div>
+        )}
+      </motion.div>
+
+      {/* ── Timeline ── */}
+      <div>
+        <p className="text-[9px] uppercase tracking-widest font-medium text-slate-400 dark:text-zinc-600 mb-2 pl-1">Meeting History</p>
+        <div className="space-y-2">
+          {meetingNotes.map((note, i) => (
+            <MeetingNoteCard key={note.id} note={note} index={i} />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Single Meeting Note Card ─── */
+
+function MeetingNoteCard({ note, index }: { note: MeetingNoteData; index: number }) {
+  const [expanded, setExpanded] = useState(false);
+
+  const dateStr = (() => {
+    try {
+      const d = new Date(note.meeting_date);
+      return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+    } catch {
+      return note.meeting_date;
+    }
+  })();
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: -8 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ delay: index * 0.06, duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+      className="group relative rounded-xl border border-slate-200/40 dark:border-zinc-800/30 bg-white/50 dark:bg-zinc-900/30 backdrop-blur-sm overflow-hidden hover:border-sky-200/40 dark:hover:border-sky-700/30 transition-all duration-200"
+    >
+      {/* Accent bar */}
+      <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-gradient-to-b from-sky-400 to-blue-500" />
+
+      <button onClick={() => setExpanded(!expanded)} className="w-full text-left p-3.5 pl-4">
+        {/* Top row */}
+        <div className="flex items-start gap-2.5">
+          <span className="flex-shrink-0 w-7 h-7 rounded-lg bg-sky-50 dark:bg-sky-950/30 flex items-center justify-center mt-0.5">
+            <IconBookOpen className="w-3.5 h-3.5 text-sky-500 dark:text-sky-400" />
+          </span>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <h4 className="text-[12px] font-semibold text-slate-800 dark:text-zinc-100 truncate">{note.subject}</h4>
+            </div>
+            <div className="flex items-center gap-2 mt-1">
+              <span className="text-[10px] font-mono text-slate-400 dark:text-zinc-500">{dateStr}</span>
+              {note.attendees && (
+                <span className="text-[10px] text-slate-400/60 dark:text-zinc-600/60 truncate">
+                  &middot; {note.attendees}
+                </span>
+              )}
+            </div>
+            {/* Preview when collapsed */}
+            {!expanded && (
+              <p className="text-[11px] font-light text-slate-500 dark:text-zinc-400 mt-1.5 line-clamp-2 leading-relaxed">
+                {note.summary}
+              </p>
+            )}
+          </div>
+          {/* Expand indicator */}
+          <div className={`flex-shrink-0 w-5 h-5 rounded-md flex items-center justify-center transition-transform duration-200 ${expanded ? "rotate-180" : ""}`}>
+            <IconChevronDown className="w-3 h-3 text-slate-300 dark:text-zinc-600" />
+          </div>
+        </div>
+
+        {/* Tag pills on collapsed */}
+        {!expanded && note.tags && note.tags.length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-2 ml-[38px]">
+            {note.tags.map((tag) => (
+              <span key={tag} className="text-[8px] font-medium px-1.5 py-[1px] rounded-full bg-slate-100/80 dark:bg-zinc-800/40 text-slate-400 dark:text-zinc-500">
+                {tag}
+              </span>
+            ))}
+          </div>
+        )}
+      </button>
+
+      {/* Expanded content */}
+      <AnimatePresence>
+        {expanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+            className="overflow-hidden"
+          >
+            <div className="px-4 pb-4 pt-0 ml-[38px] space-y-3">
+              {/* Full summary */}
+              <div>
+                <p className="text-[9px] uppercase tracking-widest font-medium text-slate-400 dark:text-zinc-600 mb-1">Summary</p>
+                <p className="text-[11px] font-light text-slate-600 dark:text-zinc-300 leading-relaxed whitespace-pre-line">{note.summary}</p>
+              </div>
+
+              {/* Action items */}
+              {note.action_items && note.action_items.length > 0 && (
+                <div>
+                  <p className="text-[9px] uppercase tracking-widest font-medium text-slate-400 dark:text-zinc-600 mb-1.5">Action Items</p>
+                  <div className="space-y-1">
+                    {note.action_items.map((item, j) => (
+                      <div key={j} className="flex items-start gap-2">
+                        <div className="w-4 h-4 rounded border border-slate-200/60 dark:border-zinc-700/40 flex items-center justify-center flex-shrink-0 mt-0.5">
+                          <IconCheck className="w-2.5 h-2.5 text-slate-300 dark:text-zinc-600" />
+                        </div>
+                        <span className="text-[11px] font-light text-slate-600 dark:text-zinc-300 leading-relaxed">{item}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Tags */}
+              {note.tags && note.tags.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {note.tags.map((tag) => (
+                    <span key={tag} className="text-[9px] font-medium px-2 py-0.5 rounded-full bg-sky-50 dark:bg-sky-950/20 text-sky-600 dark:text-sky-400 border border-sky-200/30 dark:border-sky-800/20">
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
   );
 }
 

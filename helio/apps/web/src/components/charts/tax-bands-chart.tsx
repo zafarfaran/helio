@@ -26,8 +26,14 @@ interface PayloadItem {
 function CustomTooltip({ active, payload, label }: { active?: boolean; payload?: PayloadItem[]; label?: string }) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="rounded-lg bg-[var(--card)] border border-[var(--card-border)] shadow-lg px-3 py-2">
-      <p className="text-[11px] font-medium text-[var(--foreground)] mb-1">{label}</p>
+    <div
+      className="rounded-xl px-3.5 py-2.5 shadow-xl border backdrop-blur-xl"
+      style={{
+        background: 'var(--chart-tooltip-bg)',
+        borderColor: 'var(--chart-tooltip-border)',
+      }}
+    >
+      <p className="text-[11px] font-medium text-[var(--foreground)]/70 mb-1">{label}</p>
       {payload.map((p, i) => (
         <p key={i} className="text-[12px] font-mono text-[var(--foreground)]">
           <span className="text-[var(--muted)]">{p.name}: </span>{fmt(p.value)}
@@ -56,18 +62,18 @@ export function TaxBandsChart({ bands }: TaxBandsChartProps) {
         <BarChart data={data} margin={{ top: 10, right: 10, bottom: 5, left: 10 }}>
           <XAxis
             dataKey="band"
-            tick={{ fontSize: 10, fill: "var(--muted)" }}
+            tick={{ fontSize: 10, fill: "var(--chart-axis)" }}
             axisLine={false}
             tickLine={false}
           />
           <YAxis
-            tick={{ fontSize: 10, fill: "var(--muted)" }}
+            tick={{ fontSize: 10, fill: "var(--chart-axis)" }}
             tickFormatter={(v: number) => `£${(v / 1000).toFixed(0)}k`}
             axisLine={false}
             tickLine={false}
             width={50}
           />
-          <Tooltip content={<CustomTooltip />} cursor={{ fill: "var(--surface)", opacity: 0.5 }} />
+          <Tooltip content={<CustomTooltip />} cursor={{ fill: "var(--chart-cursor)", opacity: 0.8 }} />
           <Legend
             verticalAlign="top"
             height={30}
@@ -75,8 +81,8 @@ export function TaxBandsChart({ bands }: TaxBandsChartProps) {
               <span className="text-[11px] text-[var(--muted)]">{value}</span>
             )}
           />
-          <Bar dataKey="income" name="Income in Band" fill="var(--accent)" fillOpacity={0.7} radius={[4, 4, 0, 0]} animationDuration={800} />
-          <Bar dataKey="tax" name="Tax" fill="#ef4444" fillOpacity={0.75} radius={[4, 4, 0, 0]} animationDuration={800} />
+          <Bar dataKey="income" name="Income in Band" fill="#748ffc" fillOpacity={0.75} radius={[4, 4, 0, 0]} animationDuration={800} />
+          <Bar dataKey="tax" name="Tax" fill="#f87171" fillOpacity={0.8} radius={[4, 4, 0, 0]} animationDuration={800} />
         </BarChart>
       </ResponsiveContainer>
     </div>

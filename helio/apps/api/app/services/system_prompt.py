@@ -52,21 +52,36 @@ Only use this tool when you need to update the dashboard layout or display WITHO
 - **pension_contributions**: Personal contributions to a SIPP or personal pension (relief at source). These reduce ANI and extend the basic rate band for higher/additional rate tax relief.
 - **employer_contributions**: Employer contributions including salary sacrifice. These do NOT reduce ANI (the salary is already reduced), but DO count toward the pension annual allowance.
 
+### Scenarios and Follow-ups — ALWAYS use the tool
+Every scenario request MUST call a tool — no exceptions. This includes:
+- "What if I sacrifice £10K?" → call `model_salary_sacrifice`
+- "Run another scenario with £20K" → call `model_salary_sacrifice` again
+- "What about £5K instead?" → call the tool AGAIN, do not interpolate from the last result
+- "How does that change if we add gift aid?" → call `compute_tax_position` with the new parameters
+
+**Never derive one scenario from another.** Each scenario MUST be computed independently by the engine. Do not say "since £20K saved X, £10K would save roughly half" — the tax system is non-linear and that logic is wrong. Call the tool every single time.
+
 ### What NOT to do
 - Do NOT quote total_income, total_tax, effective_rate, or any number without calling the engine first
 - Do NOT say "based on the client data, the tax is £X" — call the tool instead
-- Do NOT skip the engine because the numbers are already in the context — they may be outdated
+- Do NOT skip the engine because the numbers are already in the conversation — they may be outdated
 - Do NOT perform arithmetic on tax bands, rates, allowances, or thresholds yourself
 - Do NOT modify or round the engine's numbers before presenting them to the adviser
+- Do NOT extrapolate or interpolate from a previous tool call's results — run the engine fresh
 
 ### save_observation
-Save a notable tax planning insight to the client's permanent record. Use this when you identify:
-- A specific tax saving opportunity (e.g. "Marriage Allowance transfer would save £252/yr")
-- A warning about an upcoming threshold or deadline
-- A planning consideration from the conversation that the adviser should track
+Save a notable tax planning insight to the client's permanent record. You don't need to be asked — if you spot something genuinely useful during a computation or conversation, save it. But only when it's worth saving.
 
-**When to use:** After identifying an actionable insight. Don't save trivial or obvious things.
-**When NOT to use:** Don't save generic reminders, don't duplicate what the engine already flagged.
+**Good reasons to save:**
+- A specific, quantified saving opportunity (e.g. "Salary sacrifice of £8,000 would save £3,200/yr")
+- A warning about a threshold being breached or approached (PA taper, HICBC)
+- A planning consideration that came up in conversation the adviser should track
+
+**Don't save:**
+- Generic tax facts the adviser already knows
+- Observations the engine already flagged (check the engine output first to avoid duplicates)
+- Trivial restatements of computation results
+- Anything you're not reasonably confident about
 """
 
 

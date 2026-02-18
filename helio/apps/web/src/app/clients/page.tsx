@@ -932,7 +932,7 @@ export default function ClientsPage() {
                             {/* Net income takeaway */}
                             <NetIncomeBar
                               grossIncome={tp.total_income}
-                              totalTax={tp.income_tax + (tp.dividend_tax || 0)}
+                              totalTax={tp.total_tax - tp.national_insurance}
                               nationalInsurance={tp.national_insurance}
                               netIncome={netIncome}
                             />

@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from structlog.stdlib import BoundLogger
 
 from app.db.engine import get_db_session
-from app.db.models import Client, Household, Observation, TaxProfile
+from app.db.models import Client, Household, MeetingNote, Observation, TaxProfile
 from app.dependencies import get_request_logger
 from app.tax.engine import compute_full_tax_position
 from app.tax.types import IncomeSource as TaxIncomeSource, IncomeType
@@ -519,4 +519,71 @@ async def create_observation(
         "category": obs.category,
         "potential_saving": obs.potential_saving,
         "source": obs.source,
+    }
+
+
+@router.delete("/clients/{client_id}/observations/{observation_id}")
+async def delete_observation(
+    client_id: str,
+    observation_id: str,
+    session: AsyncSession = Depends(get_db_session),
+    logger: BoundLogger = Depends(get_request_logger),
+):
+    """Delete a single observation by ID."""
+    result = await session.execute(
+        select(Observation)
+        .where(Observation.id == observation_id)
+        .where(Observation.client_id == client_id)
+    )
+    obs = result.scalar_one_or_none()
+    if obs is None:
+        raise HTTPException(status_code=404, detail="Observation not found")
+
+    await session.delete(obs)
+    await session.flush()
+
+    logger.info("Observation deleted", client_id=client_id, observation_id=observation_id)
+    return {"success": True}
+
+
+@router.get("/clients/{client_id}/meeting-notes")
+async def list_meeting_notes(
+    client_id: str,
+    session: AsyncSession = Depends(get_db_session),
+    logger: BoundLogger = Depends(get_request_logger),
+):
+    """List all meeting notes for a client, newest first."""
+    # Verify client exists
+    result = await session.execute(
+        select(Client).where(Client.id == client_id)
+    )
+    client = result.scalar_one_or_none()
+    if client is None:
+        raise HTTPException(status_code=404, detail="Client not found")
+
+    # Fetch meeting notes ordered by meeting_date DESC
+    notes_result = await session.execute(
+        select(MeetingNote)
+        .where(MeetingNote.client_id == client_id)
+        .order_by(desc(MeetingNote.meeting_date))
+    )
+    notes = list(notes_result.scalars().all())
+
+    logger.info("Meeting notes listed", client_id=client_id, count=len(notes))
+
+    return {
+        "meeting_notes": [
+            {
+                "id": note.id,
+                "client_id": note.client_id,
+                "meeting_date": note.meeting_date.isoformat() if note.meeting_date else None,
+                "subject": note.subject,
+                "attendees": note.attendees,
+                "summary": note.summary,
+                "action_items": note.action_items,
+                "tags": note.tags,
+                "created_at": note.created_at.isoformat() if note.created_at else None,
+            }
+            for note in notes
+        ]
     }

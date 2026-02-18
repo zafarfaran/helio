@@ -383,6 +383,8 @@ def generate_tax_report(
     tax_position: dict,
     dashboard_data: dict,
     scenarios: list[dict] | None = None,
+    ai_observations: list[dict] | None = None,
+    meeting_notes: list[dict] | None = None,
 ) -> io.BytesIO:
     """Generate a professional A4 tax advisory PDF and return it as a BytesIO buffer.
 
@@ -705,11 +707,50 @@ def generate_tax_report(
     story.append(Spacer(1, 8 * mm))
 
     # ------------------------------------------------------------------
-    # 8. OBSERVATIONS & RECOMMENDATIONS
+    # 8. ALLOWANCES TRACKER
+    # ------------------------------------------------------------------
+    allowances_data = dashboard_data.get("allowancesTracker", {})
+    allowances_list = allowances_data.get("allowances", [])
+    if allowances_list:
+        story.append(_section_header("Allowances Tracker", st))
+        story.append(Spacer(1, 4 * mm))
+
+        available = PAGE_W - 2 * MARGIN
+        allow_rows = []
+        for a in allowances_list:
+            name = a.get("name", a.get("type", ""))
+            limit = a.get("annualLimit", a.get("annual_limit", 0))
+            used = a.get("used", 0)
+            remaining = a.get("remaining", limit - used if limit else 0)
+            status = a.get("status", "")
+            allow_rows.append([
+                name,
+                _fmt(limit, decimals=0),
+                _fmt(used, decimals=0),
+                _fmt(remaining, decimals=0),
+                status.capitalize() if status else "",
+            ])
+
+        story.append(_data_table(
+            ["Allowance", "Annual Limit", "Used", "Remaining", "Status"],
+            allow_rows,
+            st,
+            col_widths=[
+                available * 0.28,
+                available * 0.18,
+                available * 0.18,
+                available * 0.18,
+                available * 0.18,
+            ],
+        ))
+        story.append(Spacer(1, 8 * mm))
+
+    # ------------------------------------------------------------------
+    # 9. OBSERVATIONS & RECOMMENDATIONS
     # ------------------------------------------------------------------
     observations = dashboard_data.get("observations", [])
     if observations:
-        story.append(_section_header("Observations &amp; Recommendations", st))
+        story.append(_section_header("Engine Observations", st))
         story.append(Spacer(1, 4 * mm))
 
         for obs in observations:
@@ -719,7 +760,89 @@ def generate_tax_report(
         story.append(Spacer(1, 5 * mm))
 
     # ------------------------------------------------------------------
-    # 9. SCENARIO COMPARISONS (conditional)
+    # 10. AI ADVISORY OBSERVATIONS
+    # ------------------------------------------------------------------
+    if ai_observations:
+        story.append(_section_header("AI Advisory Insights", st))
+        story.append(Spacer(1, 4 * mm))
+
+        for obs in ai_observations:
+            story.append(_observation_card(obs, st))
+            story.append(Spacer(1, 3 * mm))
+
+        story.append(Spacer(1, 5 * mm))
+
+    # ------------------------------------------------------------------
+    # 11. MEETING NOTES
+    # ------------------------------------------------------------------
+    if meeting_notes:
+        story.append(_section_header("Meeting Notes", st))
+        story.append(Spacer(1, 4 * mm))
+
+        for note in meeting_notes:
+            subject = note.get("subject", "Meeting")
+            date_str = note.get("meeting_date", "")
+            if date_str:
+                try:
+                    from datetime import datetime as _dt
+                    dt = _dt.fromisoformat(date_str.replace("Z", "+00:00"))
+                    date_str = dt.strftime("%d %B %Y")
+                except (ValueError, TypeError):
+                    pass
+
+            summary = note.get("summary", "")
+            attendees = note.get("attendees", "")
+            action_items = note.get("action_items") or []
+            tags = note.get("tags") or []
+
+            # Build note card content
+            parts: list[str] = []
+            if date_str:
+                parts.append(f"<b>Date:</b> {date_str}")
+            if attendees:
+                parts.append(f"<b>Attendees:</b> {attendees}")
+            if summary:
+                parts.append(summary)
+            if action_items:
+                actions_str = " &bull; ".join(action_items)
+                parts.append(f"<b>Actions:</b> {actions_str}")
+            if tags:
+                parts.append(f"<b>Topics:</b> {', '.join(tags)}")
+
+            body_text = "<br/>".join(parts)
+
+            title_para = Paragraph(subject, st["card_title"])
+            body_para = Paragraph(body_text, st["card_body"])
+
+            available = PAGE_W - 2 * MARGIN
+            inner = Table(
+                [[title_para], [body_para]],
+                colWidths=[available - 12],
+            )
+            inner.setStyle(TableStyle([
+                ("TOPPADDING", (0, 0), (-1, -1), 4),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                ("LEFTPADDING", (0, 0), (-1, -1), 8),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+            ]))
+
+            card = Table([[inner]], colWidths=[available])
+            card.setStyle(TableStyle([
+                ("LINEBEFOREDECOR", (0, 0), (0, -1), 4, BRAND_PRIMARY),
+                ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#F8F9FA")),
+                ("TOPPADDING", (0, 0), (-1, -1), 2),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("ROUNDEDCORNERS", [4, 4, 4, 4]),
+            ]))
+            story.append(card)
+            story.append(Spacer(1, 3 * mm))
+
+        story.append(Spacer(1, 5 * mm))
+
+    # ------------------------------------------------------------------
+    # 12. SCENARIO COMPARISONS (conditional)
     # ------------------------------------------------------------------
     if scenarios:
         story.append(_section_header("Scenario Comparisons", st))

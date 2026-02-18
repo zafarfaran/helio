@@ -1,6 +1,6 @@
 "use client";
 
-import { RadialBarChart, RadialBar, ResponsiveContainer, Tooltip } from "recharts";
+import { motion } from "framer-motion";
 
 interface Allowance {
   type?: string;
@@ -17,10 +17,10 @@ interface AllowancesRadialProps {
   allowances: Allowance[];
 }
 
-const COLORS = ["#10b981", "#0ea5e9", "var(--accent)", "#8b5cf6", "#f59e0b"];
-
 const fmt = (n: number) =>
   `£${n.toLocaleString("en-GB", { maximumFractionDigits: 0 })}`;
+
+const ease = [0.16, 1, 0.3, 1] as const;
 
 function getName(a: Allowance): string {
   return a.label ?? a.name ?? "Allowance";
@@ -30,79 +30,72 @@ function getLimit(a: Allowance): number {
   return a.annual_limit ?? a.annualLimit ?? 0;
 }
 
-interface PayloadItem {
-  name: string;
-  value: number;
-  payload: { used: number; limit: number; remaining: number };
-}
-
-function CustomTooltip({ active, payload }: { active?: boolean; payload?: PayloadItem[] }) {
-  if (!active || !payload?.length) return null;
-  const d = payload[0]?.payload as { name: string; used: number; limit: number; remaining: number };
-  if (!d) return null;
-  return (
-    <div className="rounded-lg bg-[var(--card)] border border-[var(--card-border)] shadow-lg px-3 py-2">
-      <p className="text-[11px] font-medium text-[var(--foreground)]">{d.name}</p>
-      <p className="text-[12px] font-mono text-[var(--foreground)]">Used: {fmt(d.used)} / {fmt(d.limit)}</p>
-      <p className="text-[10px] text-[var(--muted)]">{fmt(d.remaining)} remaining</p>
-    </div>
-  );
-}
-
 export function AllowancesRadialChart({ allowances }: AllowancesRadialProps) {
-  const data = allowances
-    .filter((a) => getLimit(a) > 0)
-    .map((a, i) => {
-      const limit = getLimit(a);
-      return {
-        name: getName(a),
-        value: limit > 0 ? Math.min((a.used / limit) * 100, 100) : 0,
-        used: a.used,
-        limit,
-        remaining: a.remaining,
-        fill: COLORS[i % COLORS.length],
-      };
-    });
+  const items = allowances.filter((a) => getLimit(a) > 0);
 
-  if (data.length === 0) return null;
+  if (items.length === 0) return null;
 
   return (
-    <div>
-      <div className="h-[200px]">
-        <ResponsiveContainer width="100%" height="100%">
-          <RadialBarChart
-            cx="50%"
-            cy="50%"
-            innerRadius={20}
-            outerRadius={90}
-            barSize={12}
-            data={data}
-            startAngle={180}
-            endAngle={0}
+    <div className="space-y-5">
+      {items.map((a, i) => {
+        const limit = getLimit(a);
+        const pct = limit > 0 ? Math.min((a.used / limit) * 100, 100) : 0;
+        const fullyUsed = pct >= 100;
+        const nearlyUsed = pct >= 70;
+
+        const barClass = fullyUsed
+          ? "bg-amber-500"
+          : nearlyUsed
+            ? "bg-amber-400"
+            : "bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.15)]";
+
+        return (
+          <motion.div
+            key={getName(a)}
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35, ease, delay: i * 0.06 }}
           >
-            <RadialBar
-              dataKey="value"
-              cornerRadius={6}
-              animationDuration={800}
-            />
-            <Tooltip content={<CustomTooltip />} />
-          </RadialBarChart>
-        </ResponsiveContainer>
-      </div>
-      {/* Legend */}
-      <div className="space-y-1.5 mt-2">
-        {data.map((d) => (
-          <div key={d.name} className="flex items-center justify-between">
-            <div className="flex items-center gap-1.5">
-              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: d.fill }} />
-              <span className="text-[11px] text-[var(--muted)]">{d.name}</span>
+            {/* Label row */}
+            <div className="flex items-baseline justify-between mb-1.5">
+              <span className="text-[11px] font-medium text-[var(--foreground)]">
+                {getName(a)}
+              </span>
+              <span className="text-[10px] font-mono text-[var(--muted)] tabular-nums">
+                {fmt(a.used)}
+                <span className="text-[var(--muted)]/25 mx-0.5">/</span>
+                {fmt(limit)}
+              </span>
             </div>
-            <span className="text-[10px] font-mono text-[var(--muted)]">
-              {fmt(d.used)}<span className="opacity-40"> / </span>{fmt(d.limit)}
-            </span>
-          </div>
-        ))}
-      </div>
+
+            {/* Progress bar */}
+            <div className="h-[5px] rounded-full bg-[var(--glass)] overflow-hidden">
+              <motion.div
+                initial={{ width: 0 }}
+                animate={{ width: `${pct}%` }}
+                transition={{ duration: 0.5, ease, delay: i * 0.06 + 0.1 }}
+                className={`h-full rounded-full ${barClass}`}
+              />
+            </div>
+
+            {/* Status row */}
+            <div className="flex items-center justify-between mt-1">
+              <span
+                className={`text-[9px] font-medium ${
+                  fullyUsed
+                    ? "text-amber-600 dark:text-amber-400"
+                    : "text-[var(--muted)]/50"
+                }`}
+              >
+                {fullyUsed ? "Fully utilised" : `${fmt(a.remaining)} remaining`}
+              </span>
+              <span className="text-[9px] font-mono text-[var(--muted)]/35 tabular-nums">
+                {pct.toFixed(0)}%
+              </span>
+            </div>
+          </motion.div>
+        );
+      })}
     </div>
   );
 }

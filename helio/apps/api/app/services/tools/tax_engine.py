@@ -13,7 +13,11 @@ async def execute_compute_tax_position(
 ) -> dict:
     """Execute compute_tax_position tool — runs the deterministic engine."""
     try:
-        # Parse income sources from Claude's JSON
+        logger.info(
+            "Tax engine tool_input received from LLM",
+            tool_input=tool_input,
+        )
+
         raw_sources = tool_input.get("income_sources", [])
         income_sources = [
             IncomeSource(
@@ -25,11 +29,23 @@ async def execute_compute_tax_position(
             for s in raw_sources
         ]
 
+        pension_contrib = float(tool_input.get("pension_contributions", 0))
+        employer_contrib = float(tool_input.get("employer_contributions", 0))
+        gift_aid_val = float(tool_input.get("gift_aid", 0))
+
+        if pension_contrib > 0 or employer_contrib > 0 or gift_aid_val > 0:
+            logger.warning(
+                "BRB-extending inputs passed to engine",
+                pension_contributions=pension_contrib,
+                employer_contributions=employer_contrib,
+                gift_aid=gift_aid_val,
+            )
+
         position = compute_full_tax_position(
             income_sources=income_sources,
-            pension_contributions=float(tool_input.get("pension_contributions", 0)),
-            employer_contributions=float(tool_input.get("employer_contributions", 0)),
-            gift_aid=float(tool_input.get("gift_aid", 0)),
+            pension_contributions=pension_contrib,
+            employer_contributions=employer_contrib,
+            gift_aid=gift_aid_val,
             region=tool_input.get("region", "england"),
             number_of_children=int(tool_input.get("number_of_children", 0)),
             claims_child_benefit=bool(tool_input.get("claims_child_benefit", False)),

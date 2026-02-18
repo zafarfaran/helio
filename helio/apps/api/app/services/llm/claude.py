@@ -22,7 +22,7 @@ from app.services.tools import execute_tool
 
 logger = get_logger(__name__)
 
-MAX_TOOL_ROUNDS = 3
+MAX_TOOL_ROUNDS = 20
 
 BASE_TOOLS = [
     {
@@ -117,7 +117,9 @@ ENGINE_TOOLS = [
         "name": "model_salary_sacrifice",
         "description": (
             "Model the tax impact of salary sacrifice. Computes current vs proposed "
-            "tax positions and returns the savings breakdown (IT, NI, HICBC avoided)."
+            "tax positions and returns the savings breakdown (IT, NI, HICBC avoided). "
+            "You MUST call this tool for EVERY salary sacrifice scenario — including "
+            "follow-ups. Never extrapolate from a previous result; tax is non-linear."
         ),
         "input_schema": {
             "type": "object",
@@ -272,6 +274,7 @@ class ClaudeProvider:
                 input_json_parts: list[str] = []
                 # Collect full assistant content blocks for the tool-result loop
                 assistant_content_blocks: list[dict] = []
+                tool_result_contents: list[dict] = []
                 current_text_block: str = ""
 
                 async with self.client.messages.stream(**{**api_kwargs, "messages": messages}) as stream:
@@ -286,8 +289,8 @@ class ClaudeProvider:
                                     "generate_dashboard": StatusPhase.BUILDING_DASHBOARD,
                                     "search_meeting_notes": StatusPhase.SEARCHING_NOTES,
                                     "compute_tax_position": StatusPhase.COMPUTING_TAX,
-                                    "model_salary_sacrifice": StatusPhase.COMPUTING_TAX,
-                                    "save_observation": StatusPhase.CALCULATING,
+                                    "model_salary_sacrifice": StatusPhase.MODELLING_SCENARIO,
+                                    "save_observation": StatusPhase.SAVING_OBSERVATION,
                                 }
                                 yield StatusEvent(
                                     phase=tool_status.get(current_tool_name, StatusPhase.CALCULATING),
@@ -374,12 +377,12 @@ class ClaudeProvider:
                                 # (will be done after stream ends)
                                 tool_called = True
 
-                                # Build tool_result message content for continuation
-                                tool_result_content = {
+                                # Collect tool_result for continuation
+                                tool_result_contents.append({
                                     "type": "tool_result",
                                     "tool_use_id": current_tool_id,
                                     "content": json.dumps(tool_result),
-                                }
+                                })
 
                                 # Reset
                                 current_tool_id = None
@@ -409,10 +412,10 @@ class ClaudeProvider:
                         "role": "assistant",
                         "content": assistant_content_blocks,
                     })
-                    # Append the tool result as a user message
+                    # Append all tool results as a user message
                     messages.append({
                         "role": "user",
-                        "content": [tool_result_content],
+                        "content": tool_result_contents,
                     })
                     # Reset for next round
                     first_token = True
@@ -427,6 +430,13 @@ class ClaudeProvider:
                 else:
                     # No tool calls — we're done
                     break
+            else:
+                # Exhausted all rounds while tools were still being called
+                if tool_called:
+                    logger.warning(
+                        "Max tool rounds exhausted — final response may be incomplete",
+                        max_rounds=max_rounds,
+                    )
 
             logger.info(
                 "Claude stream completed",

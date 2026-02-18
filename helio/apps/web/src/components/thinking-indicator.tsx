@@ -9,6 +9,7 @@ import {
   IconCalculator,
   IconSparkles,
   IconSearch,
+  IconTrendingUp,
   IconHelioMark,
 } from "@/components/icons";
 
@@ -38,6 +39,10 @@ const PHASE_CONFIG: Record<
     icon: <IconCalculator className="w-3.5 h-3.5" />,
     label: "Computing tax position...",
   },
+  modelling_scenario: {
+    icon: <IconTrendingUp className="w-3.5 h-3.5" />,
+    label: "Modelling salary sacrifice scenario...",
+  },
   building_dashboard: {
     icon: <IconChart className="w-3.5 h-3.5" />,
     label: "Generating detailed dashboard...",
@@ -45,6 +50,10 @@ const PHASE_CONFIG: Record<
   searching_notes: {
     icon: <IconSearch className="w-3.5 h-3.5" />,
     label: "Searching meeting notes...",
+  },
+  saving_observation: {
+    icon: <IconLightbulb className="w-3.5 h-3.5" />,
+    label: "Generating observations...",
   },
   generating_response: {
     icon: <IconSparkles className="w-3.5 h-3.5" />,

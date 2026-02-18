@@ -29,10 +29,8 @@ import {
   IconChart,
   IconLightbulb,
   IconArrowRight,
-  IconUpload,
-  IconMessage,
-  IconTarget,
   IconZap,
+  IconGlobe,
 } from "@/components/icons";
 
 /* ═══════════════════════════════════════════════════
@@ -218,9 +216,10 @@ function Hero() {
               transition={{ duration: 0.7, delay: 0.45, ease: [0.16, 1, 0.3, 1] }}
               className="text-[15px] md:text-base font-light text-slate-500 dark:text-zinc-400 leading-relaxed max-w-md"
             >
-              Helio analyses your client&apos;s tax position in real-time,
-              identifies planning opportunities, and helps you deliver better
-              outcomes — powered by AI.
+              Model tax scenarios in seconds, surface AI-driven savings
+              opportunities, and pull research context straight from your
+              browser — Helio is the tax intelligence platform built for
+              UK financial advisers.
             </motion.p>
 
             {/* CTAs */}
@@ -585,28 +584,28 @@ function LogoCloud() {
 
 const FEATURES = [
   {
-    id: "analysis",
-    icon: <IconCalculator className="w-[18px] h-[18px]" />,
-    title: "Real-time tax analysis",
-    description: "Instant calculations across income tax, NICs, CGT, and IHT. Always current with 2025/26 rates and thresholds.",
-  },
-  {
-    id: "allowances",
-    icon: <IconShield className="w-[18px] h-[18px]" />,
-    title: "Allowance tracking",
-    description: "Monitor ISA, pension annual allowance, CGT exemption, and dividend allowances in one consolidated view.",
-  },
-  {
     id: "scenarios",
     icon: <IconChart className="w-[18px] h-[18px]" />,
     title: "Scenario modelling",
-    description: "Model salary sacrifice, pension contributions, bed-and-ISA strategies, and dividend restructuring in seconds.",
+    description: "Run what-if scenarios instantly. Model pension contributions, salary sacrifice, dividend restructuring, and income deferral — see the tax impact in real-time before committing.",
   },
   {
     id: "observations",
     icon: <IconLightbulb className="w-[18px] h-[18px]" />,
-    title: "Smart observations",
-    description: "AI-identified planning opportunities ranked by impact. From HICBC exposure to personal allowance taper traps.",
+    title: "AI observations that save money",
+    description: "Helio's AI continuously analyses your client's position to surface money-saving opportunities — from unused pension headroom to HICBC elimination, ranked by potential impact.",
+  },
+  {
+    id: "extension",
+    icon: <IconGlobe className="w-[18px] h-[18px]" />,
+    title: "Research extension",
+    description: "Our browser extension pulls context from HMRC, Companies House, and any webpage you're viewing — so Helio has the full picture before you even ask a question.",
+  },
+  {
+    id: "analysis",
+    icon: <IconCalculator className="w-[18px] h-[18px]" />,
+    title: "Real-time tax engine",
+    description: "Instant calculations across income tax, NICs, dividend tax, and HICBC. Always current with 2025/26 rates, including Scottish and Welsh variations.",
   },
 ];
 
@@ -700,6 +699,210 @@ function Features() {
 function FeatureVisual({ activeId }: { activeId: string }) {
   return (
     <div className="relative h-full">
+      {/* Scenarios visual */}
+      {activeId === "scenarios" && (
+        <motion.div
+          key="scenarios"
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -8 }}
+          transition={{ duration: 0.35 }}
+          className="absolute inset-0 p-6"
+        >
+          <div className="text-[10px] font-medium uppercase tracking-wider text-slate-400 dark:text-zinc-600 mb-5">Scenario: £40k Pension Contribution</div>
+          <div className="grid grid-cols-2 gap-4 mb-5">
+            <div className="rounded-lg border border-slate-200/60 dark:border-zinc-800 p-4 bg-white dark:bg-zinc-900">
+              <div className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-zinc-600 mb-3">Current</div>
+              <div className="text-xl font-mono font-light text-slate-900 dark:text-white mb-1">£52,847</div>
+              <div className="text-[10px] font-light text-slate-400 dark:text-zinc-600">Total tax liability</div>
+              <div className="mt-3 text-[10px] font-light text-slate-500 dark:text-zinc-500">Effective rate 27.0%</div>
+            </div>
+            <div className="rounded-lg border border-emerald-200 dark:border-emerald-900/50 p-4 bg-emerald-50/50 dark:bg-emerald-950/20">
+              <div className="text-[10px] uppercase tracking-wider text-emerald-600 dark:text-emerald-400 mb-3">After</div>
+              <div className="text-xl font-mono font-light text-slate-900 dark:text-white mb-1">£36,047</div>
+              <div className="text-[10px] font-light text-slate-400 dark:text-zinc-600">Total tax liability</div>
+              <div className="mt-3 text-[10px] font-light text-emerald-600 dark:text-emerald-400">Effective rate 21.2%</div>
+            </div>
+          </div>
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.2, duration: 0.4 }}
+            className="rounded-lg bg-brand-50 dark:bg-brand-950/20 border border-brand-200/60 dark:border-brand-800/30 p-4 flex items-center justify-between"
+          >
+            <div>
+              <div className="text-[12px] font-medium text-brand-700 dark:text-brand-300">Annual tax saving</div>
+              <div className="text-[10px] font-light text-brand-600/70 dark:text-brand-400/70 mt-0.5">Pension contribution via salary sacrifice</div>
+            </div>
+            <div className="text-xl font-mono font-medium text-brand-600 dark:text-brand-400">£16,800</div>
+          </motion.div>
+          <div className="mt-4 grid grid-cols-3 gap-3">
+            {[
+              { label: "PA restored", val: "£2,570" },
+              { label: "HICBC removed", val: "£860" },
+              { label: "NIC saved", val: "£520" },
+            ].map((x, i) => (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3 + i * 0.06 }}
+                className="text-center"
+              >
+                <div className="text-[13px] font-mono font-light text-slate-900 dark:text-white">{x.val}</div>
+                <div className="text-[10px] font-light text-slate-400 dark:text-zinc-600">{x.label}</div>
+              </motion.div>
+            ))}
+          </div>
+        </motion.div>
+      )}
+
+      {/* Observations visual */}
+      {activeId === "observations" && (
+        <motion.div
+          key="observations"
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -8 }}
+          transition={{ duration: 0.35 }}
+          className="absolute inset-0 p-6"
+        >
+          <div className="flex items-center justify-between mb-4">
+            <div className="text-[10px] font-medium uppercase tracking-wider text-slate-400 dark:text-zinc-600">AI Observations — Sarah Mitchell</div>
+            <div className="text-[10px] font-mono font-medium text-emerald-600 dark:text-emerald-400">£19,180 total savings</div>
+          </div>
+          <div className="space-y-2.5">
+            {[
+              { title: "£42,000 pension headroom", sub: "Potential £16,800 saving at marginal rate", saving: "£16,800", border: "border-l-emerald-500", bg: "bg-emerald-50/60 dark:bg-emerald-950/20" },
+              { title: "ISA allowance unused", sub: "Shelter dividend-generating assets to reduce higher-rate tax", saving: "£1,520", border: "border-l-emerald-500", bg: "bg-emerald-50/60 dark:bg-emerald-950/20" },
+              { title: "HICBC charge applies", sub: "Salary sacrifice could eliminate £860 annual charge", saving: "£860", border: "border-l-amber-500", bg: "bg-amber-50/60 dark:bg-amber-950/20" },
+              { title: "Personal allowance fully tapered", sub: "Income >£125,140 — pension contribution can restore PA", saving: null, border: "border-l-red-500", bg: "bg-red-50/60 dark:bg-red-950/20" },
+            ].map((obs, i) => (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, x: -6 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: i * 0.08, duration: 0.4 }}
+                className={`rounded-lg border-l-[3px] ${obs.border} ${obs.bg} px-4 py-3 flex items-center justify-between`}
+              >
+                <div>
+                  <div className="text-[12px] font-normal text-slate-800 dark:text-zinc-200">{obs.title}</div>
+                  <div className="text-[10px] font-light text-slate-500 dark:text-zinc-500 mt-0.5">{obs.sub}</div>
+                </div>
+                {obs.saving && (
+                  <span className="text-[12px] font-mono font-medium text-emerald-600 dark:text-emerald-400 flex-shrink-0 ml-4">{obs.saving}</span>
+                )}
+              </motion.div>
+            ))}
+          </div>
+        </motion.div>
+      )}
+
+      {/* Extension visual */}
+      {activeId === "extension" && (
+        <motion.div
+          key="extension"
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -8 }}
+          transition={{ duration: 0.35 }}
+          className="absolute inset-0 flex"
+        >
+          {/* Mock browser page (left) */}
+          <div className="flex-1 border-r border-slate-100 dark:border-zinc-800 p-5 bg-white dark:bg-zinc-900">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="h-[5px] w-[5px] rounded-full bg-slate-300 dark:bg-zinc-700" />
+              <div className="flex-1 h-5 rounded bg-slate-100 dark:bg-zinc-800 px-2 flex items-center">
+                <span className="text-[8px] font-light text-slate-400 dark:text-zinc-600">gov.uk/self-assessment/sa302</span>
+              </div>
+            </div>
+            <div className="space-y-3">
+              <div className="h-3 w-3/4 rounded bg-slate-100 dark:bg-zinc-800" />
+              <div className="h-3 w-1/2 rounded bg-slate-100 dark:bg-zinc-800" />
+              <div className="rounded-lg border border-slate-100 dark:border-zinc-800 p-3 space-y-2">
+                {[
+                  { label: "Tax year", val: "2025-26" },
+                  { label: "Total income", val: "£195,500" },
+                  { label: "Tax due", val: "£52,847" },
+                ].map((r, i) => (
+                  <motion.div
+                    key={i}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.2 + i * 0.1 }}
+                    className="flex items-center justify-between"
+                  >
+                    <span className="text-[10px] font-light text-slate-400 dark:text-zinc-600">{r.label}</span>
+                    <span className="text-[10px] font-mono text-slate-700 dark:text-zinc-300">{r.val}</span>
+                  </motion.div>
+                ))}
+              </div>
+              <div className="h-3 w-full rounded bg-slate-50 dark:bg-zinc-800/50" />
+              <div className="h-3 w-2/3 rounded bg-slate-50 dark:bg-zinc-800/50" />
+            </div>
+          </div>
+
+          {/* Extension side panel (right) */}
+          <div className="w-[42%] p-4 bg-slate-50/80 dark:bg-zinc-950/80">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-5 h-5 rounded bg-brand-500 flex items-center justify-center">
+                <svg viewBox="0 0 12 12" className="w-3 h-3 text-white">
+                  <circle cx="6" cy="6" r="2" fill="currentColor" />
+                  <circle cx="6" cy="6" r="5" fill="none" stroke="currentColor" strokeWidth="1" />
+                </svg>
+              </div>
+              <span className="text-[10px] font-medium text-slate-700 dark:text-zinc-300">Helio</span>
+            </div>
+
+            <div className="text-[9px] font-medium uppercase tracking-wider text-slate-400 dark:text-zinc-600 mb-2.5">Context loaded</div>
+            <div className="space-y-1.5">
+              {[
+                { label: "SA302 2025/26", status: "done" },
+                { label: "P60 — employment", status: "done" },
+                { label: "Dividend vouchers", status: "done" },
+                { label: "Pension statement", status: "done" },
+                { label: "Companies House", status: "loading" },
+              ].map((item, i) => (
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0, x: 6 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.3 + i * 0.12, duration: 0.35 }}
+                  className="flex items-center gap-2 rounded-md bg-white dark:bg-zinc-900 border border-slate-100 dark:border-zinc-800 px-2.5 py-1.5"
+                >
+                  {item.status === "done" ? (
+                    <svg viewBox="0 0 12 12" className="w-3 h-3 text-emerald-500 flex-shrink-0">
+                      <circle cx="6" cy="6" r="5" fill="none" stroke="currentColor" strokeWidth="1.2" />
+                      <polyline points="3.5 6 5.5 8 8.5 4" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  ) : (
+                    <motion.svg
+                      viewBox="0 0 12 12"
+                      className="w-3 h-3 text-brand-400 flex-shrink-0"
+                      animate={{ rotate: 360 }}
+                      transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
+                    >
+                      <circle cx="6" cy="6" r="4.5" fill="none" stroke="currentColor" strokeWidth="1.2" strokeDasharray="20" strokeDashoffset="6" strokeLinecap="round" />
+                    </motion.svg>
+                  )}
+                  <span className="text-[10px] font-light text-slate-600 dark:text-zinc-400">{item.label}</span>
+                </motion.div>
+              ))}
+            </div>
+
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 1.2 }}
+              className="mt-3 rounded-md bg-brand-50 dark:bg-brand-950/20 border border-brand-200/50 dark:border-brand-800/30 p-2.5"
+            >
+              <div className="text-[9px] font-medium text-brand-700 dark:text-brand-300">Ready to analyse</div>
+              <div className="text-[8px] font-light text-brand-600/60 dark:text-brand-400/50 mt-0.5">4 sources loaded into Helio</div>
+            </motion.div>
+          </div>
+        </motion.div>
+      )}
+
       {/* Analysis visual */}
       {activeId === "analysis" && (
         <motion.div
@@ -741,144 +944,6 @@ function FeatureVisual({ activeId }: { activeId: string }) {
           </div>
         </motion.div>
       )}
-
-      {/* Allowances visual */}
-      {activeId === "allowances" && (
-        <motion.div
-          key="allowances"
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.35 }}
-          className="absolute inset-0 p-6"
-        >
-          <div className="text-[10px] font-medium uppercase tracking-wider text-slate-400 dark:text-zinc-600 mb-5">Allowance Utilisation — 2025/26</div>
-          <div className="space-y-5">
-            {[
-              { label: "Personal Allowance", used: 12570, total: 12570, note: "Tapered to £0" },
-              { label: "Pension Annual Allowance", used: 18000, total: 60000, note: "£42k headroom" },
-              { label: "ISA", used: 0, total: 20000, note: "Fully available" },
-              { label: "Dividend", used: 500, total: 500, note: "Exhausted" },
-              { label: "CGT Annual Exemption", used: 0, total: 3000, note: "Fully available" },
-            ].map((a, i) => {
-              const pct = Math.round((a.used / a.total) * 100);
-              const barColor = pct >= 100 ? "bg-red-400" : pct >= 60 ? "bg-amber-400" : pct > 0 ? "bg-brand-400" : "bg-slate-200 dark:bg-zinc-700";
-              return (
-                <motion.div
-                  key={i}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: i * 0.06, duration: 0.4 }}
-                >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[12px] font-light text-slate-700 dark:text-zinc-300">{a.label}</span>
-                    <span className="text-[10px] font-light text-slate-400 dark:text-zinc-600">{a.note}</span>
-                  </div>
-                  <div className="h-[6px] bg-slate-100 dark:bg-zinc-800 rounded-full overflow-hidden">
-                    <motion.div
-                      initial={{ width: 0 }}
-                      animate={{ width: `${Math.max(pct, 3)}%` }}
-                      transition={{ delay: 0.15 + i * 0.06, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-                      className={`h-full rounded-full ${barColor}`}
-                    />
-                  </div>
-                </motion.div>
-              );
-            })}
-          </div>
-        </motion.div>
-      )}
-
-      {/* Scenarios visual */}
-      {activeId === "scenarios" && (
-        <motion.div
-          key="scenarios"
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.35 }}
-          className="absolute inset-0 p-6"
-        >
-          <div className="text-[10px] font-medium uppercase tracking-wider text-slate-400 dark:text-zinc-600 mb-5">Scenario: £40k Pension Contribution</div>
-          <div className="grid grid-cols-2 gap-4 mb-5">
-            {/* Before */}
-            <div className="rounded-lg border border-slate-200/60 dark:border-zinc-800 p-4 bg-white dark:bg-zinc-900">
-              <div className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-zinc-600 mb-3">Current</div>
-              <div className="text-xl font-mono font-light text-slate-900 dark:text-white mb-1">£52,847</div>
-              <div className="text-[10px] font-light text-slate-400 dark:text-zinc-600">Total tax liability</div>
-              <div className="mt-3 text-[10px] font-light text-slate-500 dark:text-zinc-500">Effective rate 27.0%</div>
-            </div>
-            {/* After */}
-            <div className="rounded-lg border border-emerald-200 dark:border-emerald-900/50 p-4 bg-emerald-50/50 dark:bg-emerald-950/20">
-              <div className="text-[10px] uppercase tracking-wider text-emerald-600 dark:text-emerald-400 mb-3">After</div>
-              <div className="text-xl font-mono font-light text-slate-900 dark:text-white mb-1">£36,047</div>
-              <div className="text-[10px] font-light text-slate-400 dark:text-zinc-600">Total tax liability</div>
-              <div className="mt-3 text-[10px] font-light text-emerald-600 dark:text-emerald-400">Effective rate 21.2%</div>
-            </div>
-          </div>
-          {/* Saving */}
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.2, duration: 0.4 }}
-            className="rounded-lg bg-brand-50 dark:bg-brand-950/20 border border-brand-200/60 dark:border-brand-800/30 p-4 flex items-center justify-between"
-          >
-            <div>
-              <div className="text-[12px] font-medium text-brand-700 dark:text-brand-300">Annual tax saving</div>
-              <div className="text-[10px] font-light text-brand-600/70 dark:text-brand-400/70 mt-0.5">Pension contribution via salary sacrifice</div>
-            </div>
-            <div className="text-xl font-mono font-medium text-brand-600 dark:text-brand-400">£16,800</div>
-          </motion.div>
-          <div className="mt-4 grid grid-cols-3 gap-3">
-            {[
-              { label: "PA restored", val: "£2,570" },
-              { label: "HICBC removed", val: "£860" },
-              { label: "NIC saved", val: "£520" },
-            ].map((x, i) => (
-              <motion.div
-                key={i}
-                initial={{ opacity: 0, y: 4 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.3 + i * 0.06 }}
-                className="text-center"
-              >
-                <div className="text-[13px] font-mono font-light text-slate-900 dark:text-white">{x.val}</div>
-                <div className="text-[10px] font-light text-slate-400 dark:text-zinc-600">{x.label}</div>
-              </motion.div>
-            ))}
-          </div>
-        </motion.div>
-      )}
-
-      {/* Observations visual */}
-      {activeId === "observations" && (
-        <motion.div
-          key="observations"
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.35 }}
-          className="absolute inset-0 p-6"
-        >
-          <div className="text-[10px] font-medium uppercase tracking-wider text-slate-400 dark:text-zinc-600 mb-4">4 observations found</div>
-          <div className="space-y-2.5">
-            {[
-              { sev: "critical" as const, title: "Personal allowance fully tapered", sub: "Income >£125,140 — consider pension to restore", border: "border-l-red-500", bg: "bg-red-50/60 dark:bg-red-950/20" },
-              { sev: "opportunity" as const, title: "£42,000 pension headroom", sub: "Potential £16,800 saving at marginal rate", border: "border-l-emerald-500", bg: "bg-emerald-50/60 dark:bg-emerald-950/20" },
-              { sev: "opportunity" as const, title: "ISA allowance unused", sub: "Shelter dividend-generating assets to reduce tax", border: "border-l-emerald-500", bg: "bg-emerald-50/60 dark:bg-emerald-950/20" },
-              { sev: "warning" as const, title: "HICBC charge applies", sub: "Salary sacrifice could eliminate £860 charge", border: "border-l-amber-500", bg: "bg-amber-50/60 dark:bg-amber-950/20" },
-            ].map((obs, i) => (
-              <motion.div
-                key={i}
-                initial={{ opacity: 0, x: -6 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: i * 0.08, duration: 0.4 }}
-                className={`rounded-lg border-l-[3px] ${obs.border} ${obs.bg} px-4 py-3`}
-              >
-                <div className="text-[12px] font-normal text-slate-800 dark:text-zinc-200">{obs.title}</div>
-                <div className="text-[10px] font-light text-slate-500 dark:text-zinc-500 mt-0.5">{obs.sub}</div>
-              </motion.div>
-            ))}
-          </div>
-        </motion.div>
-      )}
     </div>
   );
 }
@@ -889,32 +954,29 @@ function FeatureVisual({ activeId }: { activeId: string }) {
 
 const WORKFLOW_STEPS = [
   {
-    id: "connect",
+    id: "gather",
     num: "01",
-    label: "Connect",
-    icon: <IconUpload className="w-4 h-4" />,
-    heading: "Import your client data",
-    sub: "Pull in data from your practice management system, or enter it directly. Helio maps everything automatically.",
+    label: "Gather",
+    heading: "Pull in everything, instantly",
+    sub: "Use the Helio browser extension to grab SA302s, P60s, and documents — or import straight from your practice system.",
   },
   {
-    id: "analyse",
+    id: "discover",
     num: "02",
-    label: "Analyse",
-    icon: <IconMessage className="w-4 h-4" />,
-    heading: "Ask in plain English",
-    sub: "No complex queries. Just ask what you need to know about your client\u2019s tax position, and Helio responds instantly.",
+    label: "Discover",
+    heading: "AI surfaces what matters",
+    sub: "Ask questions in plain English. Helio analyses the full tax picture and flags savings opportunities you might have missed.",
   },
   {
-    id: "act",
+    id: "model",
     num: "03",
-    label: "Act",
-    icon: <IconTarget className="w-4 h-4" />,
-    heading: "Get actionable recommendations",
-    sub: "Ranked planning opportunities with projected savings. Present to your client with confidence.",
+    label: "Model & Act",
+    heading: "Test scenarios, recommend with confidence",
+    sub: "Run what-if models side by side, compare outcomes, and present ranked recommendations with projected savings.",
   },
 ];
 
-const STEP_DURATIONS = [5000, 16000, 5000]; // Connect, Analyse (typing + AI stream + follow-up), Act
+const STEP_DURATIONS = [6000, 16000, 6000]; // Gather (docs loading), Discover (chat + AI), Model (scenarios)
 
 function HowItWorks() {
   const sectionRef = useRef(null);
@@ -967,97 +1029,72 @@ function HowItWorks() {
             How it works
           </p>
           <h2 className="text-3xl md:text-4xl font-extralight tracking-tight text-slate-900 dark:text-white">
-            Three steps to{" "}
-            <span className="font-normal">better outcomes</span>
+            From raw data to{" "}
+            <span className="font-normal">actionable savings</span>
           </h2>
         </FadeUp>
 
-        {/* ── Step indicators + progress + description ── */}
+        {/* ── Pill-tab stepper + description ── */}
         <FadeUp delay={0.1} className="max-w-2xl mx-auto mb-12">
-          {/* Step circles with inline progress track */}
-          <div className="relative flex items-center justify-between">
-            {/* Track background */}
-            <div className="absolute top-[19px] left-[40px] right-[40px] h-[3px] rounded-full bg-slate-200 dark:bg-zinc-800" />
-            {/* Animated fill — spans from first circle to current active circle */}
-            <motion.div
-              className="absolute top-[19px] left-[40px] h-[3px] rounded-full bg-brand-500 origin-left"
-              animate={{
-                width:
-                  activeStep === 0
-                    ? "0%"
-                    : activeStep === 1
-                      ? "calc(50% - 40px)"
-                      : "calc(100% - 80px)",
-              }}
-              transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-            />
-            {/* Per-step fill that animates within the current segment */}
-            <motion.div
-              key={`seg-${cycleKey}-${activeStep}`}
-              className="absolute top-[19px] h-[3px] rounded-full bg-brand-400/50 origin-left"
-              style={{
-                left:
-                  activeStep === 0
-                    ? "40px"
-                    : activeStep === 1
-                      ? "calc(50%)"
-                      : "calc(100% - 40px)",
-              }}
-              initial={{ width: 0 }}
-              animate={{
-                width: activeStep < 2 ? "calc(50% - 40px)" : 0,
-              }}
-              transition={{ duration: currentDuration / 1000, ease: "linear" }}
-            />
-
-            {WORKFLOW_STEPS.map((s, i) => {
-              const isActive = activeStep === i;
-              const isPast = activeStep > i;
-              return (
-                <button
-                  key={s.id}
-                  onClick={() => {
-                    setActiveStep(i);
-                    setCurrentDuration(STEP_DURATIONS[i]);
-                    setCycleKey((k) => k + 1);
-                  }}
-                  className="relative z-10 flex flex-col items-center gap-2.5 group"
-                >
-                  <div
-                    className={`w-[38px] h-[38px] rounded-full flex items-center justify-center border-2 transition-all duration-400 ${
-                      isActive
-                        ? "bg-brand-500 border-brand-500 text-white shadow-lg shadow-brand-500/20"
-                        : isPast
-                          ? "bg-brand-500 border-brand-500 text-white"
-                          : "bg-white dark:bg-zinc-900 border-slate-200 dark:border-zinc-700 text-slate-400 dark:text-zinc-500 group-hover:border-slate-300 dark:group-hover:border-zinc-600"
-                    }`}
+          {/* Segmented pill tabs */}
+          <div className="flex justify-center mb-8">
+            <div className="inline-flex items-center gap-0.5 p-[3px] rounded-lg bg-slate-100/80 dark:bg-zinc-800/50 border border-slate-200/40 dark:border-zinc-700/30">
+              {WORKFLOW_STEPS.map((s, i) => {
+                const isActive = activeStep === i;
+                const isPast = activeStep > i;
+                return (
+                  <button
+                    key={s.id}
+                    onClick={() => {
+                      setActiveStep(i);
+                      setCurrentDuration(STEP_DURATIONS[i]);
+                      setCycleKey((k) => k + 1);
+                    }}
+                    className="relative px-4 md:px-5 py-2 rounded-md transition-colors duration-300"
                   >
-                    {isPast ? (
-                      <svg viewBox="0 0 16 16" className="w-4 h-4">
-                        <polyline points="4 8 7 11 12 5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    ) : (
-                      <span className="text-[12px] font-mono font-medium">{s.num}</span>
+                    {isActive && (
+                      <motion.div
+                        layoutId="workflow-pill"
+                        className="absolute inset-0 rounded-md bg-white dark:bg-zinc-700/80 shadow-sm shadow-slate-200/60 dark:shadow-black/30"
+                        transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+                      />
                     )}
-                  </div>
-                  <span
-                    className={`text-[12px] font-medium tracking-tight transition-colors duration-300 ${
+                    <span className={`relative z-10 flex items-center gap-1.5 text-[11px] md:text-[12px] tracking-wide transition-colors duration-300 ${
                       isActive
                         ? "text-slate-900 dark:text-white"
                         : isPast
-                          ? "text-slate-600 dark:text-zinc-400"
-                          : "text-slate-400 dark:text-zinc-600"
-                    }`}
-                  >
-                    {s.label}
-                  </span>
-                </button>
-              );
-            })}
+                          ? "text-slate-500 dark:text-zinc-400"
+                          : "text-slate-400 dark:text-zinc-500 hover:text-slate-500 dark:hover:text-zinc-400"
+                    }`}>
+                      <span className="font-mono text-[9px] md:text-[10px] text-brand-500/70">{s.num}</span>
+                      <span className="font-medium">{s.label}</span>
+                      {isPast && (
+                        <svg viewBox="0 0 12 12" className="w-3 h-3 text-brand-500/60">
+                          <polyline points="3 6 5.5 8.5 9 3.5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      )}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Thin progress track below pills */}
+          <div className="max-w-xs mx-auto mb-7">
+            <div className="h-[2px] rounded-full bg-slate-100 dark:bg-zinc-800 overflow-hidden">
+              <motion.div
+                key={`prog-${cycleKey}-${activeStep}`}
+                initial={{ width: "0%" }}
+                animate={{ width: "100%" }}
+                transition={{ duration: currentDuration / 1000, ease: "linear" }}
+                className="h-full rounded-full bg-brand-500/40"
+              />
+            </div>
           </div>
 
           {/* Step description text */}
-          <div className="mt-6 text-center min-h-[48px]">
+          <div className="text-center min-h-[56px]">
             <AnimatePresence mode="wait">
               <motion.div
                 key={step.id}
@@ -1065,11 +1102,12 @@ function HowItWorks() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -6 }}
                 transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+                className="max-w-md mx-auto"
               >
                 <h3 className="text-[15px] font-medium text-slate-900 dark:text-white tracking-tight">
                   {step.heading}
                 </h3>
-                <p className="text-[13px] font-light text-slate-500 dark:text-zinc-400 mt-1 leading-relaxed">
+                <p className="text-[13px] font-light text-slate-500 dark:text-zinc-400 mt-1.5 leading-relaxed">
                   {step.sub}
                 </p>
               </motion.div>
@@ -1096,9 +1134,9 @@ function HowItWorks() {
               {/* Demo content */}
               <div className="h-[380px] md:h-[440px] relative overflow-hidden">
                 <AnimatePresence mode="wait">
-                  {activeStep === 0 && <WorkflowConnect key="connect" />}
-                  {activeStep === 1 && <WorkflowAnalyse key="analyse" />}
-                  {activeStep === 2 && <WorkflowAct key="act" />}
+                  {activeStep === 0 && <WorkflowGather key="gather" />}
+                  {activeStep === 1 && <WorkflowDiscover key="discover" />}
+                  {activeStep === 2 && <WorkflowModel key="model" />}
                 </AnimatePresence>
               </div>
             </div>
@@ -1109,14 +1147,14 @@ function HowItWorks() {
   );
 }
 
-/* ── Step 1: Connect — client data importing ── */
+/* ── Step 1: Gather — extension + document import ── */
 
-function WorkflowConnect() {
-  const fields = [
-    { label: "Employment income", value: "\u00a3145,000", icon: "briefcase" },
-    { label: "Dividend income", value: "\u00a332,500", icon: "chart" },
-    { label: "Rental income", value: "\u00a318,000", icon: "home" },
-    { label: "Pension contributions", value: "\u00a318,000", icon: "shield" },
+function WorkflowGather() {
+  const documents = [
+    { name: "SA302 Tax Calculation", source: "HMRC Gateway", delay: 0.6 },
+    { name: "P60 End of Year Certificate", source: "Employer portal", delay: 1.2 },
+    { name: "Dividend vouchers (3)", source: "Companies House", delay: 1.8 },
+    { name: "Pension annual statement", source: "Aviva", delay: 2.4 },
   ];
 
   return (
@@ -1125,98 +1163,136 @@ function WorkflowConnect() {
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
       transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
-      className="absolute inset-0 p-6 md:p-8"
+      className="absolute inset-0 flex"
     >
-      {/* Client header */}
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1, duration: 0.5 }}
-        className="flex items-center gap-4 mb-7"
-      >
-        <div className="w-11 h-11 rounded-full bg-brand-50 dark:bg-brand-950/30 border border-brand-200/50 dark:border-brand-800/30 flex items-center justify-center text-brand-600 dark:text-brand-400 text-sm font-medium">
-          SM
-        </div>
-        <div className="flex-1">
-          <div className="text-[14px] font-medium text-slate-900 dark:text-white">
-            Sarah Mitchell
-          </div>
-          <div className="text-[11px] font-light text-slate-400 dark:text-zinc-500">
-            Client since 2019 &middot; Annual review
-          </div>
-        </div>
-        <motion.div
-          initial={{ opacity: 0, scale: 0.8 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: 0.6, duration: 0.3 }}
-          className="flex items-center gap-1.5 text-[11px] font-light text-emerald-600 dark:text-emerald-400"
-        >
-          <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
-          </span>
-          Connected
-        </motion.div>
-      </motion.div>
-
-      {/* Data fields */}
-      <div className="grid grid-cols-2 gap-3">
-        {fields.map((field, i) => (
-          <motion.div
-            key={i}
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{
-              delay: 0.2 + i * 0.1,
-              duration: 0.5,
-              ease: [0.16, 1, 0.3, 1],
-            }}
-            className="rounded-lg border border-slate-100 dark:border-zinc-800 bg-slate-50/50 dark:bg-zinc-800/30 p-3.5"
-          >
-            <div className="text-[10px] font-light text-slate-400 dark:text-zinc-500 mb-1">
-              {field.label}
-            </div>
-            <div className="text-[15px] font-mono font-light text-slate-900 dark:text-white tracking-tight">
-              {field.value}
-            </div>
-          </motion.div>
-        ))}
-      </div>
-
-      {/* Import progress bar */}
-      <div className="mt-6">
-        <motion.div
-          className="h-1 rounded-full bg-slate-100 dark:bg-zinc-800 overflow-hidden"
-        >
-          <motion.div
-            initial={{ width: "0%" }}
-            animate={{ width: "100%" }}
-            transition={{ delay: 0.3, duration: 1.2, ease: [0.16, 1, 0.3, 1] }}
-            className="h-full rounded-full bg-emerald-500"
-          />
-        </motion.div>
+      {/* Left: simulated browser page (dimmed) */}
+      <div className="flex-1 border-r border-slate-100 dark:border-zinc-800 bg-slate-50/30 dark:bg-zinc-900/30 p-5 md:p-6 overflow-hidden">
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ delay: 1.5, duration: 0.4 }}
-          className="flex items-center gap-1.5 mt-2.5"
+          transition={{ delay: 0.15, duration: 0.4 }}
         >
-          <svg viewBox="0 0 16 16" className="w-3.5 h-3.5 text-emerald-500">
-            <circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" strokeWidth="1.5" />
-            <polyline points="5 8 7 10 11 6" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-          <span className="text-[11px] font-light text-emerald-600 dark:text-emerald-400">
-            4 data sources imported successfully
-          </span>
+          {/* Fake browser URL bar */}
+          <div className="flex items-center gap-2 mb-5 px-2.5 py-1.5 rounded-md bg-slate-100/80 dark:bg-zinc-800/50 border border-slate-200/40 dark:border-zinc-700/30">
+            <div className="w-2 h-2 rounded-full bg-emerald-400/60" />
+            <span className="text-[9px] font-mono text-slate-400 dark:text-zinc-500 truncate">
+              hmrc.gov.uk/self-assessment/sarah-mitchell
+            </span>
+          </div>
+
+          {/* Skeleton page content */}
+          <div className="space-y-3 opacity-40 dark:opacity-25">
+            <div className="w-28 h-2 rounded-full bg-slate-300 dark:bg-zinc-600" />
+            <div className="w-full h-1.5 rounded-full bg-slate-200 dark:bg-zinc-700" />
+            <div className="w-4/5 h-1.5 rounded-full bg-slate-200 dark:bg-zinc-700" />
+            <div className="w-3/5 h-1.5 rounded-full bg-slate-200 dark:bg-zinc-700" />
+            <div className="mt-4 rounded-lg border border-slate-200/60 dark:border-zinc-700/40 p-3 space-y-2">
+              <div className="w-20 h-1.5 rounded-full bg-slate-200 dark:bg-zinc-700" />
+              <div className="w-full h-1.5 rounded-full bg-slate-200 dark:bg-zinc-700" />
+              <div className="w-3/4 h-1.5 rounded-full bg-slate-200 dark:bg-zinc-700" />
+            </div>
+            <div className="mt-3 rounded-lg border border-slate-200/60 dark:border-zinc-700/40 p-3 space-y-2">
+              <div className="w-16 h-1.5 rounded-full bg-slate-200 dark:bg-zinc-700" />
+              <div className="w-full h-1.5 rounded-full bg-slate-200 dark:bg-zinc-700" />
+              <div className="w-2/3 h-1.5 rounded-full bg-slate-200 dark:bg-zinc-700" />
+            </div>
+          </div>
+        </motion.div>
+      </div>
+
+      {/* Right: Helio extension panel */}
+      <div className="w-[220px] md:w-[260px] p-4 md:p-5 flex flex-col">
+        {/* Extension header */}
+        <motion.div
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2, duration: 0.4 }}
+          className="flex items-center gap-2 mb-1"
+        >
+          <div className="w-5 h-5 rounded-md bg-brand-500 flex items-center justify-center">
+            <span className="text-white text-[8px] font-bold">H</span>
+          </div>
+          <span className="text-[11px] font-medium text-slate-800 dark:text-zinc-200">Helio</span>
+          <span className="text-[9px] text-slate-400 dark:text-zinc-500 ml-auto">Extension</span>
+        </motion.div>
+
+        {/* Divider */}
+        <div className="h-px bg-slate-100 dark:bg-zinc-800 my-3" />
+
+        {/* Client badge */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.3, duration: 0.3 }}
+          className="flex items-center gap-2 mb-4"
+        >
+          <div className="w-6 h-6 rounded-full bg-brand-50 dark:bg-brand-950/30 flex items-center justify-center text-[8px] font-medium text-brand-600 dark:text-brand-400">
+            SM
+          </div>
+          <div>
+            <div className="text-[10px] font-medium text-slate-700 dark:text-zinc-300">Sarah Mitchell</div>
+            <div className="text-[8px] text-slate-400 dark:text-zinc-500">Detecting documents...</div>
+          </div>
+        </motion.div>
+
+        {/* Documents list */}
+        <div className="space-y-0.5 flex-1">
+          {documents.map((doc, i) => (
+            <motion.div
+              key={doc.name}
+              initial={{ opacity: 0, x: 8 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: doc.delay, duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+              className="flex items-start gap-2.5 py-2 border-b border-slate-50 dark:border-zinc-800/50 last:border-0"
+            >
+              {/* Animated checkmark */}
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ delay: doc.delay + 0.3, duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                className="w-4 h-4 rounded-full bg-emerald-500/10 dark:bg-emerald-500/15 flex items-center justify-center flex-shrink-0 mt-0.5"
+              >
+                <svg viewBox="0 0 10 10" className="w-2.5 h-2.5 text-emerald-500">
+                  <polyline points="2.5 5 4.5 7 7.5 3" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </motion.div>
+              <div className="min-w-0">
+                <div className="text-[10px] font-medium text-slate-700 dark:text-zinc-300 leading-tight">
+                  {doc.name}
+                </div>
+                <div className="text-[8px] text-slate-400 dark:text-zinc-500 mt-0.5">
+                  {doc.source}
+                </div>
+              </div>
+            </motion.div>
+          ))}
+        </div>
+
+        {/* Completion footer */}
+        <motion.div
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 3.2, duration: 0.4 }}
+          className="mt-3 pt-3 border-t border-slate-100 dark:border-zinc-800"
+        >
+          <div className="flex items-center gap-1.5">
+            <span className="relative flex h-1.5 w-1.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
+            </span>
+            <span className="text-[10px] font-light text-emerald-600 dark:text-emerald-400">
+              4 documents loaded into Helio
+            </span>
+          </div>
         </motion.div>
       </div>
     </motion.div>
   );
 }
 
-/* ── Step 2: Analyse — chat interaction ── */
+/* ── Step 2: Discover — AI chat interaction ── */
 
-function WorkflowAnalyse() {
+function WorkflowDiscover() {
   const QUESTION = "What are Sarah\u2019s best tax saving opportunities this year?";
   const AI_RESPONSE =
     "I\u2019ve identified 3 planning opportunities for Sarah. The highest-impact is using her unused pension annual allowance \u2014 a \u00a342,000 contribution could save up to \u00a316,800 in tax.";
@@ -1587,27 +1663,29 @@ function WorkflowAnalyse() {
   );
 }
 
-/* ── Step 3: Act — recommendations dashboard ── */
+/* ── Step 3: Model & Act — scenario comparison ── */
 
-function WorkflowAct() {
-  const recs = [
+function WorkflowModel() {
+  const scenarios = [
     {
-      title: "Maximise pension contribution",
-      desc: "Use \u00a342,000 unused annual allowance via salary sacrifice",
-      saving: "\u00a316,800",
-      priority: "high" as const,
+      label: "Current position",
+      active: false,
+      rows: [
+        { key: "Gross income", value: "\u00a3195,500" },
+        { key: "Total tax", value: "\u00a383,115" },
+        { key: "National Insurance", value: "\u00a37,932" },
+        { key: "Take-home", value: "\u00a3104,453" },
+      ],
     },
     {
-      title: "Reallocate to ISA",
-      desc: "Shelter dividend-generating assets to reduce higher-rate tax",
-      saving: "\u00a31,520",
-      priority: "medium" as const,
-    },
-    {
-      title: "Eliminate HICBC charge",
-      desc: "Salary sacrifice brings income below \u00a360,000 threshold",
-      saving: "\u00a3860",
-      priority: "medium" as const,
+      label: "With pension sacrifice",
+      active: true,
+      rows: [
+        { key: "Gross income", value: "\u00a3195,500" },
+        { key: "Total tax", value: "\u00a366,315", delta: "\u221217,800" },
+        { key: "National Insurance", value: "\u00a36,472", delta: "\u22121,460" },
+        { key: "Take-home", value: "\u00a3122,713", delta: "+18,260" },
+      ],
     },
   ];
 
@@ -1617,77 +1695,120 @@ function WorkflowAct() {
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
       transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
-      className="absolute inset-0 p-6 md:p-8"
+      className="absolute inset-0 p-5 md:p-7 flex flex-col"
     >
-      <div className="flex items-center justify-between mb-5">
-        <div className="text-[10px] font-medium uppercase tracking-[0.12em] text-slate-400 dark:text-zinc-500">
-          Recommendations
+      {/* Header */}
+      <motion.div
+        initial={{ opacity: 0, y: 6 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.08, duration: 0.4 }}
+        className="flex items-center justify-between mb-4"
+      >
+        <div className="text-[10px] font-medium uppercase tracking-[0.14em] text-slate-400 dark:text-zinc-500">
+          Scenario comparison
         </div>
-        <div className="text-[10px] font-light text-slate-400 dark:text-zinc-600">
-          3 opportunities found
+        <div className="flex items-center gap-1 text-[9px] text-slate-400 dark:text-zinc-500">
+          <span className="w-1.5 h-1.5 rounded-full bg-brand-500/50" />
+          Sarah Mitchell &middot; 2025/26
         </div>
-      </div>
+      </motion.div>
 
-      {/* Recommendation cards */}
-      <div className="space-y-2.5">
-        {recs.map((rec, i) => (
+      {/* Scenario cards — side by side */}
+      <div className="grid grid-cols-2 gap-3 flex-1 min-h-0">
+        {scenarios.map((scenario, si) => (
           <motion.div
-            key={i}
-            initial={{ opacity: 0, y: 12 }}
+            key={scenario.label}
+            initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{
-              delay: 0.15 + i * 0.12,
-              duration: 0.5,
-              ease: [0.16, 1, 0.3, 1],
-            }}
-            className="flex items-center gap-4 rounded-lg border border-slate-100 dark:border-zinc-800 bg-slate-50/30 dark:bg-zinc-800/20 p-4 group"
+            transition={{ delay: 0.15 + si * 0.12, duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+            className={`rounded-lg border p-3.5 md:p-4 flex flex-col ${
+              scenario.active
+                ? "border-brand-200/50 dark:border-brand-800/30 bg-brand-50/30 dark:bg-brand-950/10"
+                : "border-slate-100 dark:border-zinc-800 bg-slate-50/30 dark:bg-zinc-800/20"
+            }`}
           >
-            {/* Priority dot */}
-            <div
-              className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                rec.priority === "high"
-                  ? "bg-emerald-500"
-                  : "bg-amber-400"
-              }`}
-            />
-            <div className="flex-1 min-w-0">
-              <div className="text-[13px] font-medium text-slate-800 dark:text-zinc-200 tracking-tight">
-                {rec.title}
-              </div>
-              <div className="text-[11px] font-light text-slate-400 dark:text-zinc-500 mt-0.5 truncate">
-                {rec.desc}
-              </div>
+            {/* Scenario label */}
+            <div className="flex items-center gap-1.5 mb-3">
+              {scenario.active && (
+                <div className="w-1.5 h-1.5 rounded-full bg-brand-500" />
+              )}
+              <span className={`text-[10px] font-medium ${
+                scenario.active
+                  ? "text-brand-600 dark:text-brand-400"
+                  : "text-slate-500 dark:text-zinc-400"
+              }`}>
+                {scenario.label}
+              </span>
             </div>
-            <div className="text-right flex-shrink-0">
-              <div className="text-[14px] font-mono font-medium text-emerald-600 dark:text-emerald-400 tracking-tight">
-                {rec.saving}
-              </div>
-              <div className="text-[9px] font-light text-slate-400 dark:text-zinc-600">
-                /year
-              </div>
+
+            {/* Row values */}
+            <div className="space-y-2.5 flex-1">
+              {scenario.rows.map((row, ri) => (
+                <motion.div
+                  key={row.key}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.3 + si * 0.12 + ri * 0.06, duration: 0.35 }}
+                >
+                  <div className="text-[8px] uppercase tracking-wider text-slate-400 dark:text-zinc-500 mb-0.5">
+                    {row.key}
+                  </div>
+                  <div className="flex items-baseline gap-1.5">
+                    <span className={`text-[14px] md:text-[15px] font-mono font-light tracking-tight ${
+                      row.key === "Take-home"
+                        ? "text-emerald-600 dark:text-emerald-400"
+                        : "text-slate-800 dark:text-zinc-200"
+                    }`}>
+                      {row.value}
+                    </span>
+                    {row.delta && (
+                      <motion.span
+                        initial={{ opacity: 0, x: -4 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: 0.6 + ri * 0.08, duration: 0.3 }}
+                        className={`text-[9px] font-mono font-medium ${
+                          row.delta.startsWith("+")
+                            ? "text-emerald-500"
+                            : "text-red-400 dark:text-red-400/70"
+                        }`}
+                      >
+                        {row.delta}
+                      </motion.span>
+                    )}
+                  </div>
+                </motion.div>
+              ))}
             </div>
           </motion.div>
         ))}
       </div>
 
-      {/* Total savings highlight */}
+      {/* Bottom recommendation banner */}
       <motion.div
-        initial={{ opacity: 0, y: 10, scale: 0.98 }}
+        initial={{ opacity: 0, y: 8, scale: 0.98 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
-        transition={{ delay: 0.65, duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-        className="mt-5 rounded-xl bg-slate-50 dark:bg-zinc-800/50 border border-slate-200/60 dark:border-zinc-700/50 p-5 flex items-center justify-between"
+        transition={{ delay: 1.0, duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+        className="mt-3 rounded-lg bg-emerald-500/[0.06] dark:bg-emerald-500/[0.04] border border-emerald-500/[0.12] dark:border-emerald-500/[0.08] px-4 py-3 flex items-center justify-between"
       >
-        <div>
-          <div className="text-[13px] font-medium text-slate-800 dark:text-zinc-200">
-            Total annual saving
-          </div>
-          <div className="text-[11px] font-light text-slate-500 dark:text-zinc-500 mt-0.5">
-            Combined impact of all recommendations
+        <div className="flex items-center gap-2.5">
+          <div className="w-[5px] h-[5px] rounded-full bg-emerald-500" />
+          <div>
+            <div className="text-[11px] font-medium text-slate-800 dark:text-zinc-200">
+              Recommended: Pension sacrifice
+            </div>
+            <div className="text-[9px] font-light text-slate-500 dark:text-zinc-500 mt-0.5">
+              Saves &pound;19,260/yr &middot; eliminates HICBC
+            </div>
           </div>
         </div>
-        <div className="text-2xl font-mono font-medium text-emerald-600 dark:text-emerald-400 tracking-tight">
-          &pound;19,180
-        </div>
+        <motion.div
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 1.3, duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+          className="text-[18px] font-mono font-medium text-emerald-600 dark:text-emerald-400 tracking-tight"
+        >
+          &pound;19,260
+        </motion.div>
       </motion.div>
     </motion.div>
   );

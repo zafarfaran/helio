@@ -18,6 +18,8 @@ class ExportRequest(BaseModel):
     tax_position: dict[str, Any]
     dashboard_data: dict[str, Any]
     scenarios: list[dict[str, Any]] | None = None
+    ai_observations: list[dict[str, Any]] | None = None
+    meeting_notes: list[dict[str, Any]] | None = None
 
 
 @router.post("/exports/tax-report")
@@ -31,6 +33,8 @@ async def export_tax_report(req: ExportRequest) -> StreamingResponse:
         tax_position=req.tax_position,
         dashboard_data=req.dashboard_data,
         scenarios=req.scenarios,
+        ai_observations=req.ai_observations,
+        meeting_notes=req.meeting_notes,
     )
 
     filename = f"helio-tax-report-{client_name}-{tax_year}.pdf"

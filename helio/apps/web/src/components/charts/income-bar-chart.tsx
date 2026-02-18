@@ -16,7 +16,7 @@ interface IncomeBarChartProps {
 const fmt = (n: number) =>
   `£${n.toLocaleString("en-GB", { maximumFractionDigits: 0 })}`;
 
-const COLORS = ["var(--accent)", "#0ea5e9", "#8b5cf6", "#14b8a6", "#f59e0b", "#ec4899"];
+const COLORS = ["#748ffc", "#38bdf8", "#a78bfa", "#2dd4bf", "#fbbf24", "#f472b6"];
 
 interface PayloadItem {
   name: string;
@@ -29,9 +29,15 @@ function CustomTooltip({ active, payload }: { active?: boolean; payload?: Payloa
   const d = payload[0]?.payload as { name: string; value: number; pct: number };
   if (!d) return null;
   return (
-    <div className="rounded-lg bg-[var(--card)] border border-[var(--card-border)] shadow-lg px-3 py-2">
-      <p className="text-[11px] font-medium text-[var(--foreground)]">{d.name}</p>
-      <p className="text-[13px] font-mono font-semibold text-[var(--foreground)]">{fmt(d.value)}</p>
+    <div
+      className="rounded-xl px-3.5 py-2.5 shadow-xl border backdrop-blur-xl"
+      style={{
+        background: 'var(--chart-tooltip-bg)',
+        borderColor: 'var(--chart-tooltip-border)',
+      }}
+    >
+      <p className="text-[11px] font-medium text-[var(--foreground)]/70">{d.name}</p>
+      <p className="text-[14px] font-mono font-semibold text-[var(--foreground)]">{fmt(d.value)}</p>
       <p className="text-[10px] text-[var(--muted)]">{d.pct.toFixed(1)}% of total</p>
     </div>
   );
@@ -55,7 +61,7 @@ export function IncomeBarChart({ sources, totalIncome }: IncomeBarChartProps) {
         <BarChart data={data} layout="vertical" margin={{ top: 5, right: 10, bottom: 5, left: 10 }}>
           <XAxis
             type="number"
-            tick={{ fontSize: 10, fill: "var(--muted)" }}
+            tick={{ fontSize: 10, fill: "var(--chart-axis)" }}
             tickFormatter={(v: number) => `£${(v / 1000).toFixed(0)}k`}
             axisLine={false}
             tickLine={false}
@@ -63,12 +69,12 @@ export function IncomeBarChart({ sources, totalIncome }: IncomeBarChartProps) {
           <YAxis
             type="category"
             dataKey="name"
-            tick={{ fontSize: 11, fill: "var(--muted)" }}
+            tick={{ fontSize: 11, fill: "var(--chart-axis)" }}
             axisLine={false}
             tickLine={false}
             width={100}
           />
-          <Tooltip content={<CustomTooltip />} cursor={{ fill: "var(--surface)", opacity: 0.5 }} />
+          <Tooltip content={<CustomTooltip />} cursor={{ fill: "var(--chart-cursor)", opacity: 0.8 }} />
           <Bar dataKey="value" radius={[0, 4, 4, 0]} animationDuration={800}>
             {data.map((_, i) => (
               <Cell key={i} fill={COLORS[i % COLORS.length]} fillOpacity={0.85} />
