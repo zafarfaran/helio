@@ -484,7 +484,199 @@ def analyse_bed_and_isa(
 
 ---
 
-### 6. Multi-Variable "Optimiser" — FUTURE
+### 6. Spousal Income Transfer — TO BUILD (NEXT PRIORITY)
+
+**What changes**: Income-producing assets (rental property, dividend shares) are transferred from the higher-earning spouse to the lower-earning spouse. This is a **household-level** scenario — it runs the engine for **both** spouses.
+
+**Why this is high value for the demo**:
+- Most tax tools can only model one person. Household planning is a differentiator.
+- Sarah and James Mitchell are already linked as a household in the demo data.
+- Meeting notes explicitly mention "explore spousal transfer of rental property to utilise James's basic rate band".
+- The numbers are immediately compelling: Sarah pays 40%+ on rental income that James would pay 20% on.
+
+**How it differs from other scenarios**:
+- Other scenarios change ONE input for ONE person (sacrifice amount, pension contribution).
+- This scenario changes inputs for TWO people simultaneously — income moves from A to B.
+- Requires 4 engine calls instead of 2 (current + proposed for each spouse).
+
+**Engine calls**:
+```python
+# Current household: Sarah has rental, James doesn't
+sarah_current = compute_full_tax_position(
+    income_sources=[
+        IncomeSource(EMPLOYMENT, 145_000),
+        IncomeSource(DIVIDENDS, 32_500),
+        IncomeSource(RENTAL, 18_000),      # Sarah has the rental
+    ],
+    pension_contributions=18_000,
+    number_of_children=2,
+    claims_child_benefit=True,
+)
+james_current = compute_full_tax_position(
+    income_sources=[
+        IncomeSource(SELF_EMPLOYMENT, 45_000),
+    ],
+)
+
+# Proposed household: James has rental, Sarah doesn't
+sarah_proposed = compute_full_tax_position(
+    income_sources=[
+        IncomeSource(EMPLOYMENT, 145_000),
+        IncomeSource(DIVIDENDS, 32_500),
+        # No rental — transferred to James
+    ],
+    pension_contributions=18_000,
+    number_of_children=2,
+    claims_child_benefit=True,
+)
+james_proposed = compute_full_tax_position(
+    income_sources=[
+        IncomeSource(SELF_EMPLOYMENT, 45_000),
+        IncomeSource(RENTAL, 18_000),       # James now has the rental
+    ],
+)
+```
+
+**What the diff shows**:
+- Sarah's tax reduction (rental no longer taxed at her 40%+ marginal rate)
+- James's tax increase (rental taxed at his 20-40% rate)
+- **Net household saving** (the headline number — Sarah's reduction minus James's increase)
+- PA changes for both spouses
+- HICBC impact (Sarah is still the higher earner, so HICBC doesn't shift)
+- NI: No change (NI not charged on rental income for either spouse)
+
+**New function** — `app/tax/spousal_transfer.py`:
+
+```python
+def analyse_spousal_transfer(
+    # Spouse A (the one losing income)
+    spouse_a_sources: list[IncomeSource],
+    spouse_a_pension: float = 0,
+    spouse_a_employer_contributions: float = 0,
+    spouse_a_gift_aid: float = 0,
+    spouse_a_region: str = "england",
+    spouse_a_children: int = 0,
+    spouse_a_claims_cb: bool = False,
+    # Spouse B (the one gaining income)
+    spouse_b_sources: list[IncomeSource],
+    spouse_b_pension: float = 0,
+    spouse_b_employer_contributions: float = 0,
+    spouse_b_gift_aid: float = 0,
+    spouse_b_region: str = "england",
+    spouse_b_children: int = 0,
+    spouse_b_claims_cb: bool = False,
+    # Transfer details
+    transfer_sources: list[IncomeSource],  # income to move from A → B
+) -> dict:
+    """Compare household tax positions before and after spousal income transfer.
+
+    Runs the engine 4 times:
+      1. Spouse A current (with transferred income)
+      2. Spouse B current (without transferred income)
+      3. Spouse A proposed (without transferred income)
+      4. Spouse B proposed (with transferred income)
+
+    Returns per-person breakdowns + household summary.
+    """
+
+    # 1. Current: A has the income, B doesn't
+    a_current = compute_full_tax_position(
+        income_sources=spouse_a_sources,
+        pension_contributions=spouse_a_pension,
+        employer_contributions=spouse_a_employer_contributions,
+        gift_aid=spouse_a_gift_aid,
+        region=spouse_a_region,
+        number_of_children=spouse_a_children,
+        claims_child_benefit=spouse_a_claims_cb,
+    )
+    b_current = compute_full_tax_position(
+        income_sources=spouse_b_sources,
+        pension_contributions=spouse_b_pension,
+        employer_contributions=spouse_b_employer_contributions,
+        gift_aid=spouse_b_gift_aid,
+        region=spouse_b_region,
+        number_of_children=spouse_b_children,
+        claims_child_benefit=spouse_b_claims_cb,
+    )
+
+    # 2. Proposed: remove transfer_sources from A, add to B
+    a_proposed_sources = [
+        s for s in spouse_a_sources
+        if not _matches_transfer(s, transfer_sources)
+    ]
+    b_proposed_sources = [*spouse_b_sources, *transfer_sources]
+
+    a_proposed = compute_full_tax_position(
+        income_sources=a_proposed_sources,
+        pension_contributions=spouse_a_pension,
+        employer_contributions=spouse_a_employer_contributions,
+        gift_aid=spouse_a_gift_aid,
+        region=spouse_a_region,
+        number_of_children=spouse_a_children,
+        claims_child_benefit=spouse_a_claims_cb,
+    )
+    b_proposed = compute_full_tax_position(
+        income_sources=b_proposed_sources,
+        pension_contributions=spouse_b_pension,
+        employer_contributions=spouse_b_employer_contributions,
+        gift_aid=spouse_b_gift_aid,
+        region=spouse_b_region,
+        number_of_children=spouse_b_children,
+        claims_child_benefit=spouse_b_claims_cb,
+    )
+
+    # 3. Diff
+    household_current = a_current.total_tax + b_current.total_tax
+    household_proposed = a_proposed.total_tax + b_proposed.total_tax
+    net_saving = round_currency(household_current - household_proposed)
+
+    return {
+        "scenario_type": "spousal_transfer",
+        "spouse_a": {
+            "current": _person_summary(a_current),
+            "proposed": _person_summary(a_proposed),
+            "savings": {
+                "income_tax": round_currency(a_current.income_tax - a_proposed.income_tax),
+                "national_insurance": round_currency(a_current.national_insurance - a_proposed.national_insurance),
+                "hicbc_avoided": round_currency(
+                    (a_current.hicbc_result.hicbc_charge if a_current.hicbc_result else 0)
+                    - (a_proposed.hicbc_result.hicbc_charge if a_proposed.hicbc_result else 0)
+                ),
+                "total": round_currency(a_current.total_tax - a_proposed.total_tax),
+            },
+            "pa_change": {
+                "current": a_current.personal_allowance,
+                "proposed": a_proposed.personal_allowance,
+                "restored": round_currency(a_proposed.personal_allowance - a_current.personal_allowance),
+            },
+        },
+        "spouse_b": {
+            "current": _person_summary(b_current),
+            "proposed": _person_summary(b_proposed),
+            "additional_tax": {
+                "income_tax": round_currency(b_proposed.income_tax - b_current.income_tax),
+                "national_insurance": round_currency(b_proposed.national_insurance - b_current.national_insurance),
+                "total": round_currency(b_proposed.total_tax - b_current.total_tax),
+            },
+        },
+        "household": {
+            "current_total_tax": round_currency(household_current),
+            "proposed_total_tax": round_currency(household_proposed),
+            "net_saving": net_saving,
+        },
+        "transfer": {
+            "sources": [
+                {"type": s.source_type.value, "amount": s.gross_amount, "label": s.label}
+                for s in transfer_sources
+            ],
+            "total_transferred": sum(s.gross_amount for s in transfer_sources),
+        },
+    }
+```
+
+---
+
+### 7. Multi-Variable "Optimiser" — FUTURE
 
 Instead of the adviser specifying exact numbers, the engine finds the optimal:
 
@@ -840,6 +1032,52 @@ These are the Anthropic-format tool schemas that the Scenario Modeller agent has
 }
 ```
 
+### `model_spousal_transfer`
+
+```python
+{
+    "name": "model_spousal_transfer",
+    "description": (
+        "Model the household tax impact of transferring income-producing assets "
+        "between spouses (e.g., rental property, dividend-generating shares). "
+        "Runs the engine for BOTH spouses in current and proposed scenarios "
+        "(4 engine calls total). Returns per-person and household savings."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "spouse_a_client_id": {
+                "type": "string",
+                "description": "Client ID of the spouse losing the income (higher earner)",
+            },
+            "spouse_b_client_id": {
+                "type": "string",
+                "description": "Client ID of the spouse gaining the income (lower earner)",
+            },
+            "transfer_type": {
+                "type": "string",
+                "enum": ["rental", "dividends", "savings"],
+                "description": "Type of income being transferred",
+            },
+            "transfer_amount": {
+                "type": "number",
+                "description": "Annual income amount to transfer",
+            },
+            "transfer_label": {
+                "type": "string",
+                "description": "Description of the transferred asset (e.g., 'Buy-to-let flats')",
+            },
+        },
+        "required": [
+            "spouse_a_client_id",
+            "spouse_b_client_id",
+            "transfer_type",
+            "transfer_amount",
+        ],
+    },
+}
+```
+
 ### `compute_tax_position`
 
 The Scenario agent also has access to `compute_tax_position` for ad-hoc scenarios that don't fit a pre-built template. It can call it twice manually with different inputs.
@@ -956,31 +1194,85 @@ The frontend appends this to the existing `dashboardData.scenarios` array. Previ
 | 3 | Gift Aid analyser | `tax/gift_aid.py` | To build |
 | 4 | Salary/dividend split analyser | `tax/salary_dividend.py` | To build |
 | 5 | Bed & ISA analyser | `tax/bed_and_isa.py` | To build (replace stub) |
-| 6 | Tool executor: `model_salary_sacrifice` | `services/tools/tax_engine.py` | To build |
-| 7 | Tool executor: `model_pension_contribution` | `services/tools/tax_engine.py` | To build |
-| 8 | Tool executor: `model_salary_dividend_split` | `services/tools/tax_engine.py` | To build |
-| 9 | Register tools in registry | `services/tools/__init__.py` | To build |
-| 10 | Scenario Modeller agent prompt | `services/agents/scenario_modeller.py` | To build |
-| 11 | Tool definitions for agent | `services/agents/scenario_modeller.py` | To build |
-| 12 | Frontend: Scenarios tab component | `apps/web/.../ScenariosTab.tsx` | To build |
-| 13 | Frontend: ScenarioResult type | `packages/shared/src/types/scenarios.ts` | To update |
-| 14 | Frontend: scenario list + comparison layout | `apps/web/.../ScenariosTab.tsx` | To build |
-| 15 | Optimal sacrifice sweep | `tax/salary_sacrifice.py` | Phase 3 |
+| 6 | **Spousal income transfer analyser** | `tax/spousal_transfer.py` | **To build (next)** |
+| 7 | Tool executor: `model_salary_sacrifice` | `services/tools/tax_engine.py` | To build |
+| 8 | Tool executor: `model_pension_contribution` | `services/tools/tax_engine.py` | To build |
+| 9 | Tool executor: `model_salary_dividend_split` | `services/tools/tax_engine.py` | To build |
+| 10 | **Tool executor: `model_spousal_transfer`** | `services/tools/tax_engine.py` | **To build (next)** |
+| 11 | Register tools in registry | `services/tools/__init__.py` | To build |
+| 12 | Scenario Modeller agent prompt | `services/agents/scenario_modeller.py` | To build |
+| 13 | Tool definitions for agent | `services/agents/scenario_modeller.py` | To build |
+| 14 | Frontend: Scenarios tab component | `apps/web/.../ScenariosTab.tsx` | To build |
+| 15 | Frontend: ScenarioResult type | `packages/shared/src/types/scenarios.ts` | To update |
+| 16 | Frontend: scenario list + comparison layout | `apps/web/.../ScenariosTab.tsx` | To build |
+| 17 | Optimal sacrifice sweep | `tax/salary_sacrifice.py` | Phase 3 |
+| 18 | Spousal transfer sweep optimizer | `tax/spousal_transfer.py` | Phase 3 |
 
 ### Priority for Demo
 
 **P1 — Must have**:
 - Salary sacrifice (already built in engine, just needs tool + agent wiring)
-- Personal pension contribution (simple — engine runs twice)
+- **Spousal income transfer** (household-level planning — the differentiator)
 - Scenarios tab on the frontend (before/after layout + savings table)
 
 **P2 — High value**:
-- Salary/dividend split (needed for director clients like Olivia Harper)
+- Personal pension contribution (simple — engine runs twice)
+- Salary/dividend split (needed for director clients)
 - Multiple scenario accumulation across turns
 
 **P3 — Later**:
 - Gift Aid analyser
 - Bed & ISA (replace stub)
 - Optimal sacrifice sweep
+- Spousal transfer sweep (find optimal transfer %)
+- Marriage Allowance modelling
+- Student loan planning
+- Compound scenarios (rental transfer + salary sacrifice combined)
 
-The salary sacrifice flow is the most impressive demo scenario — it touches income tax, NI, HICBC, PA taper, and pension, all in one "what if" question.
+### Why Spousal Transfer is P1
+
+1. **Differentiator**: Most tax tools model one person. Household planning is what advisers actually do — and what they can't find software for.
+2. **Demo data supports it**: Sarah + James are already linked. Meeting notes mention this exact planning opportunity.
+3. **Impressive to both audiences**: Advisers see real planning value. Investors see the AI doing something no competitor does.
+4. **Builds on existing architecture**: Same engine pattern (run twice, diff), just extended to two people (run 4 times).
+5. **Leads to a natural follow-up**: "Want me to also model increasing her salary sacrifice to restore the PA?" — shows how scenarios chain together.
+
+---
+
+## Future Scenario Research
+
+### Scenarios Investigated but Not Yet Prioritised
+
+#### Marriage Allowance Transfer
+- One spouse can transfer £1,260 of their PA to the other if the transferor earns below £12,570 and the recipient is a basic rate taxpayer.
+- **Not relevant for Sarah/James** (both earn above the PA), but useful for other client profiles.
+- Simple engine call: recipient gets £1,260 × 20% = £252 saving. Low complexity, low value.
+
+#### CGT Bed & ISA Analysis
+- Sell holdings in GIA, use CGT Annual Exempt Amount, rebuy inside ISA.
+- Stub exists in `app/tax/bed_and_isa.py`. Requires CGT calculation (not income tax engine).
+- Sarah has £85k in a global equity fund with £12k unrealised gains (from meeting notes).
+- Medium complexity, medium value for demo.
+
+#### Pension Carry-Forward Planning
+- Sarah has £14k unused from 2021/22 + current year headroom.
+- Engine already supports `pension_contributions_by_year` parameter.
+- Could model "what if Sarah uses all carry-forward this year" — reduces ANI significantly.
+- Medium complexity, high value but overlaps with personal pension contribution scenario.
+
+#### Bonus Planning
+- Sarah expects an £80k bonus in Feb 2026 (from meeting notes).
+- Model the impact of the bonus on tax + strategies to mitigate (pension sacrifice, timing).
+- High value for demo (dramatic numbers), but essentially a salary sacrifice variant with different inputs.
+
+#### Spousal Pension Contribution
+- Sarah funds contributions into James's pension.
+- Reduces household tax while building James's retirement pot.
+- Could combine with spousal transfer for a compound scenario.
+- Medium complexity, high value.
+
+#### Multi-Lever Optimiser
+- Instead of modelling one lever at a time, sweep across combinations:
+  "What's the optimal salary sacrifice + rental transfer + pension contribution to minimise household tax?"
+- Phase 3 feature — computationally intensive but very impressive.
+- Could use the engine in a grid search or gradient-free optimiser.
