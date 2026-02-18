@@ -1,7 +1,10 @@
 """Client endpoints — list clients with tax summaries and detail views."""
 
+import re
+from typing import Literal
+
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr, field_validator
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from structlog.stdlib import BoundLogger
@@ -16,13 +19,27 @@ router = APIRouter(tags=["clients"])
 class CreateClientRequest(BaseModel):
     first_name: str
     last_name: str
-    email: str
+    email: EmailStr
     date_of_birth: str
     ni_number: str
     utr: str
-    region: str = "england"
-    employment_status: str = "employed"
+    region: Literal["england", "wales", "scotland", "northern_ireland"] = "england"
+    employment_status: Literal["employed", "self-employed", "director", "retired", "other"] = "employed"
     notes: str | None = None
+
+    @field_validator("ni_number")
+    @classmethod
+    def validate_ni_number(cls, v: str) -> str:
+        if not re.match(r"^[A-Za-z]{2}\d{6}[A-Za-z]$", v):
+            raise ValueError("NI number must match format AB123456C")
+        return v.upper()
+
+    @field_validator("utr")
+    @classmethod
+    def validate_utr(cls, v: str) -> str:
+        if not re.match(r"^\d{10}$", v):
+            raise ValueError("UTR must be exactly 10 digits")
+        return v
 
 
 @router.get("/clients")
