@@ -143,6 +143,35 @@ interface ClientDetail {
   utr?: string;
   region?: string;
   employment_status?: string;
+  // Contact
+  phone?: string;
+  address_line_1?: string;
+  address_line_2?: string;
+  city?: string;
+  postcode?: string;
+  // Personal
+  marital_status?: string;
+  number_of_children?: number;
+  claims_child_benefit?: boolean;
+  // Spouse (resolved object from API)
+  spouse?: {
+    id: string;
+    first_name: string;
+    last_name: string;
+    email?: string;
+    date_of_birth?: string;
+    ni_number?: string;
+    employment_status?: string;
+    region?: string;
+  } | null;
+  // Household
+  household_members?: { id: string; first_name: string; last_name: string }[];
+  // Professional
+  employer_name?: string;
+  company_name?: string;
+  company_number?: string;
+  // Notes
+  notes?: string;
   created_at?: string;
   tax_profile?: TaxProfile | null;
   observations?: Observation[];
@@ -216,37 +245,24 @@ function hicbcCharge(h: HicbcData): number {
   return h.hicbc_charge ?? h.charge ?? 0;
 }
 
-/* ─── Consistent avatar gradient from name ─── */
+/* ─── Consistent avatar color from name ─── */
 
-const AVATAR_PAIRS: [string, string][] = [
-  ["#6366f1", "#818cf8"], // indigo
-  ["#0ea5e9", "#38bdf8"], // sky
-  ["#8b5cf6", "#a78bfa"], // violet
-  ["#ec4899", "#f472b6"], // pink
-  ["#14b8a6", "#2dd4bf"], // teal
-  ["#f59e0b", "#fbbf24"], // amber
-  ["#ef4444", "#f87171"], // red
-  ["#10b981", "#34d399"], // emerald
+const AVATAR_COLORS: string[] = [
+  "#78716c", // stone-500
+  "#6b7280", // gray-500
+  "#71717a", // zinc-500
+  "#737373", // neutral-500
+  "#a8a29e", // stone-400
+  "#9ca3af", // gray-400
+  "#a1a1aa", // zinc-400
+  "#64748b", // slate-500
 ];
 
-function avatarColors(name: string): [string, string] {
+function avatarColor(name: string): string {
   let hash = 0;
   for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  return AVATAR_PAIRS[Math.abs(hash) % AVATAR_PAIRS.length];
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
 }
-
-/* ─── Motion ─── */
-
-const ease = [0.16, 1, 0.3, 1] as const;
-
-const stagger = {
-  animate: { transition: { staggerChildren: 0.05, delayChildren: 0.02 } },
-};
-
-const fadeUp = {
-  initial: { opacity: 0, y: 14 },
-  animate: { opacity: 1, y: 0, transition: { duration: 0.45, ease } },
-};
 
 /* ─── Severity styling ─── */
 
@@ -266,7 +282,7 @@ const SEV: Record<string, { border: string; bg: string; icon: string; badge: str
 
 function ClientRow({ client, active, onSelect }: { client: ClientSummary; active: boolean; onSelect: () => void }) {
   const name = `${client.first_name} ${client.last_name}`;
-  const [c1, c2] = avatarColors(name);
+  const bg = avatarColor(name);
 
   return (
     <button onClick={onSelect} className={`w-full text-left group relative`}>
@@ -280,11 +296,11 @@ function ClientRow({ client, active, onSelect }: { client: ClientSummary; active
       )}
 
       <div className={`flex items-center gap-3 px-4 py-3 rounded-xl ml-1 transition-all duration-200 ${
-        active ? "bg-[var(--accent)]/[0.08] shadow-[0_0_20px_-6px_var(--accent-glow)]" : "hover:bg-[var(--glass)]"
+        active ? "bg-[var(--accent)]/[0.08]" : "hover:bg-[var(--surface)]"
       }`}>
         <div
           className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-[11px] font-semibold text-white"
-          style={{ background: `linear-gradient(135deg, ${c1}, ${c2})` }}
+          style={{ background: bg }}
         >
           {client.first_name[0]}{client.last_name[0]}
         </div>
@@ -319,20 +335,18 @@ function Metric({ label, value, sub, icon: Icon }: {
   icon: React.FC<{ className?: string }>;
 }) {
   return (
-    <motion.div variants={fadeUp} className="group">
-      <div className="glass-metric rounded-2xl p-5 h-full luminous-border">
-        <div className="relative z-10">
-          <div className="flex items-center gap-2 mb-4">
-            <div className="w-7 h-7 rounded-lg bg-[var(--accent)]/[0.08] flex items-center justify-center">
-              <Icon className="w-3.5 h-3.5 text-[var(--accent)]" />
-            </div>
-            <span className="text-[10px] font-semibold text-[var(--muted)] tracking-[0.08em] uppercase">{label}</span>
+    <div className="group">
+      <div className="refined-card rounded-xl p-5 h-full">
+        <div className="flex items-center gap-2 mb-4">
+          <div className="w-7 h-7 rounded-lg bg-[var(--accent)]/[0.08] flex items-center justify-center">
+            <Icon className="w-3.5 h-3.5 text-[var(--accent)]" />
           </div>
-          <p className="text-[24px] font-semibold font-mono tracking-tight text-[var(--foreground)] leading-none">{value}</p>
-          {sub && <p className="text-[11px] text-[var(--muted)] mt-2.5 leading-snug">{sub}</p>}
+          <span className="text-[10px] font-semibold text-[var(--muted)] tracking-[0.08em] uppercase">{label}</span>
         </div>
+        <p className="text-[24px] font-semibold font-mono tracking-tight text-[var(--foreground)] leading-none">{value}</p>
+        {sub && <p className="text-[11px] text-[var(--muted)] mt-2.5 leading-snug">{sub}</p>}
       </div>
-    </motion.div>
+    </div>
   );
 }
 
@@ -345,9 +359,9 @@ function Card({ title, icon: Icon, children, className }: {
   className?: string;
 }) {
   return (
-    <motion.div variants={fadeUp} className={className}>
-      <div className="glass-card rounded-2xl overflow-hidden h-full luminous-border">
-        <div className="flex items-center gap-2.5 px-5 py-3.5 border-b border-[var(--glass-border)]">
+    <div className={className}>
+      <div className="refined-card rounded-xl overflow-hidden h-full">
+        <div className="flex items-center gap-2.5 px-5 py-3.5 border-b border-[var(--border)]">
           <div className="w-5 h-5 rounded-md bg-[var(--accent)]/[0.1] flex items-center justify-center">
             <Icon className="w-3 h-3 text-[var(--accent)]" />
           </div>
@@ -355,7 +369,7 @@ function Card({ title, icon: Icon, children, className }: {
         </div>
         <div className="px-5 py-4">{children}</div>
       </div>
-    </motion.div>
+    </div>
   );
 }
 
@@ -396,7 +410,7 @@ function BandRow({ band, maxAmt, delay }: { band: TaxBand; maxAmt: number; delay
         <motion.div
           initial={{ width: 0 }}
           animate={{ width: `${pct}%` }}
-          transition={{ duration: 0.6, ease, delay: delay * 0.08 + 0.1 }}
+          transition={{ duration: 0.4, ease: "easeOut" }}
           className={`h-full rounded-full ${barColor}`}
         />
       </div>
@@ -421,7 +435,7 @@ function SourceBar({ source, total, delay }: { source: IncomeSource; total: numb
           <motion.div
             initial={{ width: 0 }}
             animate={{ width: `${pct}%` }}
-            transition={{ duration: 0.55, ease, delay: delay * 0.06 + 0.1 }}
+            transition={{ duration: 0.4, ease: "easeOut" }}
             className="h-full rounded-full bg-[var(--accent)]/60"
           />
         </div>
@@ -448,7 +462,7 @@ function AllowanceBar({ a }: { a: Allowance }) {
         <motion.div
           initial={{ width: 0 }}
           animate={{ width: `${pct}%` }}
-          transition={{ duration: 0.55, ease }}
+          transition={{ duration: 0.4, ease: "easeOut" }}
           className={`h-full rounded-full ${color}`}
         />
       </div>
@@ -465,7 +479,7 @@ function ObsItem({ obs, onDelete }: { obs: Observation; onDelete?: (id: string) 
   const s = SEV[obs.severity] || SEV.info;
 
   return (
-    <motion.div variants={fadeUp} className={`group/obs rounded-xl border-l-[3px] ${s.border} backdrop-blur-md bg-[var(--glass)] border border-[var(--glass-border)] px-4 py-3.5`}>
+    <div className={`group/obs rounded-xl border-l-[3px] ${s.border} bg-[var(--card)] border border-[var(--card-border)] px-4 py-3.5`}>
       <div className="flex items-start gap-2.5">
         <div className={`mt-0.5 ${s.icon} flex-shrink-0`}>
           {obs.severity === "opportunity" ? <IconLightbulb className="w-3.5 h-3.5" />
@@ -506,7 +520,7 @@ function ObsItem({ obs, onDelete }: { obs: Observation; onDelete?: (id: string) 
           </button>
         )}
       </div>
-    </motion.div>
+    </div>
   );
 }
 
@@ -539,9 +553,8 @@ function IntelligenceTab({
     <div className="space-y-5">
       {/* Savings banner */}
       {totalSavings > 0 && (
-        <div className="rounded-2xl backdrop-blur-xl border border-emerald-500/[0.12] p-5 relative overflow-hidden" style={{ background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.06), rgba(16, 185, 129, 0.02))' }}>
-          <div className="absolute -top-12 -left-12 w-32 h-32 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
-          <div className="relative z-10">
+        <div className="rounded-xl border border-emerald-200 dark:border-emerald-800/30 bg-emerald-50/50 dark:bg-emerald-950/20 p-5 border-l-[3px] border-l-emerald-500">
+          <div>
             <p className="text-[10px] font-semibold text-emerald-500/60 dark:text-emerald-400/50 uppercase tracking-[0.08em] mb-1.5">Total Potential Savings</p>
             <p className="text-[28px] font-semibold font-mono text-emerald-600 dark:text-emerald-400 leading-none">
               £{totalSavings.toLocaleString("en-GB", { maximumFractionDigits: 0 })}
@@ -551,7 +564,7 @@ function IntelligenceTab({
       )}
 
       {/* Filter pills */}
-      <div className="flex items-center gap-1.5 p-1 rounded-xl bg-[var(--glass)] backdrop-blur-md border border-[var(--glass-border)] w-fit">
+      <div className="flex items-center gap-1.5 p-1 rounded-xl bg-[var(--surface)] border border-[var(--border)] w-fit">
         {(["all", "opportunity", "warning", "critical", "info"] as const).map((key) => {
           const count = counts[key];
           if (key !== "all" && count === 0) return null;
@@ -561,8 +574,8 @@ function IntelligenceTab({
               onClick={() => setFilter(key)}
               className={`text-[11px] font-medium px-3 py-1.5 rounded-lg transition-all ${
                 filter === key
-                  ? "bg-[var(--accent)]/[0.15] text-[var(--accent)] border border-[var(--accent)]/[0.2] shadow-[0_0_12px_-3px_var(--accent-glow)]"
-                  : "text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--glass)]"
+                  ? "bg-[var(--accent)]/[0.15] text-[var(--accent)] border border-[var(--accent)]/[0.2]"
+                  : "text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--surface)]"
               }`}
             >
               {key === "all" ? "All" : key.charAt(0).toUpperCase() + key.slice(1)}
@@ -574,13 +587,13 @@ function IntelligenceTab({
 
       {/* Observation list */}
       {filtered.length > 0 ? (
-        <motion.div variants={stagger} initial="initial" animate="animate" className="space-y-3">
+        <div className="space-y-3">
           {filtered.map((o) => (
             <ObsItem key={o.id} obs={o} onDelete={onDelete} />
           ))}
-        </motion.div>
+        </div>
       ) : (
-        <div className="rounded-2xl border border-dashed border-[var(--glass-border)] bg-[var(--glass)] backdrop-blur-sm p-10 text-center">
+        <div className="rounded-2xl border border-dashed border-[var(--border)] bg-[var(--surface)] p-10 text-center">
           <p className="text-[13px] text-[var(--muted)]">No observations match this filter</p>
         </div>
       )}
@@ -624,7 +637,7 @@ export default function ClientsPage() {
   const [search, setSearch] = useState("");
   const [showAddPanel, setShowAddPanel] = useState(false);
   const [showTaxForm, setShowTaxForm] = useState(false);
-  const [activeTab, setActiveTab] = useState<TabId>("overview");
+  const [activeTab, setActiveTab] = useState<TabId>("profile");
 
   const handleClientAdded = (newClient: ClientSummary) => {
     setClients((prev) => [newClient, ...prev]);
@@ -665,7 +678,7 @@ export default function ClientsPage() {
     if (!selectedId) return;
     let cancelled = false;
     setShowTaxForm(false);
-    setActiveTab("overview");
+    setActiveTab("profile");
     setDetailLoading(true);
     (async () => {
       try {
@@ -723,7 +736,6 @@ export default function ClientsPage() {
   const ni = parseNI(tp?.ni_breakdown);
 
   const name = detail ? `${detail.first_name} ${detail.last_name}` : "";
-  const [c1, c2] = detail ? avatarColors(name) : ["#666", "#888"];
 
   const dobStr = detail?.date_of_birth
     ? new Date(detail.date_of_birth).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })
@@ -739,16 +751,12 @@ export default function ClientsPage() {
   const curIdx = clients.findIndex((c) => c.id === selectedId);
 
   return (
-    <div className="h-screen flex dashboard-mesh">
-      {/* Background orbs */}
-      <div className="orb-accent-1" style={{ top: '10%', left: '15%' }} />
-      <div className="orb-accent-2" style={{ top: '60%', right: '10%' }} />
-
+    <div className="h-screen flex bg-[var(--background)]">
       {/* ═══════════ SIDEBAR ═══════════ */}
-      <aside className="w-[264px] flex-shrink-0 glass-sidebar flex flex-col relative z-10">
+      <aside className="w-[264px] flex-shrink-0 refined-sidebar flex flex-col relative z-10">
 
         {/* Brand bar */}
-        <div className="h-14 flex items-center justify-between px-5 border-b border-[var(--glass-border)]">
+        <div className="h-14 flex items-center justify-between px-5 border-b border-[var(--border)]">
           <Link href="/" className="text-[var(--foreground)] hover:text-[var(--accent)] transition-colors">
             <HelioLogo className="h-[18px]" />
           </Link>
@@ -774,7 +782,7 @@ export default function ClientsPage() {
               placeholder="Search clients..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-7 pr-3 py-1.5 text-[12px] bg-[var(--glass)] backdrop-blur-sm border border-[var(--glass-border)] rounded-xl text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] focus:outline-none focus:border-[var(--accent)]/30 focus:ring-1 focus:ring-[var(--accent)]/15 transition-all"
+              className="w-full pl-7 pr-3 py-1.5 text-[12px] bg-[var(--surface)] border border-[var(--border)] rounded-xl text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]/20 transition-all"
             />
           </div>
         </div>
@@ -795,7 +803,7 @@ export default function ClientsPage() {
         </div>
 
         {/* Sidebar footer */}
-        <div className="px-5 py-3 border-t border-[var(--glass-border)]">
+        <div className="px-5 py-3 border-t border-[var(--border)]">
           <Link href="/chat" className="flex items-center gap-2 text-[11px] text-[var(--muted)] hover:text-[var(--accent)] transition-colors">
             <IconMessage className="w-3 h-3" /> Back to chat
           </Link>
@@ -813,18 +821,18 @@ export default function ClientsPage() {
             ) : (
               <motion.div
                 key={detail.id}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -6 }}
-                transition={{ duration: 0.3, ease }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.15 }}
               >
 
                 {/* ── Header ── */}
                 <div className="flex items-start justify-between mb-10">
                   <div className="flex items-center gap-5">
                     <div
-                      className="w-[52px] h-[52px] rounded-2xl flex items-center justify-center text-white text-lg font-semibold shadow-[0_8px_30px_-4px_rgba(0,0,0,0.3)] ring-1 ring-white/10"
-                      style={{ background: `linear-gradient(135deg, ${c1}, ${c2})` }}
+                      className="w-[52px] h-[52px] rounded-2xl flex items-center justify-center text-white text-lg font-semibold shadow-sm"
+                      style={{ background: avatarColor(name) }}
                     >
                       {detail.first_name[0]}{detail.last_name[0]}
                     </div>
@@ -837,7 +845,7 @@ export default function ClientsPage() {
                           </span>
                         )}
                         {detail.region && (
-                          <span className="text-[10px] font-medium uppercase tracking-wider px-2.5 py-[3px] rounded-lg bg-[var(--glass)] text-[var(--muted)] border border-[var(--glass-border)] backdrop-blur-sm">
+                          <span className="text-[10px] font-medium uppercase tracking-wider px-2.5 py-[3px] rounded-lg bg-[var(--surface)] text-[var(--muted)] border border-[var(--border)]">
                             {detail.region}
                           </span>
                         )}
@@ -881,7 +889,7 @@ export default function ClientsPage() {
                             const next = curIdx + dir;
                             if (clients[next]) setSelectedId(clients[next].id);
                           }}
-                          className="w-7 h-7 rounded-lg bg-[var(--glass)] border border-[var(--glass-border)] flex items-center justify-center text-[var(--muted)] hover:text-[var(--foreground)] hover:border-[var(--glass-border-hover)] hover:bg-[var(--glass-hover)] transition-all disabled:opacity-25 disabled:pointer-events-none backdrop-blur-sm"
+                          className="w-7 h-7 rounded-lg bg-[var(--surface)] border border-[var(--border)] flex items-center justify-center text-[var(--muted)] hover:text-[var(--foreground)] hover:border-[var(--border)] hover:bg-[var(--surface-elevated)] transition-all disabled:opacity-25 disabled:pointer-events-none"
                         >
                           <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d={d} /></svg>
                         </button>
@@ -906,21 +914,102 @@ export default function ClientsPage() {
                 )}
 
                 {/* ── Tabs ── */}
-                {tp && !showTaxForm && (
+                {!showTaxForm && (
                   <>
                     <TabBar active={activeTab} onChange={setActiveTab} />
 
                     <AnimatePresence mode="wait">
+                      {/* ══ PROFILE TAB ══ */}
+                      {activeTab === "profile" && (
+                        <motion.div
+                          key="profile"
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0 }}
+                          transition={{ duration: 0.15 }}
+                        >
+                          <div className="space-y-5">
+                            {/* Personal Information + Address */}
+                            <div className="grid grid-cols-2 gap-5">
+                              <Card title="Personal Information" icon={IconUser}>
+                                <KV label="Full Name" value={name} />
+                                <KV label="Date of Birth" value={dobStr} />
+                                <KV label="Email" value={detail.email} />
+                                <KV label="Phone" value={detail.phone} />
+                                <KV label="NI Number" value={detail.ni_number} mono />
+                                <KV label="UTR" value={detail.utr} mono />
+                                <KV label="Marital Status" value={detail.marital_status ? detail.marital_status.charAt(0).toUpperCase() + detail.marital_status.slice(1) : undefined} />
+                              </Card>
+
+                              <Card title="Address" icon={IconFileText}>
+                                <KV label="Address Line 1" value={detail.address_line_1} />
+                                <KV label="Address Line 2" value={detail.address_line_2} />
+                                <KV label="City" value={detail.city} />
+                                <KV label="Postcode" value={detail.postcode} mono />
+                                <KV label="Region" value={detail.region ? detail.region.charAt(0).toUpperCase() + detail.region.slice(1) : undefined} />
+                              </Card>
+                            </div>
+
+                            {/* Spouse + Family */}
+                            <div className="grid grid-cols-2 gap-5">
+                              {detail.spouse && (
+                                <Card title="Spouse / Partner" icon={IconUser}>
+                                  <KV label="Name" value={`${detail.spouse.first_name} ${detail.spouse.last_name}`} />
+                                  <KV label="Date of Birth" value={detail.spouse.date_of_birth ? new Date(detail.spouse.date_of_birth).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }) : undefined} />
+                                  <KV label="NI Number" value={detail.spouse.ni_number} mono />
+                                  <KV label="Employment" value={detail.spouse.employment_status ? detail.spouse.employment_status.charAt(0).toUpperCase() + detail.spouse.employment_status.slice(1) : undefined} />
+                                  <KV label="Region" value={detail.spouse.region ? detail.spouse.region.charAt(0).toUpperCase() + detail.spouse.region.slice(1) : undefined} />
+                                  <div className="mt-3 pt-3 border-t border-[var(--border-subtle)]">
+                                    <button
+                                      onClick={() => setSelectedId(detail.spouse!.id)}
+                                      className="inline-flex items-center gap-1.5 text-[12px] font-medium text-[var(--accent)] hover:text-[var(--accent-hover)] transition-colors"
+                                    >
+                                      View full profile <IconArrowRight className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                </Card>
+                              )}
+
+                              <Card title="Family" icon={IconShield}>
+                                <KV label="Children" value={detail.number_of_children != null ? String(detail.number_of_children) : "0"} />
+                                <KV label="Claims Child Benefit" value={detail.claims_child_benefit ? "Yes" : "No"} />
+                              </Card>
+                            </div>
+
+                            {/* Professional */}
+                            <Card title="Professional" icon={IconTrendingUp}>
+                              <div className="grid grid-cols-2 gap-x-8">
+                                <div>
+                                  <KV label="Employment Status" value={detail.employment_status ? detail.employment_status.charAt(0).toUpperCase() + detail.employment_status.slice(1) : undefined} />
+                                  <KV label="Employer" value={detail.employer_name} />
+                                </div>
+                                <div>
+                                  <KV label="Company Name" value={detail.company_name} />
+                                  <KV label="Company Number" value={detail.company_number} mono />
+                                </div>
+                              </div>
+                            </Card>
+
+                            {/* Notes */}
+                            {detail.notes && (
+                              <Card title="Notes" icon={IconMessage}>
+                                <p className="text-[12px] text-[var(--foreground)]/80 leading-relaxed whitespace-pre-wrap">{detail.notes}</p>
+                              </Card>
+                            )}
+                          </div>
+                        </motion.div>
+                      )}
+
                       {/* ══ OVERVIEW TAB ══ */}
-                      {activeTab === "overview" && (
+                      {activeTab === "overview" && tp && (
                         <motion.div
                           key="overview"
-                          initial={{ opacity: 0, y: 8 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: -8 }}
-                          transition={{ duration: 0.25, ease }}
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0 }}
+                          transition={{ duration: 0.15 }}
                         >
-                          <motion.div variants={stagger} initial="initial" animate="animate" className="space-y-5">
+                          <div className="space-y-5">
                             {/* Metric cards */}
                             <div className="grid grid-cols-4 gap-5">
                               <Metric label="Total Income" value={fmt(tp.total_income)} sub={sources.length > 1 ? `${sources.length} income sources` : undefined} icon={IconWallet} />
@@ -967,45 +1056,34 @@ export default function ClientsPage() {
                               warningCount={warningCount}
                               onViewIntelligence={() => setActiveTab("intelligence")}
                             />
-                          </motion.div>
+                          </div>
                         </motion.div>
                       )}
 
                       {/* ══ BREAKDOWN TAB ══ */}
-                      {activeTab === "breakdown" && (
+                      {activeTab === "breakdown" && tp && (
                         <motion.div
                           key="breakdown"
-                          initial={{ opacity: 0, y: 8 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: -8 }}
-                          transition={{ duration: 0.25, ease }}
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0 }}
+                          transition={{ duration: 0.15 }}
                         >
-                          <motion.div variants={stagger} initial="initial" animate="animate" className="space-y-5">
-                            {/* Client details + Income sources */}
-                            <div className="grid grid-cols-2 gap-5">
-                              <Card title="Client Details" icon={IconUser}>
-                                <KV label="Email" value={detail.email} />
-                                <KV label="NI Number" value={detail.ni_number} mono />
-                                <KV label="UTR" value={detail.utr} mono />
-                                <KV label="Date of Birth" value={dobStr} />
-                                <KV label="Region" value={detail.region} />
-                                <KV label="Employment" value={detail.employment_status} />
+                          <div className="space-y-5">
+                            {/* Income sources — full width */}
+                            {sources.length > 0 ? (
+                              <Card title="Income Sources" icon={IconWallet}>
+                                <IncomeBarChart sources={sources} totalIncome={tp.total_income} />
+                                <div className="mt-3 pt-3 border-t border-[var(--border-subtle)] flex items-center justify-between">
+                                  <span className="text-[12px] font-medium text-[var(--foreground)]">Total Gross Income</span>
+                                  <span className="text-[14px] font-mono font-semibold text-[var(--foreground)]">{fmt(tp.total_income)}</span>
+                                </div>
                               </Card>
-
-                              {sources.length > 0 ? (
-                                <Card title="Income Sources" icon={IconWallet}>
-                                  <IncomeBarChart sources={sources} totalIncome={tp.total_income} />
-                                  <div className="mt-3 pt-3 border-t border-[var(--border-subtle)] flex items-center justify-between">
-                                    <span className="text-[12px] font-medium text-[var(--foreground)]">Total Gross Income</span>
-                                    <span className="text-[14px] font-mono font-semibold text-[var(--foreground)]">{fmt(tp.total_income)}</span>
-                                  </div>
-                                </Card>
-                              ) : (
-                                <Card title="Income Sources" icon={IconWallet}>
-                                  <p className="text-[12px] text-[var(--muted)] py-4 text-center">No income sources recorded</p>
-                                </Card>
-                              )}
-                            </div>
+                            ) : (
+                              <Card title="Income Sources" icon={IconWallet}>
+                                <p className="text-[12px] text-[var(--muted)] py-4 text-center">No income sources recorded</p>
+                              </Card>
+                            )}
 
                             {/* Tax bands chart */}
                             {bands.length > 0 && (
@@ -1051,7 +1129,7 @@ export default function ClientsPage() {
                                 </div>
                               </Card>
                             )}
-                          </motion.div>
+                          </div>
                         </motion.div>
                       )}
 
@@ -1059,10 +1137,10 @@ export default function ClientsPage() {
                       {activeTab === "intelligence" && (
                         <motion.div
                           key="intelligence"
-                          initial={{ opacity: 0, y: 8 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: -8 }}
-                          transition={{ duration: 0.25, ease }}
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0 }}
+                          transition={{ duration: 0.15 }}
                         >
                           <IntelligenceTab
                             observations={obs}
@@ -1076,33 +1154,16 @@ export default function ClientsPage() {
                       {activeTab === "notes" && (
                         <motion.div
                           key="notes"
-                          initial={{ opacity: 0, y: 8 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: -8 }}
-                          transition={{ duration: 0.25, ease }}
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0 }}
+                          transition={{ duration: 0.15 }}
                         >
                           <MeetingNotesTimeline clientId={detail.id} />
                         </motion.div>
                       )}
                     </AnimatePresence>
                   </>
-                )}
-
-                {/* Empty state — prompt to enter tax data */}
-                {!tp && !showTaxForm && (
-                  <div className="rounded-2xl border border-dashed border-[var(--glass-border)] bg-[var(--glass)] backdrop-blur-md p-14 text-center">
-                    <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-[var(--accent)]/[0.06] border border-[var(--accent)]/[0.1] flex items-center justify-center">
-                      <IconFileText className="w-6 h-6 text-[var(--accent)]/60" />
-                    </div>
-                    <p className="text-[14px] font-medium text-[var(--foreground)]/70 mb-1">No tax profile</p>
-                    <p className="text-[12px] text-[var(--muted)] mb-5">Enter income data to calculate this client&apos;s tax position.</p>
-                    <button
-                      onClick={() => setShowTaxForm(true)}
-                      className="inline-flex items-center gap-1.5 text-[12px] font-medium text-[var(--accent)] hover:text-[var(--accent-hover)] transition-all px-4 py-2 rounded-xl bg-[var(--accent)]/[0.08] border border-[var(--accent)]/[0.12] hover:bg-[var(--accent)]/[0.12] hover:border-[var(--accent)]/[0.2]"
-                    >
-                      Enter tax data <IconArrowRight className="w-3 h-3" />
-                    </button>
-                  </div>
                 )}
 
                 {/* Tax data form — shown when no profile exists */}
