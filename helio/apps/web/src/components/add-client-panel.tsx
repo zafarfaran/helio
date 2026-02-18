@@ -47,7 +47,7 @@ const panelVariants = {
   exit: {
     x: "100%",
     opacity: 0.6,
-    transition: { duration: 0.28, ease: [0.4, 0, 1, 1] },
+    transition: { duration: 0.28, ease: [0.4, 0, 1, 1] as const },
   },
 };
 
@@ -119,23 +119,29 @@ function Field({
   error,
   children,
   hint,
+  id,
 }: {
   label: string;
   error?: string;
   children: React.ReactNode;
   hint?: string;
+  id: string;
 }) {
+  const errorId = `${id}-error`;
+  const hintId = `${id}-hint`;
   return (
     <div className="space-y-1">
-      <label className="block text-[11px] font-medium text-[var(--foreground)]/70 tracking-wide">
+      <label htmlFor={id} className="block text-[11px] font-medium text-[var(--foreground)]/70 tracking-wide">
         {label}
       </label>
       {children}
       {hint && !error && (
-        <p className="text-[10px] text-[var(--muted-foreground)]">{hint}</p>
+        <p id={hintId} className="text-[10px] text-[var(--muted-foreground)]">{hint}</p>
       )}
       {error && (
         <motion.p
+          id={errorId}
+          role="alert"
           initial={{ opacity: 0, y: -4 }}
           animate={{ opacity: 1, y: 0 }}
           className="text-[10px] text-red-500 dark:text-red-400 font-medium"
@@ -174,25 +180,29 @@ export function AddClientPanel({ isOpen, onClose, onClientAdded }: AddClientPane
       setTouched(new Set());
       setApiError(null);
       setSubmitting(false);
-      /* Focus first input after animation */
-      setTimeout(() => firstInputRef.current?.focus(), 350);
     }
   }, [isOpen]);
+
+  /* Focus first input after panel slide animation completes */
+  const handleAnimationComplete = useCallback(() => {
+    firstInputRef.current?.focus();
+  }, []);
 
   /* Field change handler */
   const set = useCallback(
     (field: keyof ClientFormData, value: string) => {
       setForm((prev) => ({ ...prev, [field]: value }));
       /* Clear error for this field on change */
-      if (errors[field]) {
-        setErrors((prev) => {
+      setErrors((prev) => {
+        if (prev[field]) {
           const next = { ...prev };
           delete next[field];
           return next;
-        });
-      }
+        }
+        return prev;
+      });
     },
-    [errors],
+    [],
   );
 
   /* Blur handler — validate single field */
@@ -263,15 +273,15 @@ export function AddClientPanel({ isOpen, onClose, onClientAdded }: AddClientPane
     }
   }, [form, onClientAdded]);
 
-  /* Keyboard: Escape to close */
+  /* Keyboard: Escape to close (guarded during submission) */
   useEffect(() => {
     if (!isOpen) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape" && !submitting) onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [isOpen, onClose]);
+  }, [isOpen, onClose, submitting]);
 
   return (
     <AnimatePresence>
@@ -284,17 +294,21 @@ export function AddClientPanel({ isOpen, onClose, onClientAdded }: AddClientPane
             initial="hidden"
             animate="visible"
             exit="exit"
-            onClick={onClose}
+            onClick={submitting ? undefined : onClose}
             className="fixed inset-0 z-40 bg-black/20 dark:bg-black/40 backdrop-blur-[2px]"
           />
 
           {/* Panel */}
           <motion.div
             key="add-client-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="add-client-title"
             variants={panelVariants}
             initial="hidden"
             animate="visible"
             exit="exit"
+            onAnimationComplete={handleAnimationComplete}
             className="fixed top-0 right-0 bottom-0 z-50 w-[480px] max-w-[90vw] bg-[var(--background)] border-l border-[var(--border)] shadow-2xl shadow-black/10 dark:shadow-black/30 flex flex-col"
           >
             {/* ── Header ── */}
@@ -303,12 +317,13 @@ export function AddClientPanel({ isOpen, onClose, onClientAdded }: AddClientPane
                 <div className="w-7 h-7 rounded-lg bg-[var(--accent)]/10 flex items-center justify-center">
                   <IconUser className="w-3.5 h-3.5 text-[var(--accent)]" />
                 </div>
-                <h2 className="text-[15px] font-semibold text-[var(--foreground)] tracking-[-0.01em]">
+                <h2 id="add-client-title" className="text-[15px] font-semibold text-[var(--foreground)] tracking-[-0.01em]">
                   Add New Client
                 </h2>
               </div>
               <button
-                onClick={onClose}
+                onClick={submitting ? undefined : onClose}
+                aria-label="Close"
                 className="w-7 h-7 rounded-lg border border-[var(--border)] flex items-center justify-center text-[var(--muted)] hover:text-[var(--foreground)] hover:border-[var(--accent)]/30 transition-colors"
               >
                 <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -317,6 +332,14 @@ export function AddClientPanel({ isOpen, onClose, onClientAdded }: AddClientPane
               </button>
             </div>
 
+            {/* ── Form wrapper ── */}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                submit();
+              }}
+              className="flex flex-col flex-1 overflow-hidden"
+            >
             {/* ── Scrollable form body ── */}
             <div className="flex-1 overflow-y-auto">
               <motion.div
@@ -351,44 +374,56 @@ export function AddClientPanel({ isOpen, onClose, onClientAdded }: AddClientPane
                   </div>
                   <div className="space-y-3">
                     <div className="grid grid-cols-2 gap-3">
-                      <Field label="First Name" error={err("first_name")}>
+                      <Field label="First Name" error={err("first_name")} id="ac-first-name">
                         <input
+                          id="ac-first-name"
                           ref={firstInputRef}
                           type="text"
                           placeholder="e.g. Sarah"
                           value={form.first_name}
                           onChange={(e) => set("first_name", e.target.value)}
                           onBlur={() => blur("first_name")}
+                          aria-invalid={!!err("first_name")}
+                          aria-describedby={err("first_name") ? "ac-first-name-error" : undefined}
                           className={`${inputClass} ${err("first_name") ? inputError : inputDefault}`}
                         />
                       </Field>
-                      <Field label="Last Name" error={err("last_name")}>
+                      <Field label="Last Name" error={err("last_name")} id="ac-last-name">
                         <input
+                          id="ac-last-name"
                           type="text"
                           placeholder="e.g. Mitchell"
                           value={form.last_name}
                           onChange={(e) => set("last_name", e.target.value)}
                           onBlur={() => blur("last_name")}
+                          aria-invalid={!!err("last_name")}
+                          aria-describedby={err("last_name") ? "ac-last-name-error" : undefined}
                           className={`${inputClass} ${err("last_name") ? inputError : inputDefault}`}
                         />
                       </Field>
                     </div>
-                    <Field label="Email Address" error={err("email")}>
+                    <Field label="Email Address" error={err("email")} id="ac-email">
                       <input
+                        id="ac-email"
                         type="email"
                         placeholder="e.g. sarah@example.com"
                         value={form.email}
                         onChange={(e) => set("email", e.target.value)}
                         onBlur={() => blur("email")}
+                        aria-invalid={!!err("email")}
+                        aria-describedby={err("email") ? "ac-email-error" : undefined}
                         className={`${inputClass} ${err("email") ? inputError : inputDefault}`}
                       />
                     </Field>
-                    <Field label="Date of Birth" error={err("date_of_birth")}>
+                    <Field label="Date of Birth" error={err("date_of_birth")} id="ac-dob">
                       <input
+                        id="ac-dob"
                         type="date"
                         value={form.date_of_birth}
                         onChange={(e) => set("date_of_birth", e.target.value)}
                         onBlur={() => blur("date_of_birth")}
+                        aria-invalid={!!err("date_of_birth")}
+                        aria-describedby={err("date_of_birth") ? "ac-dob-error" : undefined}
                         className={`${inputClass} ${err("date_of_birth") ? inputError : inputDefault}`}
                       />
                     </Field>
@@ -408,8 +443,10 @@ export function AddClientPanel({ isOpen, onClose, onClientAdded }: AddClientPane
                       label="National Insurance Number"
                       error={err("ni_number")}
                       hint="Format: AB123456C"
+                      id="ac-ni-number"
                     >
                       <input
+                        id="ac-ni-number"
                         type="text"
                         placeholder="AB123456C"
                         value={form.ni_number}
@@ -418,6 +455,8 @@ export function AddClientPanel({ isOpen, onClose, onClientAdded }: AddClientPane
                         }
                         onBlur={() => blur("ni_number")}
                         maxLength={9}
+                        aria-invalid={!!err("ni_number")}
+                        aria-describedby={err("ni_number") ? "ac-ni-number-error" : "ac-ni-number-hint"}
                         className={`${inputClass} font-mono tracking-wider ${err("ni_number") ? inputError : inputDefault}`}
                       />
                     </Field>
@@ -425,8 +464,10 @@ export function AddClientPanel({ isOpen, onClose, onClientAdded }: AddClientPane
                       label="Unique Taxpayer Reference (UTR)"
                       error={err("utr")}
                       hint="10-digit HMRC reference"
+                      id="ac-utr"
                     >
                       <input
+                        id="ac-utr"
                         type="text"
                         placeholder="1234567890"
                         value={form.utr}
@@ -435,6 +476,8 @@ export function AddClientPanel({ isOpen, onClose, onClientAdded }: AddClientPane
                         }
                         onBlur={() => blur("utr")}
                         maxLength={10}
+                        aria-invalid={!!err("utr")}
+                        aria-describedby={err("utr") ? "ac-utr-error" : "ac-utr-hint"}
                         className={`${inputClass} font-mono tracking-wider ${err("utr") ? inputError : inputDefault}`}
                       />
                     </Field>
@@ -451,8 +494,9 @@ export function AddClientPanel({ isOpen, onClose, onClientAdded }: AddClientPane
                   </div>
                   <div className="space-y-3">
                     <div className="grid grid-cols-2 gap-3">
-                      <Field label="Region" error={err("region")}>
+                      <Field label="Region" error={err("region")} id="ac-region">
                         <select
+                          id="ac-region"
                           value={form.region}
                           onChange={(e) =>
                             set("region", e.target.value)
@@ -466,8 +510,9 @@ export function AddClientPanel({ isOpen, onClose, onClientAdded }: AddClientPane
                           ))}
                         </select>
                       </Field>
-                      <Field label="Employment Status" error={err("employment_status")}>
+                      <Field label="Employment Status" error={err("employment_status")} id="ac-employment">
                         <select
+                          id="ac-employment"
                           value={form.employment_status}
                           onChange={(e) =>
                             set("employment_status", e.target.value)
@@ -516,8 +561,7 @@ export function AddClientPanel({ isOpen, onClose, onClientAdded }: AddClientPane
                 Cancel
               </button>
               <button
-                type="button"
-                onClick={submit}
+                type="submit"
                 disabled={submitting}
                 className="relative px-5 py-2 rounded-lg text-[12px] font-medium bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)] transition-all disabled:opacity-70 shadow-sm shadow-[var(--accent)]/20"
               >
@@ -534,6 +578,7 @@ export function AddClientPanel({ isOpen, onClose, onClientAdded }: AddClientPane
                 )}
               </button>
             </div>
+            </form>
           </motion.div>
         </>
       )}
