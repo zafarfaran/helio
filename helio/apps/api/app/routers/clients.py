@@ -1,15 +1,28 @@
 """Client endpoints — list clients with tax summaries and detail views."""
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from structlog.stdlib import BoundLogger
 
 from app.db.engine import get_db_session
-from app.db.models import Client, Observation, TaxProfile
+from app.db.models import Client, Household, Observation, TaxProfile
 from app.dependencies import get_request_logger
 
 router = APIRouter(tags=["clients"])
+
+
+class CreateClientRequest(BaseModel):
+    first_name: str
+    last_name: str
+    email: str
+    date_of_birth: str
+    ni_number: str
+    utr: str
+    region: str = "england"
+    employment_status: str = "employed"
+    notes: str | None = None
 
 
 @router.get("/clients")
@@ -159,4 +172,55 @@ async def get_client(
         "created_at": client.created_at.isoformat() if client.created_at else None,
         "tax_profile": tax_profile_out,
         "observations": observations_out,
+    }
+
+
+@router.post("/clients", status_code=201)
+async def create_client(
+    body: CreateClientRequest,
+    session: AsyncSession = Depends(get_db_session),
+    logger: BoundLogger = Depends(get_request_logger),
+):
+    """Create a new client with an auto-generated household."""
+    user_id = "demo-user"
+
+    logger.info("Creating client", first_name=body.first_name, last_name=body.last_name)
+
+    # Create a household for this client
+    household = Household(
+        user_id=user_id,
+        name=f"{body.last_name} Household",
+    )
+    session.add(household)
+    await session.flush()  # Get the household ID
+
+    # Create the client
+    client = Client(
+        household_id=household.id,
+        user_id=user_id,
+        first_name=body.first_name,
+        last_name=body.last_name,
+        email=body.email,
+        date_of_birth=body.date_of_birth,
+        ni_number=body.ni_number,
+        utr=body.utr,
+        region=body.region,
+        employment_status=body.employment_status,
+        metadata_={"notes": body.notes} if body.notes else {},
+    )
+    session.add(client)
+    await session.flush()
+
+    logger.info("Client created", client_id=client.id)
+
+    return {
+        "id": client.id,
+        "first_name": client.first_name,
+        "last_name": client.last_name,
+        "email": client.email,
+        "date_of_birth": client.date_of_birth,
+        "ni_number": client.ni_number,
+        "utr": client.utr,
+        "region": client.region,
+        "employment_status": client.employment_status,
     }
