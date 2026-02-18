@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { ThemeToggle } from "@/components/theme-provider";
 import { AddClientPanel } from "@/components/add-client-panel";
+import { TaxDataForm } from "@/components/tax-data-form";
 import {
   HelioLogo,
   IconUser,
@@ -514,12 +515,27 @@ export default function ClientsPage() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [search, setSearch] = useState("");
   const [showAddPanel, setShowAddPanel] = useState(false);
+  const [showTaxForm, setShowTaxForm] = useState(false);
 
   const handleClientAdded = (newClient: ClientSummary) => {
     setClients((prev) => [newClient, ...prev]);
     setSelectedId(newClient.id);
     setShowAddPanel(false);
   };
+
+  const refetchDetail = useCallback(() => {
+    if (!selectedId) return;
+    setShowTaxForm(false);
+    setDetailLoading(true);
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/clients/${selectedId}`);
+        const data: ClientDetail = await res.json();
+        setDetail(data);
+      } catch { /* noop */ }
+      finally { setDetailLoading(false); }
+    })();
+  }, [selectedId]);
 
   /* Fetch list */
   useEffect(() => {
@@ -700,8 +716,24 @@ export default function ClientsPage() {
                     </div>
                   </div>
 
-                  {/* Prev / Next */}
-                  <div className="flex items-center gap-2 pt-1">
+                  {/* Prev / Next + Edit */}
+                  <div className="flex items-center gap-3 pt-1">
+                    {tp && !showTaxForm && (
+                      <button
+                        onClick={() => setShowTaxForm(true)}
+                        className="text-[11px] font-medium text-[var(--accent)] hover:text-[var(--accent-hover)] transition-colors"
+                      >
+                        Edit tax data
+                      </button>
+                    )}
+                    {showTaxForm && (
+                      <button
+                        onClick={() => setShowTaxForm(false)}
+                        className="text-[11px] font-medium text-[var(--muted)] hover:text-[var(--foreground)] transition-colors"
+                      >
+                        Cancel edit
+                      </button>
+                    )}
                     <span className="text-[11px] font-mono text-[var(--muted)]">
                       {curIdx + 1}<span className="text-[var(--muted)]/40"> / </span>{clients.length}
                     </span>
@@ -727,7 +759,7 @@ export default function ClientsPage() {
                 </div>
 
                 {/* ── Metrics ── */}
-                {tp && (
+                {tp && !showTaxForm && (
                   <motion.div variants={stagger} initial="initial" animate="animate" className="grid grid-cols-4 gap-5 mb-8">
                     <Metric label="Total Income" value={fmt(tp.total_income)} sub={sources.length > 1 ? `${sources.length} income sources` : undefined} icon={IconWallet} />
                     <Metric label="Total Tax" value={fmtFull(tp.total_tax)} sub={`Income tax ${fmt(tp.income_tax)}`} icon={IconCalculator} />
@@ -736,8 +768,22 @@ export default function ClientsPage() {
                   </motion.div>
                 )}
 
+                {/* ── Tax data form for editing existing profile ── */}
+                {tp && showTaxForm && (
+                  <TaxDataForm
+                    clientId={detail.id}
+                    clientRegion={detail.region || "england"}
+                    onComputed={refetchDetail}
+                    existingData={{
+                      income_sources: tp.income_sources,
+                      pension_data: tp.pension_data as Record<string, unknown> | undefined,
+                      hicbc: tp.hicbc as Record<string, unknown> | undefined,
+                    }}
+                  />
+                )}
+
                 {/* ── Sections ── */}
-                <motion.div variants={stagger} initial="initial" animate="animate" className="space-y-5">
+                {!showTaxForm && <motion.div variants={stagger} initial="initial" animate="animate" className="space-y-5">
 
                   {/* Row 1: Personal + Income */}
                   <div className="grid grid-cols-2 gap-5">
@@ -849,22 +895,31 @@ export default function ClientsPage() {
                     </Card>
                   )}
 
-                  {/* Empty state */}
-                  {!tp && (
-                    <div className="rounded-xl border border-dashed border-[var(--border)] p-14 text-center">
-                      <IconFileText className="w-7 h-7 mx-auto text-[var(--muted)] mb-3" />
-                      <p className="text-[14px] font-medium text-[var(--muted)] mb-1">No tax profile</p>
-                      <p className="text-[12px] text-[var(--muted-foreground)] mb-4">Start a conversation to generate this client&apos;s tax computation.</p>
-                      <Link
-                        href="/chat"
-                        className="inline-flex items-center gap-1.5 text-[12px] font-medium text-[var(--accent)] hover:text-[var(--accent-hover)] transition-colors"
-                      >
-                        Open chat <IconArrowRight className="w-3 h-3" />
-                      </Link>
-                    </div>
-                  )}
+                </motion.div>}
 
-                </motion.div>
+                {/* Empty state — prompt to enter tax data */}
+                {!tp && !showTaxForm && (
+                  <div className="rounded-xl border border-dashed border-[var(--border)] p-14 text-center">
+                    <IconFileText className="w-7 h-7 mx-auto text-[var(--muted)] mb-3" />
+                    <p className="text-[14px] font-medium text-[var(--muted)] mb-1">No tax profile</p>
+                    <p className="text-[12px] text-[var(--muted-foreground)] mb-4">Enter income data to calculate this client&apos;s tax position.</p>
+                    <button
+                      onClick={() => setShowTaxForm(true)}
+                      className="inline-flex items-center gap-1.5 text-[12px] font-medium text-[var(--accent)] hover:text-[var(--accent-hover)] transition-colors"
+                    >
+                      Enter tax data <IconArrowRight className="w-3 h-3" />
+                    </button>
+                  </div>
+                )}
+
+                {/* Tax data form — shown when no profile exists */}
+                {!tp && showTaxForm && (
+                  <TaxDataForm
+                    clientId={detail.id}
+                    clientRegion={detail.region || "england"}
+                    onComputed={refetchDetail}
+                  />
+                )}
               </motion.div>
             )}
           </AnimatePresence>
