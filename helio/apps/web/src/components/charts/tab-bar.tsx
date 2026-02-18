@@ -1,8 +1,6 @@
 "use client";
 
-import { motion } from "framer-motion";
-
-export type TabId = "overview" | "breakdown" | "intelligence" | "notes";
+export type TabId = "profile" | "overview" | "breakdown" | "intelligence" | "notes";
 
 interface Tab {
   id: TabId;
@@ -10,6 +8,7 @@ interface Tab {
 }
 
 const TABS: Tab[] = [
+  { id: "profile", label: "Profile" },
   { id: "overview", label: "Overview" },
   { id: "breakdown", label: "Breakdown" },
   { id: "intelligence", label: "Intelligence" },
@@ -24,25 +23,21 @@ export function TabBar({
   onChange: (id: TabId) => void;
 }) {
   return (
-    <div className="flex items-center gap-1.5 mb-8 p-1 rounded-2xl bg-[var(--glass)] backdrop-blur-md border border-[var(--glass-border)] w-fit">
+    <div className="flex items-center gap-6 mb-8 border-b border-[var(--border)]">
       {TABS.map((tab) => (
         <button
           key={tab.id}
           onClick={() => onChange(tab.id)}
-          className={`relative px-4 py-2 text-[12px] font-medium rounded-xl transition-all duration-250 ${
+          className={`relative pb-3 text-[13px] font-medium transition-colors duration-150 ${
             active === tab.id
               ? "text-[var(--foreground)]"
-              : "text-[var(--muted)] hover:text-[var(--foreground)]/80"
+              : "text-[var(--muted)] hover:text-[var(--foreground)]"
           }`}
         >
+          {tab.label}
           {active === tab.id && (
-            <motion.div
-              layoutId="tab-pill"
-              className="absolute inset-0 rounded-xl bg-[var(--glass-hover)] border border-[var(--glass-border-hover)] shadow-[0_0_20px_-4px_var(--accent-glow)]"
-              transition={{ type: "spring", stiffness: 400, damping: 30 }}
-            />
+            <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-[var(--accent)] rounded-full" />
           )}
-          <span className="relative z-10">{tab.label}</span>
         </button>
       ))}
     </div>
