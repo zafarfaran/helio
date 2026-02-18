@@ -177,6 +177,28 @@ interface ClientDetail {
   observations?: Observation[];
 }
 
+interface HouseholdMember {
+  id: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  employment_status?: string;
+  total_income?: number;
+  total_tax?: number;
+  effective_rate?: number;
+}
+
+interface HouseholdSummary {
+  id: string;
+  name: string;
+  notes?: string | null;
+  member_count: number;
+  members: HouseholdMember[];
+  total_income: number;
+  total_tax: number;
+  avg_effective_rate?: number | null;
+}
+
 /* ─── Helpers ─── */
 
 const fmt = (n: number | undefined | null): string => {
@@ -317,6 +339,45 @@ function ClientRow({ client, active, onSelect }: { client: ClientSummary; active
               <>
                 <span className="text-[var(--muted)]/30 text-[8px]">&middot;</span>
                 <span className="text-[10px] font-mono text-[var(--muted)]">{fmtPct(client.effective_rate)}</span>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    </button>
+  );
+}
+
+/* ── Sidebar household row ── */
+
+function HouseholdRow({ household, active, onSelect }: { household: HouseholdSummary; active: boolean; onSelect: () => void }) {
+  return (
+    <button onClick={onSelect} className="w-full text-left group relative">
+      {active && (
+        <motion.div
+          layoutId="active-hh-indicator"
+          className="absolute left-0 top-1 bottom-1 w-[3px] rounded-full bg-brand-500"
+          transition={{ type: "spring", stiffness: 400, damping: 30 }}
+        />
+      )}
+      <div className={`flex items-center gap-3 px-4 py-3 rounded-xl ml-1 transition-all duration-200 ${
+        active ? "bg-brand-50/80 dark:bg-brand-950/20 ring-1 ring-brand-200/50 dark:ring-brand-800/30" : "hover:bg-slate-50 dark:hover:bg-zinc-900/50"
+      }`}>
+        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-100 to-violet-100 dark:from-brand-900/40 dark:to-violet-900/40 flex items-center justify-center flex-shrink-0">
+          <IconUser className="w-3.5 h-3.5 text-brand-500 dark:text-brand-400" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className={`text-[13px] font-medium truncate transition-colors ${active ? "text-slate-900 dark:text-white" : "text-slate-700 dark:text-zinc-300"}`}>
+            {household.name}
+          </p>
+          <div className="flex items-center gap-1.5 mt-0.5">
+            <span className="text-[10px] font-light text-slate-400 dark:text-zinc-500">
+              {household.member_count} {household.member_count === 1 ? "member" : "members"}
+            </span>
+            {household.total_income > 0 && (
+              <>
+                <span className="text-slate-300 dark:text-zinc-700 text-[8px]">&middot;</span>
+                <span className="text-[10px] font-mono font-light text-slate-400 dark:text-zinc-500">{fmt(household.total_income)}</span>
               </>
             )}
           </div>
@@ -624,6 +685,107 @@ function Skeleton() {
   );
 }
 
+/* ── Household detail view ── */
+
+function HouseholdDetail({
+  household,
+  onViewMember,
+}: {
+  household: HouseholdSummary;
+  onViewMember: (id: string) => void;
+}) {
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div>
+        <h1 className="text-[24px] font-semibold text-slate-900 dark:text-white tracking-[-0.025em] leading-none">
+          {household.name}
+        </h1>
+        <p className="text-[13px] font-light text-slate-400 dark:text-zinc-500 mt-2">
+          {household.member_count} {household.member_count === 1 ? "member" : "members"}
+        </p>
+        {household.notes && (
+          <p className="text-[12px] font-light text-slate-500 dark:text-zinc-400 mt-2 leading-relaxed">{household.notes}</p>
+        )}
+      </div>
+
+      {/* Combined stats */}
+      <div className="grid grid-cols-3 gap-4">
+        {[
+          { label: "Total Income", value: `£${household.total_income.toLocaleString("en-GB", { maximumFractionDigits: 0 })}` },
+          { label: "Total Tax", value: `£${household.total_tax.toLocaleString("en-GB", { maximumFractionDigits: 0 })}` },
+          { label: "Avg Effective Rate", value: household.avg_effective_rate != null ? `${household.avg_effective_rate}%` : "—" },
+        ].map(({ label, value }) => (
+          <div key={label} className="refined-card rounded-xl p-5">
+            <p className="text-[10px] font-medium text-slate-400 dark:text-zinc-500 uppercase tracking-[0.08em] mb-3">{label}</p>
+            <p className="text-[22px] font-semibold font-mono tracking-tight text-slate-900 dark:text-white leading-none">{value}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Members */}
+      <div>
+        <h2 className="text-[13px] font-semibold text-slate-900 dark:text-white mb-3">Members</h2>
+        <div className="grid grid-cols-2 gap-4">
+          {household.members.map((member) => {
+            const [g1, g2] = avatarGradient(`${member.first_name} ${member.last_name}`);
+            return (
+              <div key={member.id} className="refined-card rounded-xl p-4 group">
+                <div className="flex items-center gap-3 mb-3">
+                  <div
+                    className="w-10 h-10 rounded-xl flex items-center justify-center text-white text-[13px] font-semibold shadow-sm shadow-brand-500/20"
+                    style={{ background: `linear-gradient(135deg, ${g1}, ${g2})` }}
+                  >
+                    {member.first_name[0]}{member.last_name[0]}
+                  </div>
+                  <div>
+                    <p className="text-[14px] font-medium text-slate-900 dark:text-white">{member.first_name} {member.last_name}</p>
+                    {member.employment_status && (
+                      <span className="text-[10px] font-medium text-brand-600 dark:text-brand-400 bg-brand-50 dark:bg-brand-950/30 px-1.5 py-[1px] rounded">
+                        {member.employment_status}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-4 mb-3">
+                  {member.total_income != null && (
+                    <div>
+                      <p className="text-[9px] font-light text-slate-400 dark:text-zinc-500 uppercase tracking-wider">Income</p>
+                      <p className="text-[14px] font-mono font-medium text-slate-900 dark:text-white">
+                        £{member.total_income.toLocaleString("en-GB", { maximumFractionDigits: 0 })}
+                      </p>
+                    </div>
+                  )}
+                  {member.effective_rate != null && (
+                    <div>
+                      <p className="text-[9px] font-light text-slate-400 dark:text-zinc-500 uppercase tracking-wider">Effective</p>
+                      <p className="text-[14px] font-mono font-medium text-slate-900 dark:text-white">{member.effective_rate.toFixed(1)}%</p>
+                    </div>
+                  )}
+                  {member.total_tax != null && (
+                    <div>
+                      <p className="text-[9px] font-light text-slate-400 dark:text-zinc-500 uppercase tracking-wider">Tax</p>
+                      <p className="text-[14px] font-mono font-medium text-slate-900 dark:text-white">
+                        £{member.total_tax.toLocaleString("en-GB", { maximumFractionDigits: 0 })}
+                      </p>
+                    </div>
+                  )}
+                </div>
+                <button
+                  onClick={() => onViewMember(member.id)}
+                  className="flex items-center gap-1 text-[11px] font-medium text-brand-500 dark:text-brand-400 hover:text-brand-600 dark:hover:text-brand-300 transition-colors"
+                >
+                  View profile <IconArrowRight className="w-3 h-3" />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ════════════════════════════════════════════════════════════════
    MAIN PAGE
    ════════════════════════════════════════════════════════════════ */
@@ -638,6 +800,10 @@ export default function ClientsPage() {
   const [showAddPanel, setShowAddPanel] = useState(false);
   const [showTaxForm, setShowTaxForm] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>("profile");
+  const [sidebarMode, setSidebarMode] = useState<"clients" | "households">("clients");
+  const [households, setHouseholds] = useState<HouseholdSummary[]>([]);
+  const [selectedHouseholdId, setSelectedHouseholdId] = useState<string | null>(null);
+  const [householdsLoading, setHouseholdsLoading] = useState(true);
 
   const handleClientAdded = (newClient: ClientSummary) => {
     setClients((prev) => [newClient, ...prev]);
@@ -659,17 +825,29 @@ export default function ClientsPage() {
     })();
   }, [selectedId]);
 
-  /* Fetch list */
+  /* Fetch lists */
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch(`${API_BASE}/api/clients`);
-        const data = await res.json();
-        const list: ClientSummary[] = data.clients || [];
+        const [clientsRes, householdsRes] = await Promise.all([
+          fetch(`${API_BASE}/api/clients`),
+          fetch(`${API_BASE}/api/households`),
+        ]);
+        const clientsData = await clientsRes.json();
+        const householdsData = await householdsRes.json();
+
+        const list: ClientSummary[] = clientsData.clients || [];
         setClients(list);
         if (list.length > 0) setSelectedId(list[0].id);
+
+        const hhList: HouseholdSummary[] = householdsData.households || [];
+        setHouseholds(hhList);
+        if (hhList.length > 0) setSelectedHouseholdId(hhList[0].id);
       } catch { /* noop */ }
-      finally { setLoading(false); }
+      finally {
+        setLoading(false);
+        setHouseholdsLoading(false);
+      }
     })();
   }, []);
 
@@ -714,6 +892,22 @@ export default function ClientsPage() {
       `${c.first_name} ${c.last_name} ${c.email}`.toLowerCase().includes(q)
     );
   }, [clients, search]);
+
+  const filteredHouseholds = useMemo(() => {
+    if (!search.trim()) return households;
+    const q = search.toLowerCase();
+    return households.filter((h) => h.name.toLowerCase().includes(q));
+  }, [households, search]);
+
+  const selectedHousehold = useMemo(
+    () => households.find((h) => h.id === selectedHouseholdId) || null,
+    [households, selectedHouseholdId]
+  );
+
+  const viewMemberProfile = useCallback((memberId: string) => {
+    setSidebarMode("clients");
+    setSelectedId(memberId);
+  }, []);
 
   /* Delete observation handler */
   const handleDeleteObservation = useCallback(async (obsId: string) => {
@@ -766,7 +960,21 @@ export default function ClientsPage() {
         {/* Search + Add */}
         <div className="px-4 py-3">
           <div className="flex items-center gap-2 mb-2">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--muted)] flex-1">Clients</span>
+            <div className="flex items-center gap-1 flex-1 p-0.5 rounded-lg bg-slate-100/80 dark:bg-zinc-800/50">
+              {(["clients", "households"] as const).map((mode) => (
+                <button
+                  key={mode}
+                  onClick={() => setSidebarMode(mode)}
+                  className={`flex-1 text-[10px] font-medium py-1 rounded-md transition-all duration-150 ${
+                    sidebarMode === mode
+                      ? "bg-white dark:bg-zinc-700 text-slate-900 dark:text-white shadow-sm"
+                      : "text-slate-400 dark:text-zinc-500 hover:text-slate-600 dark:hover:text-zinc-300"
+                  }`}
+                >
+                  {mode === "clients" ? "Clients" : "Households"}
+                </button>
+              ))}
+            </div>
             <button
               onClick={() => setShowAddPanel(true)}
               className="w-6 h-6 rounded-lg bg-brand-500 hover:bg-brand-600 flex items-center justify-center text-white transition-colors"
@@ -789,16 +997,34 @@ export default function ClientsPage() {
 
         {/* List */}
         <div className="flex-1 overflow-y-auto pb-2">
-          {loading ? (
-            <div className="space-y-1 px-3 animate-pulse">
-              {[...Array(6)].map((_, i) => <div key={i} className="h-12 rounded-lg bg-[var(--surface)]" />)}
-            </div>
-          ) : filtered.length === 0 ? (
-            <p className="text-center text-[12px] text-[var(--muted)] py-8">No clients found</p>
+          {sidebarMode === "clients" ? (
+            <>
+              {loading ? (
+                <div className="space-y-1 px-3 animate-pulse">
+                  {[...Array(6)].map((_, i) => <div key={i} className="h-12 rounded-lg bg-[var(--surface)]" />)}
+                </div>
+              ) : filtered.length === 0 ? (
+                <p className="text-center text-[12px] text-slate-400 dark:text-zinc-500 font-light py-8">No clients found</p>
+              ) : (
+                filtered.map((c) => (
+                  <ClientRow key={c.id} client={c} active={c.id === selectedId} onSelect={() => setSelectedId(c.id)} />
+                ))
+              )}
+            </>
           ) : (
-            filtered.map((c) => (
-              <ClientRow key={c.id} client={c} active={c.id === selectedId} onSelect={() => setSelectedId(c.id)} />
-            ))
+            <>
+              {householdsLoading ? (
+                <div className="space-y-1 px-3 animate-pulse">
+                  {[...Array(4)].map((_, i) => <div key={i} className="h-12 rounded-lg bg-[var(--surface)]" />)}
+                </div>
+              ) : filteredHouseholds.length === 0 ? (
+                <p className="text-center text-[12px] text-slate-400 dark:text-zinc-500 font-light py-8">No households found</p>
+              ) : (
+                filteredHouseholds.map((h) => (
+                  <HouseholdRow key={h.id} household={h} active={h.id === selectedHouseholdId} onSelect={() => setSelectedHouseholdId(h.id)} />
+                ))
+              )}
+            </>
           )}
         </div>
 
@@ -813,370 +1039,393 @@ export default function ClientsPage() {
       {/* ═══════════ MAIN ═══════════ */}
       <main className="flex-1 overflow-y-auto relative z-10">
         <div className="max-w-[860px] mx-auto px-10 py-10">
-          <AnimatePresence mode="wait">
-            {detailLoading || !detail ? (
-              <motion.div key="skel" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                <Skeleton />
-              </motion.div>
-            ) : (
-              <motion.div
-                key={detail.id}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.15 }}
-              >
+          {sidebarMode === "clients" ? (
+            <AnimatePresence mode="wait">
+              {detailLoading || !detail ? (
+                <motion.div key="skel" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                  <Skeleton />
+                </motion.div>
+              ) : (
+                <motion.div
+                  key={detail.id}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.15 }}
+                >
 
-                {/* ── Header ── */}
-                <div className="flex items-start justify-between mb-10">
-                  <div className="flex items-center gap-5">
-                    <div
-                      className="w-[52px] h-[52px] rounded-2xl flex items-center justify-center text-white text-lg font-semibold shadow-sm shadow-brand-500/20"
-                      style={{ background: `linear-gradient(135deg, ${avatarGradient(name)[0]}, ${avatarGradient(name)[1]})` }}
-                    >
-                      {detail.first_name[0]}{detail.last_name[0]}
+                  {/* ── Header ── */}
+                  <div className="flex items-start justify-between mb-10">
+                    <div className="flex items-center gap-5">
+                      <div
+                        className="w-[52px] h-[52px] rounded-2xl flex items-center justify-center text-white text-lg font-semibold shadow-sm shadow-brand-500/20"
+                        style={{ background: `linear-gradient(135deg, ${avatarGradient(name)[0]}, ${avatarGradient(name)[1]})` }}
+                      >
+                        {detail.first_name[0]}{detail.last_name[0]}
+                      </div>
+                      <div>
+                        <h1 className="text-[24px] font-semibold text-[var(--foreground)] tracking-[-0.025em] leading-none">{name}</h1>
+                        <div className="flex items-center gap-2 mt-2">
+                          {detail.employment_status && (
+                            <span className="text-[10px] font-semibold uppercase tracking-wider px-2.5 py-[3px] rounded-lg bg-brand-50 dark:bg-brand-950/30 text-brand-600 dark:text-brand-400 border border-brand-200/40 dark:border-brand-800/30">
+                              {detail.employment_status}
+                            </span>
+                          )}
+                          {detail.region && (
+                            <span className="text-[10px] font-medium uppercase tracking-wider px-2.5 py-[3px] rounded-lg bg-slate-50 dark:bg-zinc-900/50 text-slate-500 dark:text-zinc-400 border border-slate-200/40 dark:border-zinc-800/30">
+                              {detail.region}
+                            </span>
+                          )}
+                          {tp?.tax_year && (
+                            <span className="text-[10px] font-mono text-[var(--muted)]">{tp.tax_year}</span>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                    <div>
-                      <h1 className="text-[24px] font-semibold text-[var(--foreground)] tracking-[-0.025em] leading-none">{name}</h1>
-                      <div className="flex items-center gap-2 mt-2">
-                        {detail.employment_status && (
-                          <span className="text-[10px] font-semibold uppercase tracking-wider px-2.5 py-[3px] rounded-lg bg-brand-50 dark:bg-brand-950/30 text-brand-600 dark:text-brand-400 border border-brand-200/40 dark:border-brand-800/30">
-                            {detail.employment_status}
-                          </span>
-                        )}
-                        {detail.region && (
-                          <span className="text-[10px] font-medium uppercase tracking-wider px-2.5 py-[3px] rounded-lg bg-slate-50 dark:bg-zinc-900/50 text-slate-500 dark:text-zinc-400 border border-slate-200/40 dark:border-zinc-800/30">
-                            {detail.region}
-                          </span>
-                        )}
-                        {tp?.tax_year && (
-                          <span className="text-[10px] font-mono text-[var(--muted)]">{tp.tax_year}</span>
-                        )}
+
+                    {/* Prev / Next + Edit */}
+                    <div className="flex items-center gap-3 pt-1">
+                      {tp && !showTaxForm && (
+                        <button
+                          onClick={() => setShowTaxForm(true)}
+                          className="text-[11px] font-medium text-brand-500 dark:text-brand-400 hover:text-brand-600 dark:hover:text-brand-300 transition-colors"
+                        >
+                          Edit tax data
+                        </button>
+                      )}
+                      {showTaxForm && (
+                        <button
+                          onClick={() => setShowTaxForm(false)}
+                          className="text-[11px] font-medium text-slate-400 dark:text-zinc-500 hover:text-slate-700 dark:hover:text-zinc-300 transition-colors"
+                        >
+                          Cancel edit
+                        </button>
+                      )}
+                      <span className="text-[11px] font-mono text-[var(--muted)]">
+                        {curIdx + 1}<span className="text-[var(--muted)]/40"> / </span>{clients.length}
+                      </span>
+                      <div className="flex gap-1">
+                        {[
+                          { dir: -1, d: "M15 18l-6-6 6-6", disabled: curIdx <= 0 },
+                          { dir: 1, d: "M9 18l6-6-6-6", disabled: curIdx >= clients.length - 1 },
+                        ].map(({ dir, d, disabled }) => (
+                          <button
+                            key={dir}
+                            disabled={disabled}
+                            onClick={() => {
+                              const next = curIdx + dir;
+                              if (clients[next]) setSelectedId(clients[next].id);
+                            }}
+                            className="w-7 h-7 rounded-lg bg-white dark:bg-zinc-900 border border-slate-200/60 dark:border-zinc-800/60 flex items-center justify-center text-slate-400 dark:text-zinc-500 hover:text-slate-700 dark:hover:text-zinc-300 hover:border-slate-300 dark:hover:border-zinc-700 transition-all disabled:opacity-25 disabled:pointer-events-none"
+                          >
+                            <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d={d} /></svg>
+                          </button>
+                        ))}
                       </div>
                     </div>
                   </div>
 
-                  {/* Prev / Next + Edit */}
-                  <div className="flex items-center gap-3 pt-1">
-                    {tp && !showTaxForm && (
-                      <button
-                        onClick={() => setShowTaxForm(true)}
-                        className="text-[11px] font-medium text-brand-500 dark:text-brand-400 hover:text-brand-600 dark:hover:text-brand-300 transition-colors"
-                      >
-                        Edit tax data
-                      </button>
-                    )}
-                    {showTaxForm && (
-                      <button
-                        onClick={() => setShowTaxForm(false)}
-                        className="text-[11px] font-medium text-slate-400 dark:text-zinc-500 hover:text-slate-700 dark:hover:text-zinc-300 transition-colors"
-                      >
-                        Cancel edit
-                      </button>
-                    )}
-                    <span className="text-[11px] font-mono text-[var(--muted)]">
-                      {curIdx + 1}<span className="text-[var(--muted)]/40"> / </span>{clients.length}
-                    </span>
-                    <div className="flex gap-1">
-                      {[
-                        { dir: -1, d: "M15 18l-6-6 6-6", disabled: curIdx <= 0 },
-                        { dir: 1, d: "M9 18l6-6-6-6", disabled: curIdx >= clients.length - 1 },
-                      ].map(({ dir, d, disabled }) => (
-                        <button
-                          key={dir}
-                          disabled={disabled}
-                          onClick={() => {
-                            const next = curIdx + dir;
-                            if (clients[next]) setSelectedId(clients[next].id);
-                          }}
-                          className="w-7 h-7 rounded-lg bg-white dark:bg-zinc-900 border border-slate-200/60 dark:border-zinc-800/60 flex items-center justify-center text-slate-400 dark:text-zinc-500 hover:text-slate-700 dark:hover:text-zinc-300 hover:border-slate-300 dark:hover:border-zinc-700 transition-all disabled:opacity-25 disabled:pointer-events-none"
-                        >
-                          <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d={d} /></svg>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
+                  {/* ── Tax data form for editing existing profile ── */}
+                  {tp && showTaxForm && (
+                    <TaxDataForm
+                      clientId={detail.id}
+                      clientRegion={detail.region || "england"}
+                      onComputed={refetchDetail}
+                      existingData={{
+                        income_sources: tp.income_sources,
+                        pension_data: tp.pension_data as Record<string, unknown> | undefined,
+                        hicbc: tp.hicbc as Record<string, unknown> | undefined,
+                        allowances: tp.allowances as Array<{ type?: string; used?: number }> | undefined,
+                      }}
+                    />
+                  )}
 
-                {/* ── Tax data form for editing existing profile ── */}
-                {tp && showTaxForm && (
-                  <TaxDataForm
-                    clientId={detail.id}
-                    clientRegion={detail.region || "england"}
-                    onComputed={refetchDetail}
-                    existingData={{
-                      income_sources: tp.income_sources,
-                      pension_data: tp.pension_data as Record<string, unknown> | undefined,
-                      hicbc: tp.hicbc as Record<string, unknown> | undefined,
-                      allowances: tp.allowances as Array<{ type?: string; used?: number }> | undefined,
-                    }}
-                  />
-                )}
+                  {/* ── Tabs ── */}
+                  {!showTaxForm && (
+                    <>
+                      <TabBar active={activeTab} onChange={setActiveTab} />
 
-                {/* ── Tabs ── */}
-                {!showTaxForm && (
-                  <>
-                    <TabBar active={activeTab} onChange={setActiveTab} />
+                      <AnimatePresence mode="wait">
+                        {/* ══ PROFILE TAB ══ */}
+                        {activeTab === "profile" && (
+                          <motion.div
+                            key="profile"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: 0.15 }}
+                          >
+                            <div className="space-y-5">
+                              {/* Personal Information + Address */}
+                              <div className="grid grid-cols-2 gap-5">
+                                <Card title="Personal Information" icon={IconUser}>
+                                  <KV label="Full Name" value={name} />
+                                  <KV label="Date of Birth" value={dobStr} />
+                                  <KV label="Email" value={detail.email} />
+                                  <KV label="Phone" value={detail.phone} />
+                                  <KV label="NI Number" value={detail.ni_number} mono />
+                                  <KV label="UTR" value={detail.utr} mono />
+                                  <KV label="Marital Status" value={detail.marital_status ? detail.marital_status.charAt(0).toUpperCase() + detail.marital_status.slice(1) : undefined} />
+                                </Card>
 
-                    <AnimatePresence mode="wait">
-                      {/* ══ PROFILE TAB ══ */}
-                      {activeTab === "profile" && (
-                        <motion.div
-                          key="profile"
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          exit={{ opacity: 0 }}
-                          transition={{ duration: 0.15 }}
-                        >
-                          <div className="space-y-5">
-                            {/* Personal Information + Address */}
-                            <div className="grid grid-cols-2 gap-5">
-                              <Card title="Personal Information" icon={IconUser}>
-                                <KV label="Full Name" value={name} />
-                                <KV label="Date of Birth" value={dobStr} />
-                                <KV label="Email" value={detail.email} />
-                                <KV label="Phone" value={detail.phone} />
-                                <KV label="NI Number" value={detail.ni_number} mono />
-                                <KV label="UTR" value={detail.utr} mono />
-                                <KV label="Marital Status" value={detail.marital_status ? detail.marital_status.charAt(0).toUpperCase() + detail.marital_status.slice(1) : undefined} />
+                                <Card title="Address" icon={IconFileText}>
+                                  <KV label="Address Line 1" value={detail.address_line_1} />
+                                  <KV label="Address Line 2" value={detail.address_line_2} />
+                                  <KV label="City" value={detail.city} />
+                                  <KV label="Postcode" value={detail.postcode} mono />
+                                  <KV label="Region" value={detail.region ? detail.region.charAt(0).toUpperCase() + detail.region.slice(1) : undefined} />
+                                </Card>
+                              </div>
+
+                              {/* Spouse + Family */}
+                              <div className="grid grid-cols-2 gap-5">
+                                {detail.spouse && (
+                                  <Card title="Spouse / Partner" icon={IconUser}>
+                                    <KV label="Name" value={`${detail.spouse.first_name} ${detail.spouse.last_name}`} />
+                                    <KV label="Date of Birth" value={detail.spouse.date_of_birth ? new Date(detail.spouse.date_of_birth).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }) : undefined} />
+                                    <KV label="NI Number" value={detail.spouse.ni_number} mono />
+                                    <KV label="Employment" value={detail.spouse.employment_status ? detail.spouse.employment_status.charAt(0).toUpperCase() + detail.spouse.employment_status.slice(1) : undefined} />
+                                    <KV label="Region" value={detail.spouse.region ? detail.spouse.region.charAt(0).toUpperCase() + detail.spouse.region.slice(1) : undefined} />
+                                    <div className="mt-3 pt-3 border-t border-[var(--border-subtle)]">
+                                      <button
+                                        onClick={() => setSelectedId(detail.spouse!.id)}
+                                        className="inline-flex items-center gap-1.5 text-[12px] font-medium text-brand-500 dark:text-brand-400 hover:text-brand-600 dark:hover:text-brand-300 transition-colors"
+                                      >
+                                        View full profile <IconArrowRight className="w-3 h-3" />
+                                      </button>
+                                    </div>
+                                  </Card>
+                                )}
+
+                                <Card title="Family" icon={IconShield}>
+                                  <KV label="Children" value={detail.number_of_children != null ? String(detail.number_of_children) : "0"} />
+                                  <KV label="Claims Child Benefit" value={detail.claims_child_benefit ? "Yes" : "No"} />
+                                </Card>
+                              </div>
+
+                              {/* Professional */}
+                              <Card title="Professional" icon={IconTrendingUp}>
+                                <div className="grid grid-cols-2 gap-x-8">
+                                  <div>
+                                    <KV label="Employment Status" value={detail.employment_status ? detail.employment_status.charAt(0).toUpperCase() + detail.employment_status.slice(1) : undefined} />
+                                    <KV label="Employer" value={detail.employer_name} />
+                                  </div>
+                                  <div>
+                                    <KV label="Company Name" value={detail.company_name} />
+                                    <KV label="Company Number" value={detail.company_number} mono />
+                                  </div>
+                                </div>
                               </Card>
 
-                              <Card title="Address" icon={IconFileText}>
-                                <KV label="Address Line 1" value={detail.address_line_1} />
-                                <KV label="Address Line 2" value={detail.address_line_2} />
-                                <KV label="City" value={detail.city} />
-                                <KV label="Postcode" value={detail.postcode} mono />
-                                <KV label="Region" value={detail.region ? detail.region.charAt(0).toUpperCase() + detail.region.slice(1) : undefined} />
-                              </Card>
+                              {/* Notes */}
+                              {detail.notes && (
+                                <Card title="Notes" icon={IconMessage}>
+                                  <p className="text-[12px] text-[var(--foreground)]/80 leading-relaxed whitespace-pre-wrap">{detail.notes}</p>
+                                </Card>
+                              )}
                             </div>
+                          </motion.div>
+                        )}
 
-                            {/* Spouse + Family */}
-                            <div className="grid grid-cols-2 gap-5">
-                              {detail.spouse && (
-                                <Card title="Spouse / Partner" icon={IconUser}>
-                                  <KV label="Name" value={`${detail.spouse.first_name} ${detail.spouse.last_name}`} />
-                                  <KV label="Date of Birth" value={detail.spouse.date_of_birth ? new Date(detail.spouse.date_of_birth).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }) : undefined} />
-                                  <KV label="NI Number" value={detail.spouse.ni_number} mono />
-                                  <KV label="Employment" value={detail.spouse.employment_status ? detail.spouse.employment_status.charAt(0).toUpperCase() + detail.spouse.employment_status.slice(1) : undefined} />
-                                  <KV label="Region" value={detail.spouse.region ? detail.spouse.region.charAt(0).toUpperCase() + detail.spouse.region.slice(1) : undefined} />
-                                  <div className="mt-3 pt-3 border-t border-[var(--border-subtle)]">
-                                    <button
-                                      onClick={() => setSelectedId(detail.spouse!.id)}
-                                      className="inline-flex items-center gap-1.5 text-[12px] font-medium text-brand-500 dark:text-brand-400 hover:text-brand-600 dark:hover:text-brand-300 transition-colors"
-                                    >
-                                      View full profile <IconArrowRight className="w-3 h-3" />
-                                    </button>
+                        {/* ══ OVERVIEW TAB ══ */}
+                        {activeTab === "overview" && tp && (
+                          <motion.div
+                            key="overview"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: 0.15 }}
+                          >
+                            <div className="space-y-5">
+                              {/* Metric cards */}
+                              <div className="grid grid-cols-4 gap-5">
+                                <Metric label="Total Income" value={fmt(tp.total_income)} sub={sources.length > 1 ? `${sources.length} income sources` : undefined} icon={IconWallet} />
+                                <Metric label="Total Tax" value={fmtFull(tp.total_tax)} sub={`Income tax ${fmt(tp.income_tax)}`} icon={IconCalculator} />
+                                <Metric label="Effective Rate" value={fmtPct(tp.effective_rate)} sub="Overall tax burden" icon={IconChart} />
+                                <Metric label="Marginal Rate" value={fmtPct(tp.marginal_rate)} sub="Next pound earned" icon={IconTrendingUp} />
+                              </div>
+
+                              {/* Net income takeaway */}
+                              <NetIncomeBar
+                                grossIncome={tp.total_income}
+                                totalTax={tp.total_tax - tp.national_insurance}
+                                nationalInsurance={tp.national_insurance}
+                                netIncome={netIncome}
+                              />
+
+                              {/* Charts row: Donut + Waterfall */}
+                              <div className="grid grid-cols-2 gap-5">
+                                <Card title="Tax Composition" icon={IconChart}>
+                                  <TaxDonutChart
+                                    incomeTax={tp.income_tax}
+                                    nationalInsurance={tp.national_insurance}
+                                    dividendTax={tp.dividend_tax}
+                                    hicbcCharge={hicbcChargeAmt}
+                                  />
+                                </Card>
+                                <Card title="Income to Net Flow" icon={IconTrendingUp}>
+                                  <WaterfallChart
+                                    grossIncome={tp.total_income}
+                                    personalAllowance={tp.personal_allowance || 12570}
+                                    taxableIncome={tp.taxable_income || 0}
+                                    incomeTax={tp.income_tax}
+                                    nationalInsurance={tp.national_insurance}
+                                    dividendTax={tp.dividend_tax}
+                                    netIncome={netIncome}
+                                  />
+                                </Card>
+                              </div>
+
+                              {/* Savings banner (links to intelligence tab) */}
+                              <SavingsBanner
+                                totalSavings={totalSavings}
+                                opportunityCount={opportunityCount}
+                                warningCount={warningCount}
+                                onViewIntelligence={() => setActiveTab("intelligence")}
+                              />
+                            </div>
+                          </motion.div>
+                        )}
+
+                        {/* ══ BREAKDOWN TAB ══ */}
+                        {activeTab === "breakdown" && tp && (
+                          <motion.div
+                            key="breakdown"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: 0.15 }}
+                          >
+                            <div className="space-y-5">
+                              {/* Income sources — full width */}
+                              {sources.length > 0 ? (
+                                <Card title="Income Sources" icon={IconWallet}>
+                                  <IncomeBarChart sources={sources} totalIncome={tp.total_income} />
+                                  <div className="mt-3 pt-3 border-t border-[var(--border-subtle)] flex items-center justify-between">
+                                    <span className="text-[12px] font-medium text-[var(--foreground)]">Total Gross Income</span>
+                                    <span className="text-[14px] font-mono font-semibold text-[var(--foreground)]">{fmt(tp.total_income)}</span>
+                                  </div>
+                                </Card>
+                              ) : (
+                                <Card title="Income Sources" icon={IconWallet}>
+                                  <p className="text-[12px] text-[var(--muted)] py-4 text-center">No income sources recorded</p>
+                                </Card>
+                              )}
+
+                              {/* Tax bands chart */}
+                              {bands.length > 0 && (
+                                <Card title="Income Tax by Band" icon={IconCalculator}>
+                                  <TaxBandsChart bands={bands} />
+                                  <div className="mt-4 pt-4 border-t border-[var(--border)] flex items-center justify-between">
+                                    <span className="text-[13px] font-semibold text-[var(--foreground)]">Total Income Tax</span>
+                                    <span className="text-[16px] font-mono font-bold text-[var(--foreground)]">{fmtFull(tp.income_tax)}</span>
                                   </div>
                                 </Card>
                               )}
 
-                              <Card title="Family" icon={IconShield}>
-                                <KV label="Children" value={detail.number_of_children != null ? String(detail.number_of_children) : "0"} />
-                                <KV label="Claims Child Benefit" value={detail.claims_child_benefit ? "Yes" : "No"} />
-                              </Card>
-                            </div>
-
-                            {/* Professional */}
-                            <Card title="Professional" icon={IconTrendingUp}>
-                              <div className="grid grid-cols-2 gap-x-8">
-                                <div>
-                                  <KV label="Employment Status" value={detail.employment_status ? detail.employment_status.charAt(0).toUpperCase() + detail.employment_status.slice(1) : undefined} />
-                                  <KV label="Employer" value={detail.employer_name} />
+                              {/* NI + Allowances */}
+                              {((ni && ni.total > 0) || allowances.length > 0) && (
+                                <div className="grid grid-cols-2 gap-5">
+                                  {ni && ni.total > 0 && (
+                                    <Card title="National Insurance" icon={IconShield}>
+                                      <NIDonutChart class1={ni.class1} class2={ni.class2} class4={ni.class4} total={ni.total} />
+                                    </Card>
+                                  )}
+                                  {allowances.length > 0 && (
+                                    <Card title="Allowances" icon={IconShield}>
+                                      <AllowancesRadialChart allowances={allowances} />
+                                    </Card>
+                                  )}
                                 </div>
-                                <div>
-                                  <KV label="Company Name" value={detail.company_name} />
-                                  <KV label="Company Number" value={detail.company_number} mono />
-                                </div>
-                              </div>
-                            </Card>
+                              )}
 
-                            {/* Notes */}
-                            {detail.notes && (
-                              <Card title="Notes" icon={IconMessage}>
-                                <p className="text-[12px] text-[var(--foreground)]/80 leading-relaxed whitespace-pre-wrap">{detail.notes}</p>
-                              </Card>
-                            )}
-                          </div>
-                        </motion.div>
-                      )}
-
-                      {/* ══ OVERVIEW TAB ══ */}
-                      {activeTab === "overview" && tp && (
-                        <motion.div
-                          key="overview"
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          exit={{ opacity: 0 }}
-                          transition={{ duration: 0.15 }}
-                        >
-                          <div className="space-y-5">
-                            {/* Metric cards */}
-                            <div className="grid grid-cols-4 gap-5">
-                              <Metric label="Total Income" value={fmt(tp.total_income)} sub={sources.length > 1 ? `${sources.length} income sources` : undefined} icon={IconWallet} />
-                              <Metric label="Total Tax" value={fmtFull(tp.total_tax)} sub={`Income tax ${fmt(tp.income_tax)}`} icon={IconCalculator} />
-                              <Metric label="Effective Rate" value={fmtPct(tp.effective_rate)} sub="Overall tax burden" icon={IconChart} />
-                              <Metric label="Marginal Rate" value={fmtPct(tp.marginal_rate)} sub="Next pound earned" icon={IconTrendingUp} />
+                              {/* HICBC */}
+                              {(tp.hicbc_applies || tp.hicbc?.applies) && tp.hicbc && (
+                                <Card title="High Income Child Benefit Charge" icon={IconAlertCircle}>
+                                  <div className="grid grid-cols-3 gap-5">
+                                    {[
+                                      { label: "Child Benefit", value: fmtFull(hicbcBenefit(tp.hicbc)), color: "" },
+                                      { label: "Clawback", value: `${hicbcClawback(tp.hicbc)}%`, color: "text-amber-600 dark:text-amber-400" },
+                                      { label: "HICBC Charge", value: fmtFull(hicbcCharge(tp.hicbc)), color: "text-red-600 dark:text-red-400" },
+                                    ].map(({ label, value, color }) => (
+                                      <div key={label}>
+                                        <p className="text-[10px] font-medium uppercase tracking-wider text-[var(--muted)] mb-1">{label}</p>
+                                        <p className={`text-[15px] font-mono font-semibold ${color || "text-[var(--foreground)]"}`}>{value}</p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </Card>
+                              )}
                             </div>
+                          </motion.div>
+                        )}
 
-                            {/* Net income takeaway */}
-                            <NetIncomeBar
-                              grossIncome={tp.total_income}
-                              totalTax={tp.total_tax - tp.national_insurance}
-                              nationalInsurance={tp.national_insurance}
-                              netIncome={netIncome}
-                            />
-
-                            {/* Charts row: Donut + Waterfall */}
-                            <div className="grid grid-cols-2 gap-5">
-                              <Card title="Tax Composition" icon={IconChart}>
-                                <TaxDonutChart
-                                  incomeTax={tp.income_tax}
-                                  nationalInsurance={tp.national_insurance}
-                                  dividendTax={tp.dividend_tax}
-                                  hicbcCharge={hicbcChargeAmt}
-                                />
-                              </Card>
-                              <Card title="Income to Net Flow" icon={IconTrendingUp}>
-                                <WaterfallChart
-                                  grossIncome={tp.total_income}
-                                  personalAllowance={tp.personal_allowance || 12570}
-                                  taxableIncome={tp.taxable_income || 0}
-                                  incomeTax={tp.income_tax}
-                                  nationalInsurance={tp.national_insurance}
-                                  dividendTax={tp.dividend_tax}
-                                  netIncome={netIncome}
-                                />
-                              </Card>
-                            </div>
-
-                            {/* Savings banner (links to intelligence tab) */}
-                            <SavingsBanner
+                        {/* ══ INTELLIGENCE TAB ══ */}
+                        {activeTab === "intelligence" && (
+                          <motion.div
+                            key="intelligence"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: 0.15 }}
+                          >
+                            <IntelligenceTab
+                              observations={obs}
                               totalSavings={totalSavings}
-                              opportunityCount={opportunityCount}
-                              warningCount={warningCount}
-                              onViewIntelligence={() => setActiveTab("intelligence")}
+                              onDelete={handleDeleteObservation}
                             />
-                          </div>
-                        </motion.div>
-                      )}
+                          </motion.div>
+                        )}
 
-                      {/* ══ BREAKDOWN TAB ══ */}
-                      {activeTab === "breakdown" && tp && (
-                        <motion.div
-                          key="breakdown"
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          exit={{ opacity: 0 }}
-                          transition={{ duration: 0.15 }}
-                        >
-                          <div className="space-y-5">
-                            {/* Income sources — full width */}
-                            {sources.length > 0 ? (
-                              <Card title="Income Sources" icon={IconWallet}>
-                                <IncomeBarChart sources={sources} totalIncome={tp.total_income} />
-                                <div className="mt-3 pt-3 border-t border-[var(--border-subtle)] flex items-center justify-between">
-                                  <span className="text-[12px] font-medium text-[var(--foreground)]">Total Gross Income</span>
-                                  <span className="text-[14px] font-mono font-semibold text-[var(--foreground)]">{fmt(tp.total_income)}</span>
-                                </div>
-                              </Card>
-                            ) : (
-                              <Card title="Income Sources" icon={IconWallet}>
-                                <p className="text-[12px] text-[var(--muted)] py-4 text-center">No income sources recorded</p>
-                              </Card>
-                            )}
+                        {/* ══ NOTES TAB ══ */}
+                        {activeTab === "notes" && (
+                          <motion.div
+                            key="notes"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: 0.15 }}
+                          >
+                            <MeetingNotesTimeline clientId={detail.id} />
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </>
+                  )}
 
-                            {/* Tax bands chart */}
-                            {bands.length > 0 && (
-                              <Card title="Income Tax by Band" icon={IconCalculator}>
-                                <TaxBandsChart bands={bands} />
-                                <div className="mt-4 pt-4 border-t border-[var(--border)] flex items-center justify-between">
-                                  <span className="text-[13px] font-semibold text-[var(--foreground)]">Total Income Tax</span>
-                                  <span className="text-[16px] font-mono font-bold text-[var(--foreground)]">{fmtFull(tp.income_tax)}</span>
-                                </div>
-                              </Card>
-                            )}
-
-                            {/* NI + Allowances */}
-                            {((ni && ni.total > 0) || allowances.length > 0) && (
-                              <div className="grid grid-cols-2 gap-5">
-                                {ni && ni.total > 0 && (
-                                  <Card title="National Insurance" icon={IconShield}>
-                                    <NIDonutChart class1={ni.class1} class2={ni.class2} class4={ni.class4} total={ni.total} />
-                                  </Card>
-                                )}
-                                {allowances.length > 0 && (
-                                  <Card title="Allowances" icon={IconShield}>
-                                    <AllowancesRadialChart allowances={allowances} />
-                                  </Card>
-                                )}
-                              </div>
-                            )}
-
-                            {/* HICBC */}
-                            {(tp.hicbc_applies || tp.hicbc?.applies) && tp.hicbc && (
-                              <Card title="High Income Child Benefit Charge" icon={IconAlertCircle}>
-                                <div className="grid grid-cols-3 gap-5">
-                                  {[
-                                    { label: "Child Benefit", value: fmtFull(hicbcBenefit(tp.hicbc)), color: "" },
-                                    { label: "Clawback", value: `${hicbcClawback(tp.hicbc)}%`, color: "text-amber-600 dark:text-amber-400" },
-                                    { label: "HICBC Charge", value: fmtFull(hicbcCharge(tp.hicbc)), color: "text-red-600 dark:text-red-400" },
-                                  ].map(({ label, value, color }) => (
-                                    <div key={label}>
-                                      <p className="text-[10px] font-medium uppercase tracking-wider text-[var(--muted)] mb-1">{label}</p>
-                                      <p className={`text-[15px] font-mono font-semibold ${color || "text-[var(--foreground)]"}`}>{value}</p>
-                                    </div>
-                                  ))}
-                                </div>
-                              </Card>
-                            )}
-                          </div>
-                        </motion.div>
-                      )}
-
-                      {/* ══ INTELLIGENCE TAB ══ */}
-                      {activeTab === "intelligence" && (
-                        <motion.div
-                          key="intelligence"
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          exit={{ opacity: 0 }}
-                          transition={{ duration: 0.15 }}
-                        >
-                          <IntelligenceTab
-                            observations={obs}
-                            totalSavings={totalSavings}
-                            onDelete={handleDeleteObservation}
-                          />
-                        </motion.div>
-                      )}
-
-                      {/* ══ NOTES TAB ══ */}
-                      {activeTab === "notes" && (
-                        <motion.div
-                          key="notes"
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          exit={{ opacity: 0 }}
-                          transition={{ duration: 0.15 }}
-                        >
-                          <MeetingNotesTimeline clientId={detail.id} />
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </>
-                )}
-
-                {/* Tax data form — shown when no profile exists */}
-                {!tp && showTaxForm && (
-                  <TaxDataForm
-                    clientId={detail.id}
-                    clientRegion={detail.region || "england"}
-                    onComputed={refetchDetail}
+                  {/* Tax data form — shown when no profile exists */}
+                  {!tp && showTaxForm && (
+                    <TaxDataForm
+                      clientId={detail.id}
+                      clientRegion={detail.region || "england"}
+                      onComputed={refetchDetail}
+                    />
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          ) : (
+            <AnimatePresence mode="wait">
+              {householdsLoading || !selectedHousehold ? (
+                <motion.div key="hh-skel" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                  <Skeleton />
+                </motion.div>
+              ) : (
+                <motion.div
+                  key={selectedHousehold.id}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.15 }}
+                >
+                  <HouseholdDetail
+                    household={selectedHousehold}
+                    onViewMember={viewMemberProfile}
                   />
-                )}
-              </motion.div>
-            )}
-          </AnimatePresence>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          )}
         </div>
       </main>
 
