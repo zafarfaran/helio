@@ -42,6 +42,7 @@ def compute_full_tax_position(
     pension_contributions_by_year: dict[str, float] | None = None,
     mpaa_triggered: bool = False,
     tax_year: str = "2025/26",
+    cgt_gains: float = 0,
 ) -> TaxPosition:
     """Compute a complete, deterministic tax position.
 
@@ -152,6 +153,12 @@ def compute_full_tax_position(
         ani_result, it_result, ni_result, hicbc_result, pension_aa_result,
         total_income=total_income,
         pension_contributions=total_pension,
+        gift_aid=gift_aid,
+        has_dividends=any(s.source_type == IncomeType.DIVIDENDS for s in income_sources),
+        is_director_or_self_employed=any(
+            s.source_type == IncomeType.SELF_EMPLOYMENT for s in income_sources
+        ),
+        cgt_gains=cgt_gains,
     )
 
     # ── 8. Summary ───────────────────────────────────────────────────────

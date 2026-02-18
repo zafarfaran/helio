@@ -233,11 +233,12 @@ class ChatService:
         )
         # Always provide all tools — engine tools must always be available
         # so Claude never attempts to calculate tax numbers itself
-        from app.services.llm.claude import BASE_TOOLS, DASHBOARD_TOOLS, ENGINE_TOOLS
+        from app.services.llm.claude import BASE_TOOLS, DASHBOARD_TOOLS, ENGINE_TOOLS, OBSERVATION_TOOLS
 
         tools = list(BASE_TOOLS)
         tools.extend(ENGINE_TOOLS)
         tools.extend(DASHBOARD_TOOLS)
+        tools.extend(OBSERVATION_TOOLS)
 
         tool_context = {"client_id": client_id}
         async for event in provider.stream_chat(

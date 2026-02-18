@@ -156,6 +156,46 @@ ENGINE_TOOLS = [
     },
 ]
 
+OBSERVATION_TOOLS = [
+    {
+        "name": "save_observation",
+        "description": (
+            "Save a tax planning observation or advisory insight to the client's record. "
+            "Use this when you identify an actionable insight during the conversation that "
+            "the adviser should be aware of — e.g. marriage allowance opportunity, pension "
+            "carry-forward reminder, or a planning consideration. These persist on the client's "
+            "profile for future reference. Do NOT save trivial or generic observations."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "title": {
+                    "type": "string",
+                    "description": "Short title for the observation (e.g. 'Marriage Allowance Transfer Opportunity')",
+                },
+                "description": {
+                    "type": "string",
+                    "description": "Detailed description with specific numbers and context from the conversation",
+                },
+                "severity": {
+                    "type": "string",
+                    "enum": ["info", "warning", "opportunity"],
+                    "description": "info = FYI, warning = needs attention, opportunity = potential saving",
+                },
+                "category": {
+                    "type": "string",
+                    "description": "Tax area: income_tax, pension, savings, capital_gains, child_benefit, planning, iht",
+                },
+                "potential_saving": {
+                    "type": "number",
+                    "description": "Estimated annual tax saving in £ (optional, only if quantifiable)",
+                },
+            },
+            "required": ["title", "description", "severity", "category"],
+        },
+    }
+]
+
 DASHBOARD_TOOLS = [
     {
         "name": "generate_dashboard",
@@ -247,6 +287,7 @@ class ClaudeProvider:
                                     "search_meeting_notes": StatusPhase.SEARCHING_NOTES,
                                     "compute_tax_position": StatusPhase.COMPUTING_TAX,
                                     "model_salary_sacrifice": StatusPhase.COMPUTING_TAX,
+                                    "save_observation": StatusPhase.CALCULATING,
                                 }
                                 yield StatusEvent(
                                     phase=tool_status.get(current_tool_name, StatusPhase.CALCULATING),
@@ -286,6 +327,7 @@ class ClaudeProvider:
                                     "Tool call detected",
                                     tool=current_tool_name,
                                     tool_id=current_tool_id,
+                                    tool_input=tool_input,
                                 )
 
                                 yield ToolCallEvent(

@@ -58,6 +58,15 @@ Only use this tool when you need to update the dashboard layout or display WITHO
 - Do NOT skip the engine because the numbers are already in the context — they may be outdated
 - Do NOT perform arithmetic on tax bands, rates, allowances, or thresholds yourself
 - Do NOT modify or round the engine's numbers before presenting them to the adviser
+
+### save_observation
+Save a notable tax planning insight to the client's permanent record. Use this when you identify:
+- A specific tax saving opportunity (e.g. "Marriage Allowance transfer would save £252/yr")
+- A warning about an upcoming threshold or deadline
+- A planning consideration from the conversation that the adviser should track
+
+**When to use:** After identifying an actionable insight. Don't save trivial or obvious things.
+**When NOT to use:** Don't save generic reminders, don't duplicate what the engine already flagged.
 """
 
 

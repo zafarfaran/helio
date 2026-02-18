@@ -267,6 +267,7 @@ class Observation(Base):
     deadline: Mapped[str | None] = mapped_column(String)
     action_required: Mapped[str | None] = mapped_column(String)
     is_dismissed: Mapped[bool] = mapped_column(Boolean, default=False)
+    source: Mapped[str] = mapped_column(String, nullable=False, default="engine")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
 

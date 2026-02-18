@@ -196,6 +196,7 @@ async def get_client(
             "deadline": obs.deadline,
             "action_required": obs.action_required,
             "is_dismissed": obs.is_dismissed,
+            "source": obs.source,
             "created_at": obs.created_at.isoformat() if obs.created_at else None,
         }
         for obs in observations
@@ -292,7 +293,15 @@ async def compute_client_tax_profile(
     if client is None:
         raise HTTPException(status_code=404, detail="Client not found")
 
-    logger.info("Computing tax profile", client_id=client_id)
+    logger.info(
+        "Computing tax profile",
+        client_id=client_id,
+        income_sources=[{"type": s.type, "gross_amount": s.gross_amount} for s in body.income_sources],
+        pension_contributions=body.pension_contributions,
+        gift_aid=body.gift_aid,
+        claims_child_benefit=body.claims_child_benefit,
+        number_of_children=body.number_of_children,
+    )
 
     # Build engine inputs
     engine_sources = [
@@ -312,6 +321,7 @@ async def compute_client_tax_profile(
         region=client.region or "england",
         number_of_children=body.number_of_children,
         claims_child_benefit=body.claims_child_benefit,
+        cgt_gains=body.cgt_gains,
     )
 
     # Delete existing tax profile and observations for this client + tax year
@@ -326,7 +336,10 @@ async def compute_client_tax_profile(
         await session.delete(old_tp)
 
     existing_obs = await session.execute(
-        select(Observation).where(Observation.client_id == client_id)
+        select(Observation).where(
+            Observation.client_id == client_id,
+            Observation.source == "engine",
+        )
     )
     for obs in existing_obs.scalars().all():
         await session.delete(obs)
@@ -445,6 +458,7 @@ async def compute_client_tax_profile(
             priority="high" if obs_item.severity in ("warning", "critical") else "medium",
             category=obs_item.category,
             potential_saving=obs_item.potential_saving,
+            source="engine",
         ))
 
     await session.flush()
@@ -453,3 +467,56 @@ async def compute_client_tax_profile(
 
     # Return full client detail (reuse existing endpoint logic)
     return await get_client(client_id, session, logger)
+
+
+class CreateObservationRequest(BaseModel):
+    title: str
+    description: str
+    severity: Literal["info", "warning", "opportunity"]
+    category: str
+    potential_saving: float | None = None
+    source: Literal["engine", "ai"] = "ai"
+
+
+@router.post("/clients/{client_id}/observations", status_code=201)
+async def create_observation(
+    client_id: str,
+    body: CreateObservationRequest,
+    session: AsyncSession = Depends(get_db_session),
+    logger: BoundLogger = Depends(get_request_logger),
+):
+    """Create a single observation for a client."""
+    result = await session.execute(
+        select(Client).where(Client.id == client_id)
+    )
+    client = result.scalar_one_or_none()
+    if client is None:
+        raise HTTPException(status_code=404, detail="Client not found")
+
+    priority = "high" if body.severity == "warning" else ("medium" if body.severity == "opportunity" else "low")
+
+    obs = Observation(
+        client_id=client_id,
+        title=body.title,
+        description=body.description,
+        severity=body.severity,
+        priority=priority,
+        category=body.category,
+        potential_saving=body.potential_saving,
+        source=body.source,
+    )
+    session.add(obs)
+    await session.flush()
+
+    logger.info("Observation created", client_id=client_id, observation_id=obs.id, source=body.source)
+
+    return {
+        "id": obs.id,
+        "title": obs.title,
+        "description": obs.description,
+        "severity": obs.severity,
+        "priority": priority,
+        "category": obs.category,
+        "potential_saving": obs.potential_saving,
+        "source": obs.source,
+    }

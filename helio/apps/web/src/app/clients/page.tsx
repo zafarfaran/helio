@@ -92,6 +92,7 @@ interface Observation {
   deadline?: string | null;
   action_required?: string | null;
   is_dismissed?: boolean;
+  source?: string;
   created_at?: string;
 }
 
@@ -461,6 +462,11 @@ function ObsItem({ obs }: { obs: Observation }) {
           <div className="flex items-center gap-2 flex-wrap mb-1">
             <h4 className="text-[13px] font-semibold text-[var(--foreground)] leading-tight">{obs.title}</h4>
             <span className={`text-[9px] font-semibold uppercase tracking-wider px-1.5 py-[1px] rounded ${s.badge}`}>{obs.severity}</span>
+            {obs.source === "ai" && (
+              <span className="text-[8px] font-semibold uppercase tracking-wider px-1.5 py-[1px] rounded bg-violet-100 text-violet-600 dark:bg-violet-500/15 dark:text-violet-400">
+                AI
+              </span>
+            )}
             {obs.potential_saving != null && obs.potential_saving > 0 && (
               <span className="text-[10px] font-mono font-semibold text-emerald-600 dark:text-emerald-400">
                 Save {fmt(obs.potential_saving)}

@@ -27,6 +27,10 @@ def detect_observations(
     *,
     total_income: float,
     pension_contributions: float = 0,
+    gift_aid: float = 0,
+    has_dividends: bool = False,
+    is_director_or_self_employed: bool = False,
+    cgt_gains: float = 0,
 ) -> list[ObservationItem]:
     """Detect tax observations from engine results."""
     obs: list[ObservationItem] = []
@@ -212,6 +216,101 @@ def detect_observations(
             severity="info",
             category="savings",
         ))
+
+    # Marriage Allowance eligibility
+    if total_income > 0 and total_income <= 12_570:
+        obs.append(ObservationItem(
+            id="marriage-allowance",
+            title="Marriage Allowance Eligibility",
+            description=(
+                f"With income of £{total_income:,.0f} (below the Personal Allowance), "
+                f"you may be able to transfer £1,260 of unused allowance to a spouse "
+                f"or civil partner, saving them up to £252 per year."
+            ),
+            severity="opportunity",
+            category="income_tax",
+            potential_saving=252,
+            action="Check if your spouse/partner is a basic rate taxpayer to claim Marriage Allowance.",
+        ))
+
+    # Savings Allowance tracking
+    marginal = _estimate_marginal_rate(ani, income_tax)
+    psa_limit = 1_000 if marginal <= 0.20 else (500 if marginal <= 0.40 else 0)
+    savings_income = sum(
+        b.income_in_band for b in income_tax.savings_bands
+    ) if income_tax.savings_bands else 0
+    if psa_limit > 0 and savings_income > 0:
+        psa_used = min(savings_income, psa_limit)
+        psa_remaining = psa_limit - psa_used
+        obs.append(ObservationItem(
+            id="savings-allowance",
+            title="Personal Savings Allowance",
+            description=(
+                f"Your PSA is £{psa_limit:,} at your tax band. "
+                f"£{psa_used:,.0f} used, £{psa_remaining:,.0f} remaining."
+            ),
+            severity="info",
+            category="savings",
+        ))
+
+    # Dividend vs Salary flag for directors/self-employed
+    if is_director_or_self_employed and has_dividends and total_income > 50_000:
+        obs.append(ObservationItem(
+            id="dividend-salary-split",
+            title="Dividend vs Salary Optimisation",
+            description=(
+                "As a director/self-employed person with dividends, there may be "
+                "opportunities to optimise the split between salary and dividends "
+                "to reduce your overall tax and NI liability."
+            ),
+            severity="opportunity",
+            category="income_tax",
+            action="Review the salary/dividend mix with your adviser for potential NI savings.",
+        ))
+
+    # Gift Aid higher-rate relief
+    if gift_aid > 0 and marginal > 0.20:
+        extra_relief = gift_aid * 0.25 * (marginal - 0.20)
+        obs.append(ObservationItem(
+            id="gift-aid-relief",
+            title="Gift Aid Higher-Rate Relief",
+            description=(
+                f"As a {marginal:.0%} rate taxpayer, your £{gift_aid:,.0f} Gift Aid donations "
+                f"qualify for additional tax relief of £{extra_relief:,.0f} via your Self Assessment."
+            ),
+            severity="opportunity",
+            category="income_tax",
+            potential_saving=extra_relief,
+            action="Claim the additional relief on your Self Assessment tax return.",
+        ))
+
+    # CGT Annual Exemption reminder
+    if cgt_gains > 0:
+        aea = 3_000
+        if cgt_gains > aea:
+            obs.append(ObservationItem(
+                id="cgt-aea-exceeded",
+                title="CGT Annual Exemption Exceeded",
+                description=(
+                    f"Your capital gains of £{cgt_gains:,.0f} exceed the £{aea:,} annual exemption. "
+                    f"£{cgt_gains - aea:,.0f} is subject to Capital Gains Tax."
+                ),
+                severity="warning",
+                category="capital_gains",
+                action="Consider spreading disposals across tax years or using losses to offset gains.",
+            ))
+        else:
+            aea_remaining = aea - cgt_gains
+            obs.append(ObservationItem(
+                id="cgt-aea-usage",
+                title="CGT Annual Exemption Usage",
+                description=(
+                    f"You have used £{cgt_gains:,.0f} of your £{aea:,} CGT annual exemption. "
+                    f"£{aea_remaining:,.0f} remaining this tax year."
+                ),
+                severity="info",
+                category="capital_gains",
+            ))
 
     return obs
 
