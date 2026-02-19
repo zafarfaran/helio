@@ -126,6 +126,7 @@ interface ScenarioData {
   savings: {
     income_tax: number;
     national_insurance?: number;
+    employer_ni?: number;
     hicbc_avoided: number;
     total: number;
   };
@@ -164,6 +165,25 @@ interface ScenarioData {
     net_cost_after_relief?: number;
     net_benefit?: number;
     effective_cost_per_pound_in_pension?: number;
+  };
+  total_benefit?: {
+    // Personal pension fields
+    basic_rate_relief?: number;
+    higher_rate_relief?: number;
+    // Salary sacrifice fields
+    income_tax_saved?: number;
+    employee_ni_saved?: number;
+    employer_ni_saved?: number;
+    take_home_reduction?: number;
+    monthly_take_home_drop?: number;
+    // Shared fields
+    hicbc_avoided?: number;
+    pa_restoration_value?: number;
+    total_annual_benefit?: number;
+    into_pension?: number;
+    client_out_of_pocket?: number;
+    monthly_benefit?: number;
+    monthly_cost?: number;
   };
 }
 
