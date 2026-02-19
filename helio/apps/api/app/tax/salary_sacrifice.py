@@ -83,6 +83,28 @@ def analyse_salary_sacrifice(
         else 0.0
     )
 
+    # -- Employer NI savings ---------------------------------------------------
+    current_employer_ni = (
+        current.ni_result.class_1.total_employer_ni
+        if current.ni_result.class_1 else 0.0
+    )
+    proposed_employer_ni = (
+        proposed.ni_result.class_1.total_employer_ni
+        if proposed.ni_result.class_1 else 0.0
+    )
+    employer_ni_saved = round_currency(current_employer_ni - proposed_employer_ni)
+
+    # -- Total benefit (headline summary) --------------------------------------
+    pa_restored = round_currency(
+        proposed.personal_allowance - current.personal_allowance
+    )
+    pa_restoration_value = round_currency(pa_restored * 0.40) if pa_restored > 0 else 0.0
+    total_annual_benefit = round_currency(
+        it_saving + ni_saving + employer_ni_saved + hicbc_avoided
+    )
+    monthly_benefit = round_currency(total_annual_benefit / 12) if total_annual_benefit > 0 else 0.0
+    monthly_take_home_drop = round_currency(take_home_reduction / 12) if take_home_reduction > 0 else 0.0
+
     logger.info(
         "Salary sacrifice analysed",
         it_saving=it_saving,
@@ -114,6 +136,7 @@ def analyse_salary_sacrifice(
             "income_tax": it_saving,
             "national_insurance": ni_saving,
             "hicbc_avoided": hicbc_avoided,
+            "employer_ni": employer_ni_saved,
             "total": total_saving,
         },
         "pa_change": {
@@ -130,5 +153,17 @@ def analyse_salary_sacrifice(
             "total_saving": total_saving,
             "take_home_reduction": take_home_reduction,
             "effective_cost_per_pound_in_pension": effective_cost_ppp,
+        },
+        "total_benefit": {
+            "income_tax_saved": it_saving,
+            "employee_ni_saved": ni_saving,
+            "employer_ni_saved": employer_ni_saved,
+            "hicbc_avoided": hicbc_avoided,
+            "pa_restoration_value": pa_restoration_value,
+            "total_annual_benefit": total_annual_benefit,
+            "into_pension": round_currency(additional_sacrifice),
+            "take_home_reduction": take_home_reduction,
+            "monthly_benefit": monthly_benefit,
+            "monthly_take_home_drop": monthly_take_home_drop,
         },
     }, proposed
