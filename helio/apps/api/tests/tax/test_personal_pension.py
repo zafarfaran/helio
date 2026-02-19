@@ -7,7 +7,7 @@ from app.tax.types import IncomeSource, IncomeType
 def test_basic_income_tax_saving():
     """£80k salary, propose £10k pension contribution. Should save income tax."""
     sources = [IncomeSource(IncomeType.EMPLOYMENT, 80_000, "Employment")]
-    r = analyse_personal_pension(sources, proposed_contribution=10_000)
+    r, _ = analyse_personal_pension(sources, proposed_contribution=10_000)
 
     assert r["savings"]["income_tax"] > 0
     assert r["savings"]["total"] > 0
@@ -20,7 +20,7 @@ def test_basic_income_tax_saving():
 def test_pa_taper_restoration():
     """£125k salary, contribute £25,140 to bring ANI to £100k. PA fully restored."""
     sources = [IncomeSource(IncomeType.EMPLOYMENT, 125_140, "Employment")]
-    r = analyse_personal_pension(sources, proposed_contribution=25_140)
+    r, _ = analyse_personal_pension(sources, proposed_contribution=25_140)
 
     # Current: ANI=125,140 → PA=0. Proposed: ANI=100,000 → PA=12,570.
     assert r["pa_change"]["current"] == 0
@@ -31,7 +31,7 @@ def test_pa_taper_restoration():
 def test_hicbc_avoidance():
     """£70k salary + 2 children, contribute £10k to bring ANI to £60k → HICBC eliminated."""
     sources = [IncomeSource(IncomeType.EMPLOYMENT, 70_000, "Employment")]
-    r = analyse_personal_pension(
+    r, _ = analyse_personal_pension(
         sources,
         proposed_contribution=10_000,
         number_of_children=2,
@@ -44,7 +44,7 @@ def test_hicbc_avoidance():
 def test_threshold_identification():
     """£120k salary should identify PA taper and higher-rate thresholds."""
     sources = [IncomeSource(IncomeType.EMPLOYMENT, 120_000, "Employment")]
-    r = analyse_personal_pension(sources, proposed_contribution=5_000)
+    r, _ = analyse_personal_pension(sources, proposed_contribution=5_000)
 
     thresholds = r["thresholds"]
     assert len(thresholds) > 0
@@ -59,7 +59,7 @@ def test_threshold_identification():
 def test_threshold_hicbc_with_children():
     """£75k salary + children should identify HICBC threshold at £60k ANI."""
     sources = [IncomeSource(IncomeType.EMPLOYMENT, 75_000, "Employment")]
-    r = analyse_personal_pension(
+    r, _ = analyse_personal_pension(
         sources,
         proposed_contribution=5_000,
         number_of_children=2,
@@ -74,7 +74,7 @@ def test_threshold_hicbc_with_children():
 def test_pension_aa_warning():
     """Contribution exceeding AA should generate a warning."""
     sources = [IncomeSource(IncomeType.EMPLOYMENT, 200_000, "Employment")]
-    r = analyse_personal_pension(sources, proposed_contribution=65_000)
+    r, _ = analyse_personal_pension(sources, proposed_contribution=65_000)
 
     assert r["pension_aa_warning"] is not None
 
@@ -82,7 +82,7 @@ def test_pension_aa_warning():
 def test_existing_contribution_increase():
     """Already contributing £5k, propose increasing to £15k."""
     sources = [IncomeSource(IncomeType.EMPLOYMENT, 80_000, "Employment")]
-    r = analyse_personal_pension(
+    r, _ = analyse_personal_pension(
         sources,
         proposed_contribution=15_000,
         current_contribution=5_000,
@@ -95,7 +95,7 @@ def test_existing_contribution_increase():
 def test_effective_relief_rate():
     """Effective relief rate should be saving / additional contribution * 100."""
     sources = [IncomeSource(IncomeType.EMPLOYMENT, 80_000, "Employment")]
-    r = analyse_personal_pension(sources, proposed_contribution=10_000)
+    r, _ = analyse_personal_pension(sources, proposed_contribution=10_000)
 
     expected_rate = r["savings"]["total"] / 10_000 * 100
     assert abs(r["effective_relief_rate"] - expected_rate) < 0.01
@@ -108,8 +108,110 @@ def test_multiple_income_sources():
         IncomeSource(IncomeType.DIVIDENDS, 20_000, "Dividends"),
         IncomeSource(IncomeType.RENTAL, 15_000, "Rental"),
     ]
-    r = analyse_personal_pension(sources, proposed_contribution=10_000)
+    r, _ = analyse_personal_pension(sources, proposed_contribution=10_000)
     assert r["savings"]["total"] > 0
     # With £135k total income, PA taper threshold should appear
     pa_thresh = [t for t in r["thresholds"] if "PA taper" in t["name"]]
     assert len(pa_thresh) == 1
+
+
+def test_net_benefit_higher_rate_taxpayer():
+    """£80k salary, £10k gross pension. Higher rate taxpayer gets 40% total relief."""
+    sources = [IncomeSource(IncomeType.EMPLOYMENT, 80_000, "Employment")]
+    r, _ = analyse_personal_pension(sources, proposed_contribution=10_000)
+
+    nb = r["net_benefit"]
+    assert nb["gross_contribution"] == 10_000
+    assert nb["net_cost_to_client"] == 8_000          # 10k * 0.8
+    assert nb["basic_rate_relief"] == 2_000            # 10k * 0.2
+    # Higher rate relief = IT saving from BRB extension
+    assert nb["higher_rate_relief"] == r["savings"]["income_tax"]
+    assert nb["higher_rate_relief"] > 0
+    assert nb["hicbc_avoided"] == 0
+    assert nb["total_tax_relief"] == nb["basic_rate_relief"] + nb["higher_rate_relief"]
+    assert nb["net_cost_after_relief"] == nb["net_cost_to_client"] - nb["higher_rate_relief"]
+    assert nb["net_benefit"] == nb["total_tax_relief"]
+    assert 0 < nb["effective_cost_per_pound_in_pension"] < 1
+
+    # Total effective relief should be ~40% for a higher rate taxpayer
+    assert r["total_effective_relief_rate"] > 35  # at least 35%
+
+
+def test_net_benefit_basic_rate_taxpayer():
+    """£30k salary, £5k gross pension. Basic rate taxpayer still gets 20% relief."""
+    sources = [IncomeSource(IncomeType.EMPLOYMENT, 30_000, "Employment")]
+    r, _ = analyse_personal_pension(sources, proposed_contribution=5_000)
+
+    nb = r["net_benefit"]
+    assert nb["gross_contribution"] == 5_000
+    assert nb["net_cost_to_client"] == 4_000
+    assert nb["basic_rate_relief"] == 1_000
+    # Basic rate taxpayer: BRB extension doesn't help (already in basic band)
+    # So higher_rate_relief should be ~0
+    assert nb["higher_rate_relief"] == r["savings"]["income_tax"]
+    assert nb["total_tax_relief"] >= 1_000  # At least the basic rate relief
+    assert r["total_effective_relief_rate"] >= 20.0
+
+
+def test_net_benefit_pa_taper_zone():
+    """£110k salary, £10k contribution. PA taper gives massive effective relief."""
+    sources = [IncomeSource(IncomeType.EMPLOYMENT, 110_000, "Employment")]
+    r, _ = analyse_personal_pension(sources, proposed_contribution=10_000)
+
+    nb = r["net_benefit"]
+    assert nb["gross_contribution"] == 10_000
+    assert nb["net_cost_to_client"] == 8_000
+    assert nb["basic_rate_relief"] == 2_000
+    # In PA taper zone, IT saving includes PA restoration = very high
+    assert nb["higher_rate_relief"] > 3_000  # Much more than standard 40% due to PA taper
+    assert r["total_effective_relief_rate"] > 50  # Should be well above 50%
+
+
+def test_net_benefit_with_hicbc():
+    """£70k + children, £10k contribution eliminates HICBC. Net benefit includes it."""
+    sources = [IncomeSource(IncomeType.EMPLOYMENT, 70_000, "Employment")]
+    r, _ = analyse_personal_pension(
+        sources,
+        proposed_contribution=10_000,
+        number_of_children=2,
+        claims_child_benefit=True,
+    )
+
+    nb = r["net_benefit"]
+    assert nb["hicbc_avoided"] == r["savings"]["hicbc_avoided"]
+    assert nb["hicbc_avoided"] > 0
+    assert nb["total_tax_relief"] == nb["basic_rate_relief"] + nb["higher_rate_relief"] + nb["hicbc_avoided"]
+    assert nb["net_cost_after_relief"] == nb["net_cost_to_client"] - nb["higher_rate_relief"] - nb["hicbc_avoided"]
+
+
+def test_net_benefit_zero_additional_contribution():
+    """Current == proposed, no additional contribution. Net benefit all zeros."""
+    sources = [IncomeSource(IncomeType.EMPLOYMENT, 80_000, "Employment")]
+    r, _ = analyse_personal_pension(
+        sources,
+        proposed_contribution=5_000,
+        current_contribution=5_000,
+    )
+
+    nb = r["net_benefit"]
+    assert nb["gross_contribution"] == 0
+    assert nb["net_cost_to_client"] == 0
+    assert nb["basic_rate_relief"] == 0
+    assert nb["net_benefit"] == 0
+    assert r["total_effective_relief_rate"] == 0
+
+
+def test_net_benefit_existing_contribution_increase():
+    """Already contributing £5k, propose £15k. Net benefit based on additional £10k."""
+    sources = [IncomeSource(IncomeType.EMPLOYMENT, 80_000, "Employment")]
+    r, _ = analyse_personal_pension(
+        sources,
+        proposed_contribution=15_000,
+        current_contribution=5_000,
+    )
+
+    nb = r["net_benefit"]
+    # Net benefit is on the ADDITIONAL contribution only
+    assert nb["gross_contribution"] == 10_000  # 15k - 5k
+    assert nb["net_cost_to_client"] == 8_000   # 10k * 0.8
+    assert nb["basic_rate_relief"] == 2_000    # 10k * 0.2
