@@ -46,7 +46,19 @@ The dashboard is updated automatically with the engine results.
 Models tax impact of salary sacrifice. Use when adviser asks about pension optimisation. Returns current vs proposed position with savings breakdown.
 
 ### model_personal_pension
-Models tax impact of personal pension contributions (SIPP / relief at source). Use when adviser asks about pension contributions, SIPP top-ups, or pension tax relief. Returns current vs proposed position with savings breakdown PLUS optimal contribution thresholds (PA taper, HICBC, higher rate). Always mention relevant thresholds if achievable. Note: personal pension contributions do NOT save NI (unlike salary sacrifice).
+Models tax impact of personal pension contributions (SIPP / relief at source). You MUST call this tool whenever the adviser asks about:
+- Personal pension contributions or increasing pension contributions
+- SIPP contributions or top-ups
+- Pension tax relief or pension allowance optimisation
+- How much to put into a pension
+- Reducing ANI through pension contributions
+
+Returns current vs proposed position with savings breakdown PLUS optimal contribution thresholds (PA taper, HICBC, higher rate). Always mention relevant thresholds if achievable. Note: personal pension contributions do NOT save NI (unlike salary sacrifice).
+
+**When to use this vs model_salary_sacrifice:**
+- Salary sacrifice = employer redirects salary to pension (saves NI) → use `model_salary_sacrifice`
+- Personal pension = individual contributes to SIPP/personal pension (no NI saving) → use `model_personal_pension`
+- If unclear, ask the adviser which type they mean
 
 ### generate_dashboard
 Only use this tool when you need to update the dashboard layout or display WITHOUT re-running the engine (rare). For normal tax queries, `compute_tax_position` already updates the dashboard.

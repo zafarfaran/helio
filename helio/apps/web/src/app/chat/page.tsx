@@ -97,27 +97,32 @@ interface ScenarioData {
   id: string;
   name: string;
   description: string;
+  type?: "salary_sacrifice" | "personal_pension";
   current: {
-    gross_salary: number;
-    sacrifice: number;
+    gross_salary?: number;
+    sacrifice?: number;
+    pension_contribution?: number;
     income_tax: number;
     national_insurance: number;
     hicbc: number;
     total_tax: number;
     personal_allowance: number;
+    adjusted_net_income?: number;
   };
   proposed: {
-    gross_salary: number;
-    sacrifice: number;
+    gross_salary?: number;
+    sacrifice?: number;
+    pension_contribution?: number;
     income_tax: number;
     national_insurance: number;
     hicbc: number;
     total_tax: number;
     personal_allowance: number;
+    adjusted_net_income?: number;
   };
   savings: {
     income_tax: number;
-    national_insurance: number;
+    national_insurance?: number;
     hicbc_avoided: number;
     total: number;
   };
@@ -126,7 +131,17 @@ interface ScenarioData {
     proposed: number;
     restored: number;
   };
-  extra_into_pension: number;
+  extra_into_pension?: number;
+  effective_relief_rate?: number;
+  thresholds?: {
+    name: string;
+    contribution_needed: number;
+    additional_over_current: number;
+    annual_saving: number;
+    effective_relief: number;
+    feasible: boolean;
+  }[];
+  pension_aa_warning?: string | null;
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -2326,18 +2341,28 @@ const categoryIcons: Record<string, (cls: string) => React.ReactNode> = {
 
 function ScenarioComparison({ scenario }: { scenario: ScenarioData }) {
   const s = scenario;
+  const isPension = s.type === "personal_pension";
   const fmt = (n: number) => `£${Math.abs(n).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
   const fmtSigned = (n: number) => n > 0 ? `+${fmt(n)}` : n < 0 ? `-${fmt(n)}` : "—";
 
-  const rows: { label: string; current: number; proposed: number; invert?: boolean }[] = [
-    { label: "Gross Salary", current: s.current.gross_salary, proposed: s.proposed.gross_salary },
-    { label: "Pension Sacrifice", current: s.current.sacrifice, proposed: s.proposed.sacrifice },
-    { label: "Income Tax", current: s.current.income_tax, proposed: s.proposed.income_tax, invert: true },
-    { label: "National Insurance", current: s.current.national_insurance, proposed: s.proposed.national_insurance, invert: true },
-    { label: "HICBC", current: s.current.hicbc, proposed: s.proposed.hicbc, invert: true },
-    { label: "Total Tax", current: s.current.total_tax, proposed: s.proposed.total_tax, invert: true },
-    { label: "Personal Allowance", current: s.current.personal_allowance, proposed: s.proposed.personal_allowance },
-  ];
+  const rows: { label: string; current: number; proposed: number; invert?: boolean }[] = isPension
+    ? [
+        { label: "Pension Contribution", current: s.current.pension_contribution || 0, proposed: s.proposed.pension_contribution || 0 },
+        { label: "Adjusted Net Income", current: s.current.adjusted_net_income || 0, proposed: s.proposed.adjusted_net_income || 0, invert: true },
+        { label: "Income Tax", current: s.current.income_tax, proposed: s.proposed.income_tax, invert: true },
+        { label: "HICBC", current: s.current.hicbc, proposed: s.proposed.hicbc, invert: true },
+        { label: "Total Tax", current: s.current.total_tax, proposed: s.proposed.total_tax, invert: true },
+        { label: "Personal Allowance", current: s.current.personal_allowance, proposed: s.proposed.personal_allowance },
+      ]
+    : [
+        { label: "Gross Salary", current: s.current.gross_salary || 0, proposed: s.proposed.gross_salary || 0 },
+        { label: "Pension Sacrifice", current: s.current.sacrifice || 0, proposed: s.proposed.sacrifice || 0 },
+        { label: "Income Tax", current: s.current.income_tax, proposed: s.proposed.income_tax, invert: true },
+        { label: "National Insurance", current: s.current.national_insurance, proposed: s.proposed.national_insurance, invert: true },
+        { label: "HICBC", current: s.current.hicbc, proposed: s.proposed.hicbc, invert: true },
+        { label: "Total Tax", current: s.current.total_tax, proposed: s.proposed.total_tax, invert: true },
+        { label: "Personal Allowance", current: s.current.personal_allowance, proposed: s.proposed.personal_allowance },
+      ];
 
   return (
     <motion.div
@@ -2398,12 +2423,12 @@ function ScenarioComparison({ scenario }: { scenario: ScenarioData }) {
               </div>
             </div>
           )}
-          {s.savings.national_insurance > 0 && (
+          {(s.savings.national_insurance || 0) > 0 && (
             <div className="flex justify-between items-baseline">
               <span className="text-[10px] font-light text-emerald-700 dark:text-emerald-300">NI saved</span>
               <div className="flex gap-3">
-                <span className="text-[10px] font-mono font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums">{fmt(s.savings.national_insurance)}/yr</span>
-                <span className="text-[9px] font-mono text-emerald-500/60 tabular-nums">{fmt(Math.round(s.savings.national_insurance / 12))}/mo</span>
+                <span className="text-[10px] font-mono font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums">{fmt(s.savings.national_insurance!)}/yr</span>
+                <span className="text-[9px] font-mono text-emerald-500/60 tabular-nums">{fmt(Math.round(s.savings.national_insurance! / 12))}/mo</span>
               </div>
             </div>
           )}
@@ -2427,16 +2452,26 @@ function ScenarioComparison({ scenario }: { scenario: ScenarioData }) {
           </div>
         </div>
 
-        {/* Pension impact */}
-        {s.extra_into_pension > 0 && (
+        {/* Effective relief rate (personal pension) */}
+        {isPension && s.effective_relief_rate != null && s.effective_relief_rate > 0 && (
+          <div className="mt-3 pt-3 border-t border-emerald-200/30 dark:border-emerald-700/20">
+            <div className="flex justify-between items-baseline">
+              <span className="text-[10px] font-light text-emerald-700 dark:text-emerald-300">Effective tax relief</span>
+              <span className="text-[10px] font-mono font-semibold text-brand-600 dark:text-brand-400 tabular-nums">{s.effective_relief_rate.toFixed(1)}%</span>
+            </div>
+          </div>
+        )}
+
+        {/* Pension impact (salary sacrifice) */}
+        {(s.extra_into_pension || 0) > 0 && (
           <div className="mt-3 pt-3 border-t border-emerald-200/30 dark:border-emerald-700/20 space-y-1">
             <div className="flex justify-between items-baseline">
               <span className="text-[10px] font-light text-emerald-700 dark:text-emerald-300">Extra into pension</span>
-              <span className="text-[10px] font-mono font-semibold text-brand-600 dark:text-brand-400 tabular-nums">+{fmt(s.extra_into_pension)}/yr</span>
+              <span className="text-[10px] font-mono font-semibold text-brand-600 dark:text-brand-400 tabular-nums">+{fmt(s.extra_into_pension!)}/yr</span>
             </div>
-            {s.savings.total > 0 && s.extra_into_pension > 0 && (
+            {s.savings.total > 0 && s.extra_into_pension! > 0 && (
               <p className="text-[10px] font-light text-emerald-600 dark:text-emerald-300 italic mt-1">
-                For every £1 of take-home sacrificed, £{((s.extra_into_pension + s.savings.total) / s.extra_into_pension).toFixed(2)} goes into the pension pot.
+                For every £1 of take-home sacrificed, £{((s.extra_into_pension! + s.savings.total) / s.extra_into_pension!).toFixed(2)} goes into the pension pot.
               </p>
             )}
           </div>
@@ -2451,6 +2486,37 @@ function ScenarioComparison({ scenario }: { scenario: ScenarioData }) {
           </div>
         )}
       </div>
+
+      {/* Optimal Thresholds (personal pension) */}
+      {isPension && s.thresholds && s.thresholds.length > 0 && (
+        <div className="rounded-xl border border-brand-200/40 dark:border-brand-800/20 bg-brand-50/30 dark:bg-brand-900/10 backdrop-blur-sm p-4">
+          <p className="text-[8px] uppercase tracking-widest font-semibold text-brand-600 dark:text-brand-400 mb-3">Optimal Thresholds</p>
+          <div className="space-y-2">
+            {s.thresholds.map((t, i) => (
+              <div key={i} className={`flex justify-between items-start gap-2 ${!t.feasible ? "opacity-50" : ""}`}>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[10px] text-slate-700 dark:text-zinc-200 font-medium truncate">{t.name}</p>
+                  <p className="text-[9px] text-slate-500 dark:text-zinc-400">
+                    Contribute {fmt(t.contribution_needed)} → save {fmt(t.annual_saving)}/yr ({t.effective_relief.toFixed(0)}% relief)
+                  </p>
+                </div>
+                {!t.feasible && (
+                  <span className="text-[8px] font-medium text-amber-600 dark:text-amber-400 bg-amber-100/60 dark:bg-amber-800/30 px-1.5 py-0.5 rounded-full whitespace-nowrap">
+                    Exceeds AA
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* AA Warning (personal pension) */}
+      {isPension && s.pension_aa_warning && (
+        <div className="rounded-xl border border-amber-200/40 dark:border-amber-800/20 bg-amber-50/30 dark:bg-amber-900/10 backdrop-blur-sm p-3">
+          <p className="text-[10px] text-amber-700 dark:text-amber-300">{s.pension_aa_warning}</p>
+        </div>
+      )}
     </motion.div>
   );
 }
@@ -2458,7 +2524,7 @@ function ScenarioComparison({ scenario }: { scenario: ScenarioData }) {
 /* ─── Scenarios Panel ─── */
 
 function ScenarioGeneratingSkeleton() {
-  const rows = ["Gross Salary", "Pension Sacrifice", "Income Tax", "National Insurance", "HICBC", "Total Tax", "Personal Allowance"];
+  const rows = ["Contribution", "Income Tax", "HICBC", "Total Tax", "Personal Allowance", "Net Impact"];
 
   return (
     <motion.div

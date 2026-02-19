@@ -41,7 +41,7 @@ const PHASE_CONFIG: Record<
   },
   modelling_scenario: {
     icon: <IconTrendingUp className="w-3.5 h-3.5" />,
-    label: "Modelling salary sacrifice scenario...",
+    label: "Modelling scenario...",
   },
   building_dashboard: {
     icon: <IconChart className="w-3.5 h-3.5" />,

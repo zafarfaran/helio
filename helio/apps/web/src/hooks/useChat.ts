@@ -70,7 +70,7 @@ const STATUS_MESSAGES: Record<StatusPhase, string> = {
   checking_allowances: "Checking allowance status...",
   calculating: "Running tax calculations...",
   computing_tax: "Computing tax position...",
-  modelling_scenario: "Modelling salary sacrifice scenario...",
+  modelling_scenario: "Modelling scenario...",
   building_dashboard: "Building dashboard...",
   searching_notes: "Searching meeting notes...",
   saving_observation: "Generating observations...",
@@ -243,6 +243,10 @@ export function useChat(clientId: string, taxPlanMode: boolean = false, onObserv
                   setStatus("modelling_scenario");
                   setStatusMessage("Modelling salary sacrifice scenario...");
                   setIsScenarioGenerating(true);
+                } else if (data.tool === "model_personal_pension") {
+                  setStatus("modelling_scenario");
+                  setStatusMessage("Modelling pension contribution scenario...");
+                  setIsScenarioGenerating(true);
                 } else if (data.tool === "generate_dashboard") {
                   setIsDashboardGenerating(true);
                   setStatus("building_dashboard");
@@ -277,6 +281,25 @@ export function useChat(clientId: string, taxPlanMode: boolean = false, onObserv
                     savings: result.savings,
                     pa_change: result.pa_change,
                     extra_into_pension: result.extra_into_pension,
+                  };
+                  setScenarios((prev) => [...prev, newScenario]);
+                  setIsScenarioGenerating(false);
+                }
+                // Capture personal pension contribution result as a scenario
+                if (data.tool === "model_personal_pension" && data.result?.success) {
+                  const result = data.result;
+                  const newScenario = {
+                    id: crypto.randomUUID(),
+                    name: `Pension £${Number(result.proposed?.pension_contribution || 0).toLocaleString()}`,
+                    description: `Model personal pension contribution of £${Number(result.proposed?.pension_contribution || 0).toLocaleString()}`,
+                    type: "personal_pension",
+                    current: result.current,
+                    proposed: result.proposed,
+                    savings: result.savings,
+                    pa_change: result.pa_change,
+                    effective_relief_rate: result.effective_relief_rate,
+                    thresholds: result.thresholds,
+                    pension_aa_warning: result.pension_aa_warning,
                   };
                   setScenarios((prev) => [...prev, newScenario]);
                   setIsScenarioGenerating(false);
