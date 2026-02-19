@@ -11,6 +11,8 @@ import { ContextPills } from "@/components/context-pills";
 import { ThinkingIndicator } from "@/components/thinking-indicator";
 import { MarkdownRenderer } from "@/components/markdown-renderer";
 import { TaxComputationBreakdown } from "@/components/tax-computation-breakdown";
+import { ScenarioComparisonChart } from "@/components/charts/scenario-comparison-chart";
+import { NetBenefitCard } from "@/components/charts/net-benefit-card";
 import { VoiceMode } from "@/components/voice-mode";
 import {
   HelioLogo,
@@ -143,6 +145,26 @@ interface ScenarioData {
     feasible: boolean;
   }[];
   pension_aa_warning?: string | null;
+  total_effective_relief_rate?: number;
+  net_benefit?: {
+    // Personal pension fields
+    gross_contribution?: number;
+    net_cost_to_client?: number;
+    basic_rate_relief?: number;
+    higher_rate_relief?: number;
+    // Salary sacrifice fields
+    gross_into_pension?: number;
+    income_tax_saved?: number;
+    ni_saved?: number;
+    take_home_reduction?: number;
+    // Shared fields
+    hicbc_avoided?: number;
+    total_tax_relief?: number;
+    total_saving?: number;
+    net_cost_after_relief?: number;
+    net_benefit?: number;
+    effective_cost_per_pound_in_pension?: number;
+  };
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -2405,6 +2427,7 @@ const categoryIcons: Record<string, (cls: string) => React.ReactNode> = {
 function ScenarioComparison({ scenario }: { scenario: ScenarioData }) {
   const s = scenario;
   const isPension = s.type === "personal_pension";
+  const [showDetail, setShowDetail] = useState(false);
   const fmt = (n: number) => `£${Math.abs(n).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
   const fmtSigned = (n: number) => n > 0 ? `+${fmt(n)}` : n < 0 ? `-${fmt(n)}` : "—";
 
@@ -2434,123 +2457,86 @@ function ScenarioComparison({ scenario }: { scenario: ScenarioData }) {
       transition={{ duration: 0.4 }}
       className="space-y-3"
     >
-      {/* Before/After table */}
+      {/* 1. Before/After chart */}
+      <ScenarioComparisonChart
+        current={s.current}
+        proposed={s.proposed}
+        savings={s.savings}
+        isPension={isPension}
+      />
+
+      {/* 2. Net Benefit Card */}
+      <NetBenefitCard
+        netBenefit={s.net_benefit}
+        isPension={isPension}
+        totalEffectiveReliefRate={s.total_effective_relief_rate}
+        savings={s.savings}
+        paChange={s.pa_change}
+        extraIntoPension={s.extra_into_pension}
+      />
+
+      {/* 3. Collapsible detail table */}
       <div className="rounded-xl border border-slate-200/40 dark:border-zinc-800/30 bg-white/50 dark:bg-zinc-900/30 backdrop-blur-sm overflow-hidden">
-        {/* Header */}
-        <div className="grid grid-cols-[1fr,auto,auto,auto] gap-0 border-b border-slate-200/30 dark:border-zinc-800/20 bg-slate-50/50 dark:bg-zinc-800/20 px-3 py-2">
-          <span className="text-[8px] uppercase tracking-widest font-semibold text-slate-400 dark:text-zinc-500"></span>
-          <span className="text-[8px] uppercase tracking-widest font-semibold text-slate-400 dark:text-zinc-500 text-right w-[60px] md:w-[80px]">Current</span>
-          <span className="text-[8px] uppercase tracking-widest font-semibold text-brand-500 dark:text-brand-400 text-right w-[60px] md:w-[80px]">Proposed</span>
-          <span className="text-[8px] uppercase tracking-widest font-semibold text-slate-400 dark:text-zinc-500 text-right w-[50px] md:w-[70px]">Delta</span>
-        </div>
-        {/* Rows */}
-        {rows.map((row, i) => {
-          const delta = row.proposed - row.current;
-          const isSaving = row.invert ? delta < 0 : delta > 0;
-          const isCost = row.invert ? delta > 0 : delta < 0;
-          const deltaColor = isSaving
-            ? "text-emerald-600 dark:text-emerald-400"
-            : isCost
-            ? "text-amber-600 dark:text-amber-400"
-            : "text-slate-400 dark:text-zinc-500";
-
-          return (
-            <div
-              key={row.label}
-              className={`grid grid-cols-[1fr,auto,auto,auto] gap-0 px-3 py-1.5 ${
-                i % 2 === 0 ? "" : "bg-slate-50/30 dark:bg-zinc-800/10"
-              } ${row.label === "Total Tax" ? "border-t border-slate-200/30 dark:border-zinc-800/20 font-semibold" : ""}`}
+        <button
+          onClick={() => setShowDetail(!showDetail)}
+          className="w-full flex items-center justify-between px-3 py-2 hover:bg-slate-50/50 dark:hover:bg-zinc-800/20 transition-colors"
+        >
+          <span className="text-[9px] font-semibold uppercase tracking-widest text-slate-400 dark:text-zinc-500">
+            Full breakdown
+          </span>
+          <motion.span animate={{ rotate: showDetail ? 180 : 0 }} transition={{ duration: 0.2 }}>
+            <IconChevronDown className="w-3 h-3 text-slate-400 dark:text-zinc-500" />
+          </motion.span>
+        </button>
+        <AnimatePresence>
+          {showDetail && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.25 }}
+              className="overflow-hidden"
             >
-              <span className="text-[10px] text-slate-600 dark:text-zinc-300">{row.label}</span>
-              <span className="text-[10px] font-mono text-slate-500 dark:text-zinc-400 text-right w-[60px] md:w-[80px] tabular-nums">{fmt(row.current)}</span>
-              <span className="text-[10px] font-mono text-slate-800 dark:text-zinc-100 text-right w-[60px] md:w-[80px] tabular-nums">{fmt(row.proposed)}</span>
-              <span className={`text-[10px] font-mono text-right w-[50px] md:w-[70px] tabular-nums ${deltaColor}`}>
-                {delta === 0 ? "—" : fmtSigned(row.invert ? -delta : delta)}
-              </span>
-            </div>
-          );
-        })}
+              {/* Header */}
+              <div className="grid grid-cols-[1fr,auto,auto,auto] gap-0 border-b border-t border-slate-200/30 dark:border-zinc-800/20 bg-slate-50/50 dark:bg-zinc-800/20 px-3 py-2">
+                <span className="text-[8px] uppercase tracking-widest font-semibold text-slate-400 dark:text-zinc-500"></span>
+                <span className="text-[8px] uppercase tracking-widest font-semibold text-slate-400 dark:text-zinc-500 text-right w-[60px] md:w-[80px]">Current</span>
+                <span className="text-[8px] uppercase tracking-widest font-semibold text-brand-500 dark:text-brand-400 text-right w-[60px] md:w-[80px]">Proposed</span>
+                <span className="text-[8px] uppercase tracking-widest font-semibold text-slate-400 dark:text-zinc-500 text-right w-[50px] md:w-[70px]">Delta</span>
+              </div>
+              {/* Rows */}
+              {rows.map((row, i) => {
+                const delta = row.proposed - row.current;
+                const isSaving = row.invert ? delta < 0 : delta > 0;
+                const isCost = row.invert ? delta > 0 : delta < 0;
+                const deltaColor = isSaving
+                  ? "text-emerald-600 dark:text-emerald-400"
+                  : isCost
+                  ? "text-amber-600 dark:text-amber-400"
+                  : "text-slate-400 dark:text-zinc-500";
+
+                return (
+                  <div
+                    key={row.label}
+                    className={`grid grid-cols-[1fr,auto,auto,auto] gap-0 px-3 py-1.5 ${
+                      i % 2 === 0 ? "" : "bg-slate-50/30 dark:bg-zinc-800/10"
+                    } ${row.label === "Total Tax" ? "border-t border-slate-200/30 dark:border-zinc-800/20 font-semibold" : ""}`}
+                  >
+                    <span className="text-[10px] text-slate-600 dark:text-zinc-300">{row.label}</span>
+                    <span className="text-[10px] font-mono text-slate-500 dark:text-zinc-400 text-right w-[60px] md:w-[80px] tabular-nums">{fmt(row.current)}</span>
+                    <span className="text-[10px] font-mono text-slate-800 dark:text-zinc-100 text-right w-[60px] md:w-[80px] tabular-nums">{fmt(row.proposed)}</span>
+                    <span className={`text-[10px] font-mono text-right w-[50px] md:w-[70px] tabular-nums ${deltaColor}`}>
+                      {delta === 0 ? "—" : fmtSigned(row.invert ? -delta : delta)}
+                    </span>
+                  </div>
+                );
+              })}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
-      {/* Net Impact Summary */}
-      <div className="rounded-xl border border-emerald-200/40 dark:border-emerald-800/20 bg-emerald-50/30 dark:bg-emerald-900/10 backdrop-blur-sm p-4">
-        <p className="text-[8px] uppercase tracking-widest font-semibold text-emerald-600 dark:text-emerald-400 mb-3">Net Impact</p>
-
-        <div className="space-y-1.5">
-          {s.savings.income_tax > 0 && (
-            <div className="flex justify-between items-baseline">
-              <span className="text-[10px] font-light text-emerald-700 dark:text-emerald-300">Income tax saved</span>
-              <div className="flex gap-3">
-                <span className="text-[10px] font-mono font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums">{fmt(s.savings.income_tax)}/yr</span>
-                <span className="text-[9px] font-mono text-emerald-500/60 tabular-nums">{fmt(Math.round(s.savings.income_tax / 12))}/mo</span>
-              </div>
-            </div>
-          )}
-          {(s.savings.national_insurance || 0) > 0 && (
-            <div className="flex justify-between items-baseline">
-              <span className="text-[10px] font-light text-emerald-700 dark:text-emerald-300">NI saved</span>
-              <div className="flex gap-3">
-                <span className="text-[10px] font-mono font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums">{fmt(s.savings.national_insurance!)}/yr</span>
-                <span className="text-[9px] font-mono text-emerald-500/60 tabular-nums">{fmt(Math.round(s.savings.national_insurance! / 12))}/mo</span>
-              </div>
-            </div>
-          )}
-          {s.savings.hicbc_avoided > 0 && (
-            <div className="flex justify-between items-baseline">
-              <span className="text-[10px] font-light text-emerald-700 dark:text-emerald-300">HICBC avoided</span>
-              <div className="flex gap-3">
-                <span className="text-[10px] font-mono font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums">{fmt(s.savings.hicbc_avoided)}/yr</span>
-                <span className="text-[9px] font-mono text-emerald-500/60 tabular-nums">{fmt(Math.round(s.savings.hicbc_avoided / 12))}/mo</span>
-              </div>
-            </div>
-          )}
-
-          {/* Total */}
-          <div className="flex justify-between items-baseline pt-2 mt-2 border-t border-emerald-200/30 dark:border-emerald-700/20">
-            <span className="text-[10px] font-semibold text-emerald-800 dark:text-emerald-200">Total tax benefit</span>
-            <div className="flex gap-3">
-              <span className="text-[12px] font-mono font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">{fmt(s.savings.total)}/yr</span>
-              <span className="text-[10px] font-mono font-medium text-emerald-500 tabular-nums">{fmt(Math.round(s.savings.total / 12))}/mo</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Effective relief rate (personal pension) */}
-        {isPension && s.effective_relief_rate != null && s.effective_relief_rate > 0 && (
-          <div className="mt-3 pt-3 border-t border-emerald-200/30 dark:border-emerald-700/20">
-            <div className="flex justify-between items-baseline">
-              <span className="text-[10px] font-light text-emerald-700 dark:text-emerald-300">Effective tax relief</span>
-              <span className="text-[10px] font-mono font-semibold text-brand-600 dark:text-brand-400 tabular-nums">{s.effective_relief_rate.toFixed(1)}%</span>
-            </div>
-          </div>
-        )}
-
-        {/* Pension impact (salary sacrifice) */}
-        {(s.extra_into_pension || 0) > 0 && (
-          <div className="mt-3 pt-3 border-t border-emerald-200/30 dark:border-emerald-700/20 space-y-1">
-            <div className="flex justify-between items-baseline">
-              <span className="text-[10px] font-light text-emerald-700 dark:text-emerald-300">Extra into pension</span>
-              <span className="text-[10px] font-mono font-semibold text-brand-600 dark:text-brand-400 tabular-nums">+{fmt(s.extra_into_pension!)}/yr</span>
-            </div>
-            {s.savings.total > 0 && s.extra_into_pension! > 0 && (
-              <p className="text-[10px] font-light text-emerald-600 dark:text-emerald-300 italic mt-1">
-                For every £1 of take-home sacrificed, £{((s.extra_into_pension! + s.savings.total) / s.extra_into_pension!).toFixed(2)} goes into the pension pot.
-              </p>
-            )}
-          </div>
-        )}
-
-        {/* PA change */}
-        {s.pa_change.restored > 0 && (
-          <div className="mt-2 flex items-center gap-1.5">
-            <span className="text-[9px] font-medium text-emerald-700 dark:text-emerald-300 bg-emerald-100/60 dark:bg-emerald-800/30 px-2 py-0.5 rounded-full">
-              PA restored: +{fmt(s.pa_change.restored)}
-            </span>
-          </div>
-        )}
-      </div>
-
-      {/* Optimal Thresholds (personal pension) */}
+      {/* 4. Optimal Thresholds (personal pension) — UNCHANGED */}
       {isPension && s.thresholds && s.thresholds.length > 0 && (
         <div className="rounded-xl border border-brand-200/40 dark:border-brand-800/20 bg-brand-50/30 dark:bg-brand-900/10 backdrop-blur-sm p-4">
           <p className="text-[8px] uppercase tracking-widest font-semibold text-brand-600 dark:text-brand-400 mb-3">Optimal Thresholds</p>
@@ -2574,7 +2560,7 @@ function ScenarioComparison({ scenario }: { scenario: ScenarioData }) {
         </div>
       )}
 
-      {/* AA Warning (personal pension) */}
+      {/* 5. AA Warning — UNCHANGED */}
       {isPension && s.pension_aa_warning && (
         <div className="rounded-xl border border-amber-200/40 dark:border-amber-800/20 bg-amber-50/30 dark:bg-amber-900/10 backdrop-blur-sm p-3">
           <p className="text-[10px] text-amber-700 dark:text-amber-300">{s.pension_aa_warning}</p>
