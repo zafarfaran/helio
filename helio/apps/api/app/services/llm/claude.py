@@ -156,6 +156,67 @@ ENGINE_TOOLS = [
             "required": ["gross_salary", "sacrifice_amount"],
         },
     },
+    {
+        "name": "model_personal_pension",
+        "description": (
+            "Model the tax impact of personal pension contributions (SIPP / relief at source). "
+            "Computes current vs proposed tax positions and returns savings breakdown "
+            "(income tax, HICBC avoided, PA restored) plus optimal contribution thresholds. "
+            "You MUST call this tool for EVERY pension contribution scenario — including "
+            "follow-ups. Never extrapolate from a previous result; tax is non-linear."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "income_sources": {
+                    "type": "array",
+                    "description": "List of income sources",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "source_type": {
+                                "type": "string",
+                                "enum": [
+                                    "employment", "self_employment", "rental",
+                                    "pension_income", "savings", "dividends", "other",
+                                ],
+                            },
+                            "gross_amount": {"type": "number"},
+                            "label": {"type": "string"},
+                        },
+                        "required": ["source_type", "gross_amount"],
+                    },
+                },
+                "proposed_contribution": {
+                    "type": "number",
+                    "description": (
+                        "The proposed annual gross personal pension contribution to model"
+                    ),
+                },
+                "current_contribution": {
+                    "type": "number",
+                    "description": (
+                        "Existing annual personal pension contribution (default 0)"
+                    ),
+                },
+                "employer_contributions": {
+                    "type": "number",
+                    "description": (
+                        "Annual employer pension contributions including salary sacrifice "
+                        "(for pension AA check only — does not affect tax savings)"
+                    ),
+                },
+                "gift_aid": {
+                    "type": "number",
+                    "description": "Net gift aid donations (default 0)",
+                },
+                "region": {"type": "string"},
+                "number_of_children": {"type": "integer"},
+                "claims_child_benefit": {"type": "boolean"},
+            },
+            "required": ["income_sources", "proposed_contribution"],
+        },
+    },
 ]
 
 OBSERVATION_TOOLS = [
@@ -290,6 +351,7 @@ class ClaudeProvider:
                                     "search_meeting_notes": StatusPhase.SEARCHING_NOTES,
                                     "compute_tax_position": StatusPhase.COMPUTING_TAX,
                                     "model_salary_sacrifice": StatusPhase.MODELLING_SCENARIO,
+                                    "model_personal_pension": StatusPhase.MODELLING_SCENARIO,
                                     "save_observation": StatusPhase.SAVING_OBSERVATION,
                                 }
                                 yield StatusEvent(

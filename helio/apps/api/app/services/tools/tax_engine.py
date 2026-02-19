@@ -3,6 +3,7 @@
 from app.core.logging import get_logger
 from app.tax.engine import compute_full_tax_position
 from app.tax.salary_sacrifice import analyse_salary_sacrifice
+from app.tax.personal_pension import analyse_personal_pension
 from app.tax.types import IncomeSource, IncomeType, TaxPosition
 
 logger = get_logger(__name__)
@@ -110,6 +111,44 @@ async def execute_model_salary_sacrifice(
 
     except Exception as e:
         logger.exception("Salary sacrifice error")
+        return {"success": False, "error": str(e)}
+
+
+async def execute_model_personal_pension(
+    tool_input: dict, *, context: dict | None = None
+) -> dict:
+    """Execute model_personal_pension tool."""
+    try:
+        raw_sources = tool_input.get("income_sources", [])
+        income_sources = [
+            IncomeSource(
+                source_type=IncomeType(s["source_type"]),
+                gross_amount=float(s["gross_amount"]),
+                label=s.get("label", ""),
+            )
+            for s in raw_sources
+        ]
+
+        result = analyse_personal_pension(
+            income_sources=income_sources,
+            proposed_contribution=float(tool_input["proposed_contribution"]),
+            current_contribution=float(tool_input.get("current_contribution", 0)),
+            employer_contributions=float(tool_input.get("employer_contributions", 0)),
+            gift_aid=float(tool_input.get("gift_aid", 0)),
+            region=tool_input.get("region", "england"),
+            number_of_children=int(tool_input.get("number_of_children", 0)),
+            claims_child_benefit=bool(tool_input.get("claims_child_benefit", False)),
+        )
+
+        logger.info(
+            "Personal pension modelled",
+            total_saving=result["savings"]["total"],
+        )
+
+        return {"success": True, **result}
+
+    except Exception as e:
+        logger.exception("Personal pension error")
         return {"success": False, "error": str(e)}
 
 

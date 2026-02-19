@@ -7,6 +7,7 @@ from app.services.tools.observations import execute_save_observation
 from app.services.tools.tax_engine import (
     execute_compute_tax_position,
     execute_model_salary_sacrifice,
+    execute_model_personal_pension,
 )
 
 logger = get_logger(__name__)
@@ -16,6 +17,7 @@ TOOL_EXECUTORS: dict = {
     "search_meeting_notes": execute_search_meeting_notes,
     "compute_tax_position": execute_compute_tax_position,
     "model_salary_sacrifice": execute_model_salary_sacrifice,
+    "model_personal_pension": execute_model_personal_pension,
     "save_observation": execute_save_observation,
 }
 
