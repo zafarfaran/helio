@@ -13,6 +13,7 @@ import { MarkdownRenderer } from "@/components/markdown-renderer";
 import { TaxComputationBreakdown } from "@/components/tax-computation-breakdown";
 import { ScenarioComparisonChart } from "@/components/charts/scenario-comparison-chart";
 import { NetBenefitCard } from "@/components/charts/net-benefit-card";
+import { TotalBenefitHero } from "@/components/charts/total-benefit-hero";
 import { VoiceMode } from "@/components/voice-mode";
 import {
   HelioLogo,
@@ -2477,6 +2478,15 @@ function ScenarioComparison({ scenario }: { scenario: ScenarioData }) {
       transition={{ duration: 0.4 }}
       className="space-y-3"
     >
+      {/* 0. Total Benefit Hero */}
+      {s.total_benefit && (
+        <TotalBenefitHero
+          totalBenefit={s.total_benefit}
+          isPension={isPension}
+          paChange={s.pa_change}
+        />
+      )}
+
       {/* 1. Before/After chart */}
       <ScenarioComparisonChart
         current={s.current}
