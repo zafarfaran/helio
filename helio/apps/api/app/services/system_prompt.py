@@ -184,6 +184,31 @@ def _format_client_context(ctx: dict) -> str:
             for a in tp['allowances']:
                 lines.append(f"- {a.get('label', a.get('type', ''))}: £{a.get('remaining', 0):,.0f} remaining of £{a.get('annual_limit', 0):,.0f}")
 
+    if "household_members" in ctx:
+        lines.append("\n**Household Members:**")
+        for member in ctx["household_members"]:
+            relation = " (Spouse)" if member.get("is_spouse") else ""
+            lines.append(f"\n**{member.get('first_name', '')} {member.get('last_name', '')}**{relation}")
+            lines.append(f"- Employment: {member.get('employment_status', 'unknown')}")
+            lines.append(f"- Region: {member.get('region', 'england').title()}")
+            if member.get("number_of_children", 0) > 0:
+                cb = "yes" if member.get("claims_child_benefit") else "no"
+                lines.append(f"- Children: {member['number_of_children']} (claims CB: {cb})")
+            if "tax_profile" in member:
+                tp = member["tax_profile"]
+                lines.append(f"- Total Income: £{tp.get('total_income', 0):,.2f}")
+                lines.append(f"- ANI: £{tp.get('adjusted_net_income', 0):,.2f}")
+                lines.append(f"- Total Tax: £{tp.get('total_tax', 0):,.2f}")
+                lines.append(f"- Effective Rate: {tp.get('effective_rate', 0):.1f}%")
+                lines.append(f"- Marginal Rate: {tp.get('marginal_rate', 0):.0f}%")
+                lines.append(f"- PA Status: {tp.get('pa_status', 'full')}")
+                if tp.get("income_sources"):
+                    lines.append("- Income Sources:")
+                    for src in tp["income_sources"]:
+                        lines.append(f"  - {src.get('label', src.get('source_type', 'Unknown'))}: £{src.get('gross_amount', 0):,.2f}")
+            else:
+                lines.append("- Tax profile: not yet computed")
+
     if "observations" in ctx:
         lines.append("\n**Current Observations:**")
         for obs in ctx["observations"]:

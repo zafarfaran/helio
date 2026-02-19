@@ -8,7 +8,7 @@ from sqlalchemy import desc, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import get_logger
-from app.db.models import Client, Conversation, MeetingNote, Message, Observation, TaxProfile
+from app.db.models import Client, Conversation, Household, MeetingNote, Message, Observation, TaxProfile
 from app.services.llm.factory import get_llm_provider
 from app.services.llm.types import (
     DashboardUpdateEvent,
@@ -370,6 +370,51 @@ class ChatService:
         )
         meeting_notes = result.all()
 
+        # Load household members (other clients in the same household)
+        household_members = []
+        if client.household_id:
+            result = await self.session.execute(
+                select(Client)
+                .where(Client.household_id == client.household_id)
+                .where(Client.id != client_id)
+            )
+            other_members = list(result.scalars().all())
+
+            for member in other_members:
+                # Load their latest tax profile
+                result = await self.session.execute(
+                    select(TaxProfile)
+                    .where(TaxProfile.client_id == member.id)
+                    .order_by(desc(TaxProfile.created_at))
+                    .limit(1)
+                )
+                member_tax_profile = result.scalar_one_or_none()
+
+                member_info: dict = {
+                    "id": member.id,
+                    "first_name": member.first_name,
+                    "last_name": member.last_name,
+                    "region": member.region,
+                    "employment_status": member.employment_status,
+                    "is_spouse": member.id == client.spouse_id,
+                    "number_of_children": member.number_of_children,
+                    "claims_child_benefit": member.claims_child_benefit,
+                }
+                if member_tax_profile:
+                    member_info["tax_profile"] = {
+                        "tax_year": member_tax_profile.tax_year,
+                        "total_income": member_tax_profile.total_income,
+                        "adjusted_net_income": member_tax_profile.adjusted_net_income,
+                        "total_tax": member_tax_profile.total_tax,
+                        "effective_rate": member_tax_profile.effective_rate,
+                        "marginal_rate": member_tax_profile.marginal_rate,
+                        "pa_status": member_tax_profile.pa_status,
+                        "in_pa_taper_zone": member_tax_profile.in_pa_taper_zone,
+                        "hicbc_applies": member_tax_profile.hicbc_applies,
+                        "income_sources": member_tax_profile.income_sources or [],
+                    }
+                household_members.append(member_info)
+
         # Build context dict
         context: dict = {
             "client": {
@@ -394,6 +439,9 @@ class ChatService:
                 "income_sources": tax_profile.income_sources or [],
                 "allowances": tax_profile.allowances or [],
             }
+
+        if household_members:
+            context["household_members"] = household_members
 
         if observations:
             context["observations"] = [
