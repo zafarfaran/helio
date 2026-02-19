@@ -14,7 +14,7 @@ import structlog
 from app.tax.constants import get_tax_year_constants
 from app.tax.engine import compute_full_tax_position
 from app.tax.rounding import round_currency
-from app.tax.types import IncomeSource
+from app.tax.types import IncomeSource, TaxPosition
 
 logger = structlog.get_logger(__name__)
 
@@ -30,7 +30,7 @@ def analyse_personal_pension(
     number_of_children: int = 0,
     claims_child_benefit: bool = False,
     pension_contributions_by_year: dict[str, float] | None = None,
-) -> dict:
+) -> tuple[dict, TaxPosition]:
     """Analyse tax savings from personal pension contributions.
 
     Computes current and proposed tax positions, returns the diff
@@ -70,6 +70,26 @@ def analyse_personal_pension(
 
     effective_relief = (
         round_currency(total_saving / additional_contribution * 100)
+        if additional_contribution > 0
+        else 0.0
+    )
+
+    # -- Net benefit (includes basic rate relief at source) --------------------
+    basic_rate_relief = round_currency(additional_contribution * 0.2)
+    net_cost_to_client = round_currency(additional_contribution * 0.8)
+    higher_rate_relief = it_saving  # IT saving from BRB extension = the SA claim
+    total_tax_relief = round_currency(basic_rate_relief + higher_rate_relief + hicbc_avoided)
+    net_cost_after_relief = round_currency(net_cost_to_client - higher_rate_relief - hicbc_avoided)
+    net_benefit_value = round_currency(additional_contribution - net_cost_after_relief)
+
+    total_effective_relief = (
+        round_currency(total_tax_relief / additional_contribution * 100)
+        if additional_contribution > 0
+        else 0.0
+    )
+
+    effective_cost_ppp = (
+        round_currency(net_cost_after_relief / additional_contribution)
         if additional_contribution > 0
         else 0.0
     )
@@ -152,7 +172,19 @@ def analyse_personal_pension(
         "effective_relief_rate": effective_relief,
         "thresholds": thresholds,
         "pension_aa_warning": pension_aa_warning,
-    }
+        "total_effective_relief_rate": total_effective_relief,
+        "net_benefit": {
+            "gross_contribution": round_currency(additional_contribution),
+            "net_cost_to_client": net_cost_to_client,
+            "basic_rate_relief": basic_rate_relief,
+            "higher_rate_relief": higher_rate_relief,
+            "hicbc_avoided": hicbc_avoided,
+            "total_tax_relief": total_tax_relief,
+            "net_cost_after_relief": net_cost_after_relief,
+            "net_benefit": net_benefit_value,
+            "effective_cost_per_pound_in_pension": effective_cost_ppp,
+        },
+    }, proposed
 
 
 def _identify_thresholds(
