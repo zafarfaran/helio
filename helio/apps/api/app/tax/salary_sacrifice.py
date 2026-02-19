@@ -9,7 +9,7 @@ import structlog
 
 from app.tax.engine import compute_full_tax_position
 from app.tax.rounding import round_currency
-from app.tax.types import IncomeSource, IncomeType
+from app.tax.types import IncomeSource, IncomeType, TaxPosition
 
 logger = structlog.get_logger(__name__)
 
@@ -24,7 +24,7 @@ def analyse_salary_sacrifice(
     number_of_children: int = 0,
     claims_child_benefit: bool = False,
     pension_contributions_by_year: dict[str, float] | None = None,
-) -> dict:
+) -> tuple[dict, "TaxPosition"]:
     """Analyse salary sacrifice tax savings.
 
     Computes current and proposed tax positions, returns the diff.
@@ -73,6 +73,16 @@ def analyse_salary_sacrifice(
     total_saving = round_currency(it_saving + ni_saving + hicbc_avoided)
     extra_pension = round_currency(sacrifice_amount - current_sacrifice)
 
+    # -- Net benefit -------------------------------------------------------
+    additional_sacrifice = sacrifice_amount - current_sacrifice
+    take_home_reduction = round_currency(additional_sacrifice - total_saving)
+
+    effective_cost_ppp = (
+        round_currency(take_home_reduction / additional_sacrifice)
+        if additional_sacrifice > 0
+        else 0.0
+    )
+
     logger.info(
         "Salary sacrifice analysed",
         it_saving=it_saving,
@@ -112,4 +122,13 @@ def analyse_salary_sacrifice(
             "restored": round_currency(proposed.personal_allowance - current.personal_allowance),
         },
         "extra_into_pension": extra_pension,
-    }
+        "net_benefit": {
+            "gross_into_pension": round_currency(additional_sacrifice),
+            "income_tax_saved": it_saving,
+            "ni_saved": ni_saving,
+            "hicbc_avoided": hicbc_avoided,
+            "total_saving": total_saving,
+            "take_home_reduction": take_home_reduction,
+            "effective_cost_per_pound_in_pension": effective_cost_ppp,
+        },
+    }, proposed
