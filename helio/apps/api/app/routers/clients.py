@@ -1,7 +1,7 @@
 """Client endpoints — list clients with tax summaries and detail views."""
 
 import re
-from typing import Literal
+from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, field_validator
@@ -451,6 +451,163 @@ async def create_client(
         "region": client.region,
         "employment_status": client.employment_status,
     }
+
+
+class UpdateClientRequest(BaseModel):
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    email: Optional[str] = None
+    date_of_birth: Optional[str] = None
+    ni_number: Optional[str] = None
+    utr: Optional[str] = None
+    region: Optional[Literal["england", "wales", "scotland", "northern_ireland"]] = None
+    employment_status: Optional[Literal["employed", "self-employed", "director", "retired", "other"]] = None
+    phone: Optional[str] = None
+    address_line_1: Optional[str] = None
+    address_line_2: Optional[str] = None
+    city: Optional[str] = None
+    postcode: Optional[str] = None
+    marital_status: Optional[str] = None
+    number_of_children: Optional[int] = None
+    claims_child_benefit: Optional[bool] = None
+    employer_name: Optional[str] = None
+    company_name: Optional[str] = None
+    company_number: Optional[str] = None
+    notes: Optional[str] = None
+    spouse_id: Optional[str] = None  # set to "" to unlink
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", v):
+            raise ValueError("Enter a valid email address")
+        return v.lower()
+
+    @field_validator("ni_number")
+    @classmethod
+    def validate_ni_number(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        if not re.match(r"^[A-Za-z]{2}\d{6}[A-Za-z]$", v):
+            raise ValueError("NI number must match format AB123456C")
+        return v.upper()
+
+    @field_validator("utr")
+    @classmethod
+    def validate_utr(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        if not re.match(r"^\d{10}$", v):
+            raise ValueError("UTR must be exactly 10 digits")
+        return v
+
+
+@router.patch("/clients/{client_id}")
+async def update_client(
+    client_id: str,
+    body: UpdateClientRequest,
+    session: AsyncSession = Depends(get_db_session),
+    logger: BoundLogger = Depends(get_request_logger),
+):
+    """Update client fields (partial update — only sent fields are changed)."""
+    result = await session.execute(
+        select(Client).where(Client.id == client_id)
+    )
+    client = result.scalar_one_or_none()
+    if client is None:
+        raise HTTPException(status_code=404, detail="Client not found")
+
+    updates = body.model_dump(exclude_unset=True)
+
+    # Handle spouse_id specially — pop it so the generic loop doesn't touch it
+    if "spouse_id" in updates:
+        new_spouse_id = updates.pop("spouse_id")
+
+        if new_spouse_id == "":
+            # Unlink: clear old spouse's back-link, then clear ours
+            if client.spouse_id:
+                old_sp_result = await session.execute(
+                    select(Client).where(Client.id == client.spouse_id)
+                )
+                old_spouse = old_sp_result.scalar_one_or_none()
+                if old_spouse:
+                    old_spouse.spouse_id = None
+            client.spouse_id = None
+
+        elif new_spouse_id is not None:
+            # Link to a new spouse
+            sp_result = await session.execute(
+                select(Client).where(Client.id == new_spouse_id)
+            )
+            new_spouse = sp_result.scalar_one_or_none()
+            if new_spouse is None:
+                raise HTTPException(status_code=404, detail="Spouse client not found")
+
+            # Clear any existing spouse back-links on both sides
+            if client.spouse_id and client.spouse_id != new_spouse_id:
+                old_sp_result = await session.execute(
+                    select(Client).where(Client.id == client.spouse_id)
+                )
+                old_spouse = old_sp_result.scalar_one_or_none()
+                if old_spouse:
+                    old_spouse.spouse_id = None
+
+            if new_spouse.spouse_id and new_spouse.spouse_id != client.id:
+                old_sp2_result = await session.execute(
+                    select(Client).where(Client.id == new_spouse.spouse_id)
+                )
+                old_spouse2 = old_sp2_result.scalar_one_or_none()
+                if old_spouse2:
+                    old_spouse2.spouse_id = None
+
+            # Set bidirectional link
+            client.spouse_id = new_spouse_id
+            new_spouse.spouse_id = client.id
+
+            # Move client into spouse's household
+            client.household_id = new_spouse.household_id
+
+    for field, value in updates.items():
+        setattr(client, field, value)
+
+    await session.flush()
+
+    logger.info("Client updated", client_id=client_id, fields=list(updates.keys()))
+
+    return await get_client(client_id, session, logger)
+
+
+class UpdateHouseholdRequest(BaseModel):
+    name: Optional[str] = None
+    notes: Optional[str] = None
+
+
+@router.patch("/households/{household_id}")
+async def update_household(
+    household_id: str,
+    body: UpdateHouseholdRequest,
+    session: AsyncSession = Depends(get_db_session),
+    logger: BoundLogger = Depends(get_request_logger),
+):
+    """Update household fields (partial update)."""
+    result = await session.execute(
+        select(Household).where(Household.id == household_id)
+    )
+    household = result.scalar_one_or_none()
+    if household is None:
+        raise HTTPException(status_code=404, detail="Household not found")
+
+    updates = body.model_dump(exclude_unset=True)
+    for field, value in updates.items():
+        setattr(household, field, value)
+
+    await session.flush()
+
+    logger.info("Household updated", household_id=household_id, fields=list(updates.keys()))
+
+    return {"id": household.id, "name": household.name, "notes": household.notes}
 
 
 @router.post("/clients/{client_id}/tax-profile")

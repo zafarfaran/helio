@@ -237,6 +237,7 @@ export function useChat(clientId: string, taxPlanMode: boolean = false, onObserv
                 }
               } else if (eventType === "tool_call") {
                 if (data.tool === "compute_tax_position") {
+                  setIsDashboardGenerating(true);
                   setStatus("computing_tax");
                   setStatusMessage("Computing tax position...");
                 } else if (data.tool === "model_salary_sacrifice") {

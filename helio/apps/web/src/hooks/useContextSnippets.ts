@@ -45,14 +45,12 @@ export function useContextSnippets() {
     return ids;
   }, [snippets]);
 
-  // Poll every 5 seconds
+  // Fetch once on mount
   useEffect(() => {
     fetchPending();
-    const interval = setInterval(fetchPending, 5000);
-    return () => clearInterval(interval);
   }, [fetchPending]);
 
-  // Listen for extension notifications via custom event
+  // Refresh when the extension notifies us of new context
   useEffect(() => {
     const handler = () => fetchPending();
     window.addEventListener("helio-context-updated", handler);

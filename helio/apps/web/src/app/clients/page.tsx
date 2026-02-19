@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { ThemeToggle } from "@/components/theme-provider";
 import { AddClientPanel } from "@/components/add-client-panel";
 import { TaxDataForm } from "@/components/tax-data-form";
+import { EditClientForm } from "@/components/edit-client-form";
 import { TabBar, TabId } from "@/components/charts/tab-bar";
 import { TaxDonutChart } from "@/components/charts/tax-donut-chart";
 import { WaterfallChart } from "@/components/charts/waterfall-chart";
@@ -690,22 +691,106 @@ function Skeleton() {
 function HouseholdDetail({
   household,
   onViewMember,
+  onUpdated,
 }: {
   household: HouseholdSummary;
   onViewMember: (id: string) => void;
+  onUpdated?: () => void;
 }) {
+  const [editing, setEditing] = useState(false);
+  const [editName, setEditName] = useState(household.name);
+  const [editNotes, setEditNotes] = useState(household.notes || "");
+  const [saving, setSaving] = useState(false);
+
+  const startEdit = () => {
+    setEditName(household.name);
+    setEditNotes(household.notes || "");
+    setEditing(true);
+  };
+
+  const cancelEdit = () => setEditing(false);
+
+  const saveEdit = async () => {
+    setSaving(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/households/${household.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...(editName !== household.name ? { name: editName } : {}),
+          ...(editNotes !== (household.notes || "") ? { notes: editNotes } : {}),
+        }),
+      });
+      if (res.ok) {
+        setEditing(false);
+        onUpdated?.();
+      }
+    } catch { /* noop */ }
+    finally { setSaving(false); }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-[24px] font-semibold text-slate-900 dark:text-white tracking-[-0.025em] leading-none">
-          {household.name}
-        </h1>
-        <p className="text-[13px] font-light text-slate-400 dark:text-zinc-500 mt-2">
-          {household.member_count} {household.member_count === 1 ? "member" : "members"}
-        </p>
-        {household.notes && (
-          <p className="text-[12px] font-light text-slate-500 dark:text-zinc-400 mt-2 leading-relaxed">{household.notes}</p>
+        {editing ? (
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <label className="block text-[11px] font-medium text-[var(--foreground)]/70 tracking-wide">Household Name</label>
+              <input
+                type="text"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                className="w-full max-w-sm px-3 py-2 text-[14px] font-semibold bg-[var(--surface)] border border-[var(--border-subtle)] rounded-lg text-[var(--foreground)] focus:outline-none focus:border-[var(--accent)]/40 focus:ring-1 focus:ring-[var(--accent)]/15 transition-all"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="block text-[11px] font-medium text-[var(--foreground)]/70 tracking-wide">Notes</label>
+              <textarea
+                value={editNotes}
+                onChange={(e) => setEditNotes(e.target.value)}
+                rows={3}
+                placeholder="Household notes..."
+                className="w-full px-3 py-2 text-[12px] bg-[var(--surface)] border border-[var(--border-subtle)] rounded-lg text-[var(--foreground)] placeholder:text-[var(--muted-foreground)]/50 focus:outline-none focus:border-[var(--accent)]/40 focus:ring-1 focus:ring-[var(--accent)]/15 transition-all resize-none"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={saveEdit}
+                disabled={saving}
+                className="px-4 py-1.5 rounded-lg text-[11px] font-medium bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)] transition-all disabled:opacity-70"
+              >
+                {saving ? "Saving..." : "Save"}
+              </button>
+              <button
+                onClick={cancelEdit}
+                disabled={saving}
+                className="px-4 py-1.5 rounded-lg text-[11px] font-medium text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--surface)] transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="flex items-center gap-3">
+              <h1 className="text-[24px] font-semibold text-slate-900 dark:text-white tracking-[-0.025em] leading-none">
+                {household.name}
+              </h1>
+              <button
+                onClick={startEdit}
+                className="text-[11px] font-medium text-brand-500 dark:text-brand-400 hover:text-brand-600 dark:hover:text-brand-300 transition-colors"
+              >
+                Edit
+              </button>
+            </div>
+            <p className="text-[13px] font-light text-slate-400 dark:text-zinc-500 mt-2">
+              {household.member_count} {household.member_count === 1 ? "member" : "members"}
+            </p>
+            {household.notes && (
+              <p className="text-[12px] font-light text-slate-500 dark:text-zinc-400 mt-2 leading-relaxed">{household.notes}</p>
+            )}
+          </>
         )}
       </div>
 
@@ -799,6 +884,7 @@ export default function ClientsPage() {
   const [search, setSearch] = useState("");
   const [showAddPanel, setShowAddPanel] = useState(false);
   const [showTaxForm, setShowTaxForm] = useState(false);
+  const [showEditProfile, setShowEditProfile] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>("profile");
   const [sidebarMode, setSidebarMode] = useState<"clients" | "households">("clients");
   const [households, setHouseholds] = useState<HouseholdSummary[]>([]);
@@ -815,6 +901,7 @@ export default function ClientsPage() {
   const refetchDetail = useCallback(() => {
     if (!selectedId) return;
     setShowTaxForm(false);
+    setShowEditProfile(false);
     setDetailLoading(true);
     (async () => {
       try {
@@ -859,6 +946,7 @@ export default function ClientsPage() {
     if (!selectedId) return;
     let cancelled = false;
     setShowTaxForm(false);
+    setShowEditProfile(false);
     setActiveTab("profile");
     setDetailLoading(true);
     (async () => {
@@ -916,6 +1004,16 @@ export default function ClientsPage() {
   const viewMemberProfile = useCallback((memberId: string) => {
     setSidebarMode("clients");
     setSelectedId(memberId);
+  }, []);
+
+  const refetchHouseholds = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/households`);
+      if (res.ok) {
+        const data = await res.json();
+        setHouseholds(data.households || []);
+      }
+    } catch { /* noop */ }
   }, []);
 
   /* Delete observation handler */
@@ -1136,17 +1234,25 @@ export default function ClientsPage() {
 
                     {/* Prev / Next + Edit */}
                     <div className="flex items-center gap-3 pt-1">
-                      {tp && !showTaxForm && (
-                        <button
-                          onClick={() => setShowTaxForm(true)}
-                          className="text-[11px] font-medium text-brand-500 dark:text-brand-400 hover:text-brand-600 dark:hover:text-brand-300 transition-colors"
-                        >
-                          Edit tax data
-                        </button>
+                      {!showTaxForm && !showEditProfile && (
+                        <>
+                          <button
+                            onClick={() => setShowEditProfile(true)}
+                            className="text-[11px] font-medium text-brand-500 dark:text-brand-400 hover:text-brand-600 dark:hover:text-brand-300 transition-colors"
+                          >
+                            Edit profile
+                          </button>
+                          <button
+                            onClick={() => setShowTaxForm(true)}
+                            className="text-[11px] font-medium text-brand-500 dark:text-brand-400 hover:text-brand-600 dark:hover:text-brand-300 transition-colors"
+                          >
+                            {tp ? "Edit tax data" : "Add tax data"}
+                          </button>
+                        </>
                       )}
-                      {showTaxForm && (
+                      {(showTaxForm || showEditProfile) && (
                         <button
-                          onClick={() => setShowTaxForm(false)}
+                          onClick={() => { setShowTaxForm(false); setShowEditProfile(false); }}
                           className="text-[11px] font-medium text-slate-400 dark:text-zinc-500 hover:text-slate-700 dark:hover:text-zinc-300 transition-colors"
                         >
                           Cancel edit
@@ -1176,23 +1282,48 @@ export default function ClientsPage() {
                     </div>
                   </div>
 
-                  {/* ── Tax data form for editing existing profile ── */}
-                  {tp && showTaxForm && (
+                  {/* ── Tax data form for editing/adding tax profile ── */}
+                  {showTaxForm && (
                     <TaxDataForm
                       clientId={detail.id}
                       clientRegion={detail.region || "england"}
                       onComputed={refetchDetail}
-                      existingData={{
-                        income_sources: tp.income_sources,
-                        pension_data: tp.pension_data as Record<string, unknown> | undefined,
-                        hicbc: tp.hicbc as Record<string, unknown> | undefined,
-                        allowances: tp.allowances as Array<{ type?: string; used?: number }> | undefined,
+                      {...(tp ? {
+                        existingData: {
+                          income_sources: tp.income_sources,
+                          pension_data: tp.pension_data as Record<string, unknown> | undefined,
+                          hicbc: tp.hicbc as Record<string, unknown> | undefined,
+                          allowances: tp.allowances as Array<{ type?: string; used?: number }> | undefined,
+                        },
+                      } : {})}
+                    />
+                  )}
+
+                  {/* ── Edit profile form ── */}
+                  {showEditProfile && (
+                    <EditClientForm
+                      client={detail}
+                      allClients={clients}
+                      onSaved={() => {
+                        setShowEditProfile(false);
+                        refetchDetail();
+                        // Also refetch client list to update sidebar name
+                        (async () => {
+                          try {
+                            const res = await fetch(`${API_BASE}/api/clients`);
+                            if (res.ok) {
+                              const data = await res.json();
+                              setClients(data.clients || []);
+                            }
+                          } catch { /* noop */ }
+                        })();
                       }}
+                      onCancel={() => setShowEditProfile(false)}
                     />
                   )}
 
                   {/* ── Tabs ── */}
-                  {!showTaxForm && (
+                  {!showTaxForm && !showEditProfile && (
                     <>
                       <div className="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
                         <TabBar active={activeTab} onChange={setActiveTab} />
@@ -1446,14 +1577,6 @@ export default function ClientsPage() {
                     </>
                   )}
 
-                  {/* Tax data form — shown when no profile exists */}
-                  {!tp && showTaxForm && (
-                    <TaxDataForm
-                      clientId={detail.id}
-                      clientRegion={detail.region || "england"}
-                      onComputed={refetchDetail}
-                    />
-                  )}
                 </motion.div>
               )}
             </AnimatePresence>
@@ -1474,6 +1597,7 @@ export default function ClientsPage() {
                   <HouseholdDetail
                     household={selectedHousehold}
                     onViewMember={viewMemberProfile}
+                    onUpdated={refetchHouseholds}
                   />
                 </motion.div>
               )}

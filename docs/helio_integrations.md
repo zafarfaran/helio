@@ -1,4 +1,4 @@
-# Helio — Integration Data Mapping
+t q2W2EWW2Q                                           # Helio — Integration Data Mapping
 
 > How external platforms (Xero, Salesforce, Hargreaves Lansdown, HMRC, FreeAgent) feed data into the Helio prototype schema. For each integration: what you get, how it's structured, where it lands, and the sync flow.
 
