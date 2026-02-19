@@ -288,7 +288,6 @@ export function useChat(clientId: string, taxPlanMode: boolean = false, onObserv
                   };
                   setScenarios((prev) => [...prev, newScenario]);
                   setIsScenarioGenerating(false);
-                  if (result.dashboardData) setDashboardData(result.dashboardData);
                 }
                 // Capture personal pension contribution result as a scenario
                 if (data.tool === "model_personal_pension" && data.result?.success) {
@@ -311,7 +310,6 @@ export function useChat(clientId: string, taxPlanMode: boolean = false, onObserv
                   };
                   setScenarios((prev) => [...prev, newScenario]);
                   setIsScenarioGenerating(false);
-                  if (result.dashboardData) setDashboardData(result.dashboardData);
                 }
                 // Extract dashboard data from tool_result (fallback)
                 if (data.tool === "generate_dashboard" && data.result?.dashboardData) {

@@ -100,7 +100,7 @@ async def execute_model_salary_sacrifice(
         if context:
             contributions_by_year = context.get("pension_contributions_by_year")
 
-        result = analyse_salary_sacrifice(
+        result, proposed_pos = analyse_salary_sacrifice(
             gross_salary=float(tool_input["gross_salary"]),
             sacrifice_amount=float(tool_input["sacrifice_amount"]),
             current_sacrifice=float(tool_input.get("current_sacrifice", 0)),
@@ -116,7 +116,10 @@ async def execute_model_salary_sacrifice(
             total_saving=result["savings"]["total"],
         )
 
-        return {"success": True, **result}
+        return {
+            "success": True,
+            **result,
+        }
 
     except Exception as e:
         logger.exception("Salary sacrifice error")
@@ -142,7 +145,7 @@ async def execute_model_personal_pension(
         if context:
             contributions_by_year = context.get("pension_contributions_by_year")
 
-        result = analyse_personal_pension(
+        result, proposed_pos = analyse_personal_pension(
             income_sources=income_sources,
             proposed_contribution=float(tool_input["proposed_contribution"]),
             current_contribution=float(tool_input.get("current_contribution", 0)),
@@ -159,7 +162,10 @@ async def execute_model_personal_pension(
             total_saving=result["savings"]["total"],
         )
 
-        return {"success": True, **result}
+        return {
+            "success": True,
+            **result,
+        }
 
     except Exception as e:
         logger.exception("Personal pension error")
