@@ -921,3 +921,61 @@ async def list_meeting_notes(
             for note in notes
         ]
     }
+
+
+# ── Pension History (carry-forward) ──────────────────────────────────
+
+
+class PensionHistoryInput(BaseModel):
+    contributions_history: dict[str, dict]
+
+
+@router.get("/clients/{client_id}/pension-history")
+async def get_pension_history(
+    client_id: str,
+    session: AsyncSession = Depends(get_db_session),
+    logger: BoundLogger = Depends(get_request_logger),
+):
+    """Return prior-year pension contributions for carry forward."""
+    result = await session.execute(
+        select(TaxProfile)
+        .where(TaxProfile.client_id == client_id)
+        .order_by(desc(TaxProfile.created_at))
+        .limit(1)
+    )
+    tp = result.scalar_one_or_none()
+
+    history = {}
+    if tp and tp.pension_data:
+        history = tp.pension_data.get("contributions_history", {})
+
+    return {"client_id": client_id, "contributions_history": history}
+
+
+@router.put("/clients/{client_id}/pension-history")
+async def update_pension_history(
+    client_id: str,
+    body: PensionHistoryInput,
+    session: AsyncSession = Depends(get_db_session),
+    logger: BoundLogger = Depends(get_request_logger),
+):
+    """Save prior-year pension contributions for carry forward."""
+    result = await session.execute(
+        select(TaxProfile)
+        .where(TaxProfile.client_id == client_id)
+        .order_by(desc(TaxProfile.created_at))
+        .limit(1)
+    )
+    tp = result.scalar_one_or_none()
+    if tp is None:
+        raise HTTPException(status_code=404, detail="No tax profile found for client")
+
+    pension_data = dict(tp.pension_data or {})
+    pension_data["contributions_history"] = body.contributions_history
+    tp.pension_data = pension_data
+    from sqlalchemy.orm.attributes import flag_modified
+    flag_modified(tp, "pension_data")
+    await session.flush()
+
+    logger.info("Pension history updated", client_id=client_id, years=list(body.contributions_history.keys()))
+    return {"client_id": client_id, "contributions_history": body.contributions_history}
