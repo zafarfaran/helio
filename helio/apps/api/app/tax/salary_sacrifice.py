@@ -23,6 +23,7 @@ def analyse_salary_sacrifice(
     region: str = "england",
     number_of_children: int = 0,
     claims_child_benefit: bool = False,
+    pension_contributions_by_year: dict[str, float] | None = None,
 ) -> dict:
     """Analyse salary sacrifice tax savings.
 
@@ -44,6 +45,7 @@ def analyse_salary_sacrifice(
         region=region,
         number_of_children=number_of_children,
         claims_child_benefit=claims_child_benefit,
+        pension_contributions_by_year=pension_contributions_by_year,
     )
 
     # Proposed position: salary with new sacrifice
@@ -57,6 +59,7 @@ def analyse_salary_sacrifice(
         region=region,
         number_of_children=number_of_children,
         claims_child_benefit=claims_child_benefit,
+        pension_contributions_by_year=pension_contributions_by_year,
     )
 
     # Compute savings

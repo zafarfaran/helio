@@ -29,6 +29,7 @@ def analyse_personal_pension(
     region: str = "england",
     number_of_children: int = 0,
     claims_child_benefit: bool = False,
+    pension_contributions_by_year: dict[str, float] | None = None,
 ) -> dict:
     """Analyse tax savings from personal pension contributions.
 
@@ -42,6 +43,7 @@ def analyse_personal_pension(
         region=region,
         number_of_children=number_of_children,
         claims_child_benefit=claims_child_benefit,
+        pension_contributions_by_year=pension_contributions_by_year,
     )
 
     # -- Current position ------------------------------------------------------
@@ -88,10 +90,22 @@ def analyse_personal_pension(
     aa_limit = c["pension"]["annual_allowance"]
     total_pension = proposed_contribution + employer_contributions
     pension_aa_warning = None
-    if total_pension > aa_limit:
+    if pension_contributions_by_year:
+        from app.tax.pension_aa import calculate_pension_aa
+        aa_check = calculate_pension_aa(
+            adjusted_income=0, threshold_income=0,
+            current_year_contributions=total_pension,
+            contributions_by_year=pension_contributions_by_year,
+        )
+        if aa_check.remaining < 0:
+            pension_aa_warning = (
+                f"Proposed total contributions (\u00a3{total_pension:,.0f}) exceed available "
+                f"allowance including carry forward (\u00a3{aa_check.total_available:,.0f})."
+            )
+    elif total_pension > aa_limit:
         pension_aa_warning = (
-            f"Proposed total pension contributions ({total_pension:,.0f}) "
-            f"exceed the annual allowance ({aa_limit:,.0f}). "
+            f"Proposed total pension contributions (\u00a3{total_pension:,.0f}) "
+            f"exceed the annual allowance (\u00a3{aa_limit:,.0f}). "
             f"Check carry-forward availability."
         )
 

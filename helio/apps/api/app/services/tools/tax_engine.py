@@ -42,6 +42,10 @@ async def execute_compute_tax_position(
                 gift_aid=gift_aid_val,
             )
 
+        contributions_by_year = tool_input.get("pension_contributions_by_year")
+        if not contributions_by_year and context:
+            contributions_by_year = context.get("pension_contributions_by_year")
+
         position = compute_full_tax_position(
             income_sources=income_sources,
             pension_contributions=pension_contrib,
@@ -50,7 +54,7 @@ async def execute_compute_tax_position(
             region=tool_input.get("region", "england"),
             number_of_children=int(tool_input.get("number_of_children", 0)),
             claims_child_benefit=bool(tool_input.get("claims_child_benefit", False)),
-            pension_contributions_by_year=tool_input.get("pension_contributions_by_year"),
+            pension_contributions_by_year=contributions_by_year,
             mpaa_triggered=bool(tool_input.get("mpaa_triggered", False)),
             tax_year=tool_input.get("tax_year", "2025/26"),
         )
@@ -92,6 +96,10 @@ async def execute_model_salary_sacrifice(
                 for s in raw_other
             ]
 
+        contributions_by_year = None
+        if context:
+            contributions_by_year = context.get("pension_contributions_by_year")
+
         result = analyse_salary_sacrifice(
             gross_salary=float(tool_input["gross_salary"]),
             sacrifice_amount=float(tool_input["sacrifice_amount"]),
@@ -100,6 +108,7 @@ async def execute_model_salary_sacrifice(
             region=tool_input.get("region", "england"),
             number_of_children=int(tool_input.get("number_of_children", 0)),
             claims_child_benefit=bool(tool_input.get("claims_child_benefit", False)),
+            pension_contributions_by_year=contributions_by_year,
         )
 
         logger.info(
@@ -129,6 +138,10 @@ async def execute_model_personal_pension(
             for s in raw_sources
         ]
 
+        contributions_by_year = None
+        if context:
+            contributions_by_year = context.get("pension_contributions_by_year")
+
         result = analyse_personal_pension(
             income_sources=income_sources,
             proposed_contribution=float(tool_input["proposed_contribution"]),
@@ -138,6 +151,7 @@ async def execute_model_personal_pension(
             region=tool_input.get("region", "england"),
             number_of_children=int(tool_input.get("number_of_children", 0)),
             claims_child_benefit=bool(tool_input.get("claims_child_benefit", False)),
+            pension_contributions_by_year=contributions_by_year,
         )
 
         logger.info(

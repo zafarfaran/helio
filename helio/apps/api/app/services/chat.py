@@ -202,7 +202,7 @@ class ChatService:
         history = await self._load_history(conversation_id)
 
         # 4. Load client tax context
-        client_context = await self._load_client_context(client_id)
+        client_context, tax_profile_obj = await self._load_client_context(client_id)
 
         # 5. Build system prompt with client context
         system_prompt = build_system_prompt(client_context, tax_plan_mode=tax_plan_mode)
@@ -240,7 +240,19 @@ class ChatService:
         tools.extend(DASHBOARD_TOOLS)
         tools.extend(OBSERVATION_TOOLS)
 
-        tool_context = {"client_id": client_id}
+        pension_contributions_by_year = None
+        if tax_profile_obj and tax_profile_obj.pension_data:
+            ch = tax_profile_obj.pension_data.get("contributions_history", {})
+            if ch:
+                pension_contributions_by_year = {
+                    year: float(vals.get("personal", 0)) + float(vals.get("employer", 0))
+                    for year, vals in ch.items()
+                }
+
+        tool_context = {
+            "client_id": client_id,
+            "pension_contributions_by_year": pension_contributions_by_year,
+        }
         async for event in provider.stream_chat(
             llm_messages, system_prompt, tools=tools, tool_context=tool_context
         ):
@@ -330,10 +342,11 @@ class ChatService:
         )
         return messages
 
-    async def _load_client_context(self, client_id: str) -> dict | None:
+    async def _load_client_context(self, client_id: str) -> tuple[dict | None, TaxProfile | None]:
         """Load client, latest tax profile, and undismissed observations.
 
-        Returns the dict structure expected by ``build_system_prompt()``.
+        Returns the dict structure expected by ``build_system_prompt()``
+        and the raw TaxProfile object (for pension contribution history).
         """
         # Load client
         result = await self.session.execute(
@@ -342,7 +355,7 @@ class ChatService:
         client = result.scalar_one_or_none()
         if client is None:
             logger.warning("Client not found for context", client_id=client_id)
-            return None
+            return None, None
 
         logger.info(
             "Client loaded for context",
@@ -498,7 +511,7 @@ class ChatService:
             has_household_members="household_members" in context,
             has_notes=bool(client.notes),
         )
-        return context
+        return context, tax_profile
 
     async def _load_and_consume_snippets(self, snippet_ids: list[str]) -> str:
         """Load context snippets, mark as consumed, return formatted context."""
