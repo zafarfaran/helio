@@ -64,3 +64,51 @@ def test_taper_floor_at_10k():
     r = calculate_pension_aa(500_000, 400_000, current_year_contributions=5_000)
     assert r.is_tapered is True
     assert r.annual_allowance == 10_000
+
+
+def test_carry_forward_partial_years():
+    """Only some years have contributions."""
+    r = calculate_pension_aa(
+        150_000, 150_000,
+        current_year_contributions=50_000,
+        contributions_by_year={
+            "2024/25": 60_000,  # Fully used -> 0 unused
+            "2023/24": 0,       # None used -> 60k unused
+            # 2022/23 not provided -> not included in carry forward
+        },
+    )
+    # carry forward only includes years present in aa_history AND contributions_by_year
+    # 2024/25: 60k AA - 60k used = 0 unused
+    # 2023/24: 60k AA - 0 used = 60k unused
+    # 2022/23: in aa_history but NOT in contributions_by_year, so contribution=0, unused=40k
+    assert r.total_available == 60_000 + 0 + 60_000 + 40_000  # current + CF
+    assert r.remaining == 110_000  # 160k - 50k
+
+
+def test_carry_forward_no_history():
+    """No carry forward data -> just current year AA."""
+    r = calculate_pension_aa(
+        150_000, 150_000,
+        current_year_contributions=30_000,
+        contributions_by_year=None,
+    )
+    assert r.total_available == 60_000
+    assert r.remaining == 30_000
+    assert len(r.carry_forward) == 0
+
+
+def test_carry_forward_tapered_with_history():
+    """Tapered AA with carry forward still available."""
+    r = calculate_pension_aa(
+        300_000, 250_000,
+        current_year_contributions=50_000,
+        contributions_by_year={
+            "2024/25": 10_000,  # 60k AA - 10k = 50k unused
+            "2023/24": 10_000,  # 60k AA - 10k = 50k unused
+            "2022/23": 10_000,  # 40k AA - 10k = 30k unused
+        },
+    )
+    assert r.is_tapered is True
+    assert r.annual_allowance == 40_000
+    assert r.total_available == 40_000 + 50_000 + 50_000 + 30_000  # 170k
+    assert r.remaining == 120_000  # 170k - 50k
