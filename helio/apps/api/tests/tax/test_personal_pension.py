@@ -215,3 +215,37 @@ def test_net_benefit_existing_contribution_increase():
     assert nb["gross_contribution"] == 10_000  # 15k - 5k
     assert nb["net_cost_to_client"] == 8_000   # 10k * 0.8
     assert nb["basic_rate_relief"] == 2_000    # 10k * 0.2
+
+
+def test_net_benefit_additional_rate_taxpayer():
+    """£200k salary, £20k contribution. Additional rate taxpayer gets ~45% total relief."""
+    sources = [IncomeSource(IncomeType.EMPLOYMENT, 200_000, "Employment")]
+    r, _ = analyse_personal_pension(sources, proposed_contribution=20_000)
+
+    nb = r["net_benefit"]
+    assert nb["basic_rate_relief"] == 4_000  # 20k * 0.2
+    # Additional rate: BRB extension saves 25% (45% - 20%)
+    assert nb["higher_rate_relief"] > 0
+    assert r["total_effective_relief_rate"] >= 40  # Should be ~45% but some may be in higher band
+
+
+def test_net_benefit_aa_warning_still_fires():
+    """AA breach warning and net_benefit coexist."""
+    sources = [IncomeSource(IncomeType.EMPLOYMENT, 200_000, "Employment")]
+    r, _ = analyse_personal_pension(sources, proposed_contribution=65_000)
+
+    assert r["pension_aa_warning"] is not None
+    assert "net_benefit" in r
+    assert r["net_benefit"]["gross_contribution"] == 65_000
+
+
+def test_net_benefit_consistency():
+    """Net benefit + net cost after relief = gross contribution."""
+    sources = [IncomeSource(IncomeType.EMPLOYMENT, 80_000, "Employment")]
+    r, _ = analyse_personal_pension(sources, proposed_contribution=10_000)
+
+    nb = r["net_benefit"]
+    # Fundamental identity: net_benefit + net_cost_after_relief = gross
+    assert abs(nb["net_benefit"] + nb["net_cost_after_relief"] - nb["gross_contribution"]) < 0.01
+    # basic_rate_relief + net_cost_to_client = gross
+    assert abs(nb["basic_rate_relief"] + nb["net_cost_to_client"] - nb["gross_contribution"]) < 0.01
