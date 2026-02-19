@@ -46,9 +46,9 @@ export function TotalBenefitHero({
   isPension,
   paChange,
 }: TotalBenefitHeroProps) {
-  if (!totalBenefit || !totalBenefit.total_annual_benefit) return null;
+  if (!totalBenefit || (totalBenefit.total_annual_benefit ?? 0) <= 0) return null;
 
-  const totalAnnual = totalBenefit.total_annual_benefit;
+  const totalAnnual = totalBenefit.total_annual_benefit!;
   const monthly = totalBenefit.monthly_benefit ?? Math.round(totalAnnual / 12);
   const intoPension = totalBenefit.into_pension ?? 0;
 

@@ -29,6 +29,7 @@ interface ScenarioComparisonChartProps {
   savings: {
     income_tax: number;
     national_insurance?: number;
+    employer_ni?: number;
     hicbc_avoided: number;
     total: number;
   };
@@ -157,6 +158,9 @@ export function ScenarioComparisonChart({
     if (savings.income_tax > 0) items.push({ label: "Income Tax", value: savings.income_tax });
     if (!isPension && savings.national_insurance && savings.national_insurance > 0) {
       items.push({ label: "NI", value: savings.national_insurance });
+    }
+    if (!isPension && savings.employer_ni && savings.employer_ni > 0) {
+      items.push({ label: "Employer NI", value: savings.employer_ni });
     }
     if (savings.hicbc_avoided > 0) items.push({ label: "HICBC avoided", value: savings.hicbc_avoided });
     return items;
