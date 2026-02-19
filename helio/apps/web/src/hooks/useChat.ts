@@ -277,14 +277,18 @@ export function useChat(clientId: string, taxPlanMode: boolean = false, onObserv
                     id: crypto.randomUUID(),
                     name: `Sacrifice £${Number(result.proposed?.sacrifice || 0).toLocaleString()}`,
                     description: `Model salary sacrifice at £${Number(result.proposed?.sacrifice || 0).toLocaleString()}`,
+                    type: "salary_sacrifice" as const,
                     current: result.current,
                     proposed: result.proposed,
                     savings: result.savings,
                     pa_change: result.pa_change,
                     extra_into_pension: result.extra_into_pension,
+                    net_benefit: result.net_benefit,
+                    total_benefit: result.total_benefit,
                   };
                   setScenarios((prev) => [...prev, newScenario]);
                   setIsScenarioGenerating(false);
+                  if (result.dashboardData) setDashboardData(result.dashboardData);
                 }
                 // Capture personal pension contribution result as a scenario
                 if (data.tool === "model_personal_pension" && data.result?.success) {
@@ -293,7 +297,7 @@ export function useChat(clientId: string, taxPlanMode: boolean = false, onObserv
                     id: crypto.randomUUID(),
                     name: `Pension £${Number(result.proposed?.pension_contribution || 0).toLocaleString()}`,
                     description: `Model personal pension contribution of £${Number(result.proposed?.pension_contribution || 0).toLocaleString()}`,
-                    type: "personal_pension",
+                    type: "personal_pension" as const,
                     current: result.current,
                     proposed: result.proposed,
                     savings: result.savings,
@@ -301,9 +305,13 @@ export function useChat(clientId: string, taxPlanMode: boolean = false, onObserv
                     effective_relief_rate: result.effective_relief_rate,
                     thresholds: result.thresholds,
                     pension_aa_warning: result.pension_aa_warning,
+                    total_effective_relief_rate: result.total_effective_relief_rate,
+                    net_benefit: result.net_benefit,
+                    total_benefit: result.total_benefit,
                   };
                   setScenarios((prev) => [...prev, newScenario]);
                   setIsScenarioGenerating(false);
+                  if (result.dashboardData) setDashboardData(result.dashboardData);
                 }
                 // Extract dashboard data from tool_result (fallback)
                 if (data.tool === "generate_dashboard" && data.result?.dashboardData) {
