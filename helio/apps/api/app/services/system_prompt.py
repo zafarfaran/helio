@@ -158,6 +158,13 @@ def _format_client_context(ctx: dict) -> str:
         lines.append(f"**Client:** {c.get('first_name', '')} {c.get('last_name', '')}")
         lines.append(f"**Region:** {c.get('region', 'england').title()}")
         lines.append(f"**Employment status:** {c.get('employment_status', 'employed')}")
+        if c.get("marital_status"):
+            lines.append(f"**Marital status:** {c['marital_status']}")
+        if c.get("number_of_children", 0) > 0:
+            cb = "yes" if c.get("claims_child_benefit") else "no"
+            lines.append(f"**Children:** {c['number_of_children']} (claims child benefit: {cb})")
+        if c.get("notes"):
+            lines.append(f"\n**Adviser Notes:**\n{c['notes']}")
 
     if "tax_profile" in ctx:
         tp = ctx["tax_profile"]

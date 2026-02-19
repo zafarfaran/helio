@@ -422,6 +422,10 @@ class ChatService:
                 "last_name": client.last_name,
                 "region": client.region,
                 "employment_status": client.employment_status,
+                "number_of_children": client.number_of_children,
+                "claims_child_benefit": client.claims_child_benefit,
+                "marital_status": client.marital_status,
+                "notes": client.notes,
             },
         }
 
