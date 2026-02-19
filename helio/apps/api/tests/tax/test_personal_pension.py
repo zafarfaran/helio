@@ -249,3 +249,58 @@ def test_net_benefit_consistency():
     assert abs(nb["net_benefit"] + nb["net_cost_after_relief"] - nb["gross_contribution"]) < 0.01
     # basic_rate_relief + net_cost_to_client = gross
     assert abs(nb["basic_rate_relief"] + nb["net_cost_to_client"] - nb["gross_contribution"]) < 0.01
+
+
+def test_total_benefit_higher_rate():
+    """£80k salary, £10k contribution. total_benefit aggregates all relief."""
+    sources = [IncomeSource(IncomeType.EMPLOYMENT, 80_000, "Employment")]
+    r, _ = analyse_personal_pension(sources, proposed_contribution=10_000)
+
+    tb = r["total_benefit"]
+    # Components match net_benefit
+    assert tb["basic_rate_relief"] == r["net_benefit"]["basic_rate_relief"]
+    assert tb["higher_rate_relief"] == r["net_benefit"]["higher_rate_relief"]
+    assert tb["hicbc_avoided"] == r["net_benefit"]["hicbc_avoided"]
+    # Total = basic + higher + hicbc
+    assert tb["total_annual_benefit"] == tb["basic_rate_relief"] + tb["higher_rate_relief"] + tb["hicbc_avoided"]
+    assert tb["total_annual_benefit"] > 0
+    # Into pension = gross additional contribution
+    assert tb["into_pension"] == 10_000
+    # Client out of pocket = net cost after relief
+    assert tb["client_out_of_pocket"] == r["net_benefit"]["net_cost_after_relief"]
+    # Monthly equivalents
+    assert tb["monthly_benefit"] == round(tb["total_annual_benefit"] / 12, 2)
+    assert tb["monthly_cost"] == round(tb["client_out_of_pocket"] / 12, 2)
+    # PA restoration value (no PA taper at £80k, so should be 0)
+    assert tb["pa_restoration_value"] == 0
+
+
+def test_total_benefit_pa_taper():
+    """£110k salary, £10k contribution. PA restoration value shown."""
+    sources = [IncomeSource(IncomeType.EMPLOYMENT, 110_000, "Employment")]
+    r, _ = analyse_personal_pension(sources, proposed_contribution=10_000)
+
+    tb = r["total_benefit"]
+    # PA is restored
+    assert r["pa_change"]["restored"] > 0
+    # PA restoration value = restored * 0.40 (higher rate)
+    assert tb["pa_restoration_value"] == round(r["pa_change"]["restored"] * 0.40, 2)
+    assert tb["pa_restoration_value"] > 0
+    # PA restoration is a SUBSET of higher_rate_relief (annotation, not additive)
+    assert tb["pa_restoration_value"] <= tb["higher_rate_relief"]
+
+
+def test_total_benefit_zero_contribution():
+    """No additional contribution → total_benefit all zeros."""
+    sources = [IncomeSource(IncomeType.EMPLOYMENT, 80_000, "Employment")]
+    r, _ = analyse_personal_pension(
+        sources, proposed_contribution=5_000, current_contribution=5_000
+    )
+
+    tb = r["total_benefit"]
+    assert tb["total_annual_benefit"] == 0
+    assert tb["into_pension"] == 0
+    assert tb["client_out_of_pocket"] == 0
+    assert tb["monthly_benefit"] == 0
+    assert tb["monthly_cost"] == 0
+    assert tb["pa_restoration_value"] == 0
