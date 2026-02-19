@@ -94,6 +94,16 @@ def analyse_personal_pension(
         else 0.0
     )
 
+    # -- Total benefit (headline summary) --------------------------------------
+    pa_restored = round_currency(
+        proposed.personal_allowance - current.personal_allowance
+    )
+    pa_restoration_value = round_currency(pa_restored * 0.40) if pa_restored > 0 else 0.0
+    total_annual_benefit = total_tax_relief  # basic + higher + hicbc (already computed)
+    client_out_of_pocket = net_cost_after_relief
+    monthly_benefit = round_currency(total_annual_benefit / 12) if total_annual_benefit > 0 else 0.0
+    monthly_cost = round_currency(client_out_of_pocket / 12) if client_out_of_pocket > 0 else 0.0
+
     # -- Threshold analysis ----------------------------------------------------
     current_ani = current.adjusted_net_income
     thresholds = _identify_thresholds(
@@ -183,6 +193,17 @@ def analyse_personal_pension(
             "net_cost_after_relief": net_cost_after_relief,
             "net_benefit": net_benefit_value,
             "effective_cost_per_pound_in_pension": effective_cost_ppp,
+        },
+        "total_benefit": {
+            "basic_rate_relief": basic_rate_relief,
+            "higher_rate_relief": higher_rate_relief,
+            "hicbc_avoided": hicbc_avoided,
+            "pa_restoration_value": pa_restoration_value,
+            "total_annual_benefit": total_annual_benefit,
+            "into_pension": round_currency(additional_contribution),
+            "client_out_of_pocket": client_out_of_pocket,
+            "monthly_benefit": monthly_benefit,
+            "monthly_cost": monthly_cost,
         },
     }, proposed
 
