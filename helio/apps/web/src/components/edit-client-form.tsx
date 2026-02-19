@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo, useRef, useEffect } from "react";
+import React, { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   IconUser,
@@ -152,6 +152,25 @@ export function EditClientForm({ client, allClients, onSaved, onCancel }: EditCl
   const [spouseDropdownOpen, setSpouseDropdownOpen] = useState(false);
   const spouseRef = useRef<HTMLDivElement>(null);
 
+  // Pension contribution history for carry forward
+  const [pensionHistory, setPensionHistory] = useState<Record<string, { personal: number; employer: number }>>({
+    "2022/23": { personal: 0, employer: 0 },
+    "2023/24": { personal: 0, employer: 0 },
+    "2024/25": { personal: 0, employer: 0 },
+  });
+
+  // Fetch pension history on mount
+  useEffect(() => {
+    fetch(`${API_BASE}/api/clients/${client.id}/pension-history`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.contributions_history && Object.keys(data.contributions_history).length > 0) {
+          setPensionHistory((prev) => ({ ...prev, ...data.contributions_history }));
+        }
+      })
+      .catch(() => {});
+  }, [client.id]);
+
   const [submitting, setSubmitting] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
 
@@ -236,13 +255,24 @@ export function EditClientForm({ client, allClients, onSaved, onCancel }: EditCl
         throw new Error(body?.detail || `Failed to update client (${res.status})`);
       }
 
+      // Save pension history
+      try {
+        await fetch(`${API_BASE}/api/clients/${client.id}/pension-history`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ contributions_history: pensionHistory }),
+        });
+      } catch {
+        // Non-critical
+      }
+
       onSaved();
     } catch (e) {
       setApiError(e instanceof Error ? e.message : "An unexpected error occurred");
     } finally {
       setSubmitting(false);
     }
-  }, [form, client, selectedSpouseId, originalSpouseId, onSaved]);
+  }, [form, client, selectedSpouseId, originalSpouseId, pensionHistory, onSaved]);
 
   // Resolve current spouse name for display
   const currentSpouseName = useMemo(() => {
@@ -627,6 +657,58 @@ export function EditClientForm({ client, allClients, onSaved, onCancel }: EditCl
                 className={`${inputClass} font-mono`}
               />
             </div>
+          </div>
+        </div>
+      </motion.div>
+
+      {/* Pension Contribution History */}
+      <motion.div variants={fadeUp}>
+        <div className="rounded-xl bg-[var(--card)] border border-[var(--card-border)] overflow-hidden">
+          <div className="flex items-center gap-2.5 px-5 py-3.5 border-b border-[var(--border-subtle)]">
+            <IconTrendingUp className="w-[14px] h-[14px] text-[var(--accent)]" />
+            <h3 className="text-[13px] font-semibold text-[var(--foreground)] tracking-[-0.01em]">Pension Contribution History</h3>
+            <span className="text-[10px] text-[var(--muted)] ml-auto">For carry forward calculation</span>
+          </div>
+          <div className="px-5 py-4 space-y-3">
+            <div className="grid grid-cols-[auto_1fr_1fr] gap-x-3 gap-y-2 items-center">
+              <span className="text-[10px] font-medium text-[var(--muted)] uppercase tracking-wider">Year</span>
+              <span className="text-[10px] font-medium text-[var(--muted)] uppercase tracking-wider">Personal (&pound;)</span>
+              <span className="text-[10px] font-medium text-[var(--muted)] uppercase tracking-wider">Employer (&pound;)</span>
+              {(["2022/23", "2023/24", "2024/25"] as const).map((year) => (
+                <React.Fragment key={year}>
+                  <span className="text-[12px] font-mono text-[var(--foreground)]">{year}</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="100"
+                    value={pensionHistory[year]?.personal || 0}
+                    onChange={(e) =>
+                      setPensionHistory((prev) => ({
+                        ...prev,
+                        [year]: { ...prev[year], personal: parseFloat(e.target.value) || 0 },
+                      }))
+                    }
+                    className={inputClass + " font-mono"}
+                  />
+                  <input
+                    type="number"
+                    min="0"
+                    step="100"
+                    value={pensionHistory[year]?.employer || 0}
+                    onChange={(e) =>
+                      setPensionHistory((prev) => ({
+                        ...prev,
+                        [year]: { ...prev[year], employer: parseFloat(e.target.value) || 0 },
+                      }))
+                    }
+                    className={inputClass + " font-mono"}
+                  />
+                </React.Fragment>
+              ))}
+            </div>
+            <p className="text-[10px] text-[var(--muted)]/60 mt-1">
+              Enter total pension contributions for each tax year. Unused allowance carries forward for up to 3 years.
+            </p>
           </div>
         </div>
       </motion.div>
