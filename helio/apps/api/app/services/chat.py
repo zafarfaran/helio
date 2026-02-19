@@ -476,6 +476,7 @@ class ChatService:
                 "hicbc_applies": tax_profile.hicbc_applies,
                 "income_sources": tax_profile.income_sources or [],
                 "allowances": tax_profile.allowances or [],
+                "pension_data": tax_profile.pension_data,
             }
 
         if household_members:

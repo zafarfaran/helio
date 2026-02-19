@@ -38,6 +38,7 @@ Computes a complete UK tax position deterministically. Provide:
 - `region`: "england" / "scotland" / "wales" / "northern_ireland"
 - `number_of_children`, `claims_child_benefit`: for HICBC
 - `tax_year`: defaults to "2025/26"
+- Pension carry forward from prior years is automatically calculated by the engine using stored contribution history. You do not need to pass `pension_contributions_by_year`.
 
 Returns: income tax (band-by-band), NI, HICBC, pension AA, observations, summary.
 The dashboard is updated automatically with the engine results.
@@ -194,6 +195,17 @@ def _format_client_context(ctx: dict) -> str:
             lines.append("\n**Allowances:**")
             for a in tp['allowances']:
                 lines.append(f"- {a.get('label', a.get('type', ''))}: £{a.get('remaining', 0):,.0f} remaining of £{a.get('annual_limit', 0):,.0f}")
+
+        if tp.get("pension_data"):
+            pd = tp["pension_data"]
+            ch = pd.get("contributions_history")
+            if ch:
+                lines.append("\n**Pension Carry Forward (prior year contributions):**")
+                for year, vals in sorted(ch.items()):
+                    personal = vals.get("personal", 0)
+                    employer = vals.get("employer", 0)
+                    total = personal + employer
+                    lines.append(f"- {year}: £{total:,.0f} contributed (personal: £{personal:,.0f}, employer: £{employer:,.0f})")
 
     if "household_members" in ctx:
         lines.append("\n**Household Members:**")
