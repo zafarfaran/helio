@@ -274,13 +274,26 @@ def _position_to_dashboard(pos: TaxPosition) -> dict:
         pa_res = pos.pension_aa_result
         used = pa_res.current_year_contributions
         remaining = max(0, pa_res.total_available - used)
-        allowances.append({
+        pension_entry: dict = {
             "name": "Pension Annual Allowance",
-            "annualLimit": pa_res.total_available,
+            "annualLimit": pa_res.annual_allowance,
             "used": used,
             "remaining": remaining,
             "status": _allowance_status(remaining, pa_res.total_available),
-        })
+            "totalAvailable": pa_res.total_available,
+        }
+        if pa_res.carry_forward:
+            pension_entry["carryForward"] = [
+                {
+                    "taxYear": cf.tax_year,
+                    "allowance": cf.annual_allowance,
+                    "used": cf.contributions,
+                    "unused": cf.unused,
+                }
+                for cf in pa_res.carry_forward
+            ]
+            pension_entry["totalCarryForward"] = sum(cf.unused for cf in pa_res.carry_forward)
+        allowances.append(pension_entry)
 
     # Dividend allowance
     allowances.append({
