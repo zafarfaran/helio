@@ -152,6 +152,16 @@
   background-image: radial-gradient(rgba(148, 163, 184, 0.07) 1px, transparent 1px);
 }
 
+/* ── Hide scrollbar utility ── */
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
 /* ── Custom scrollbar ── */
 
 ::-webkit-scrollbar {
@@ -286,17 +296,6 @@
   will-change: transform;
   transform-origin: bottom;
   animation: wave-bar var(--wave-dur, 0.8s) ease-in-out var(--wave-del, 0s) infinite;
-}
-
-@keyframes wave-bar-ambient {
-  0%, 100% { transform: scaleY(0.35); }
-  50% { transform: scaleY(1); }
-}
-
-.wave-bar-ambient {
-  will-change: transform;
-  transform-origin: center;
-  animation: wave-bar-ambient var(--wave-dur, 1.8s) ease-in-out var(--wave-del, 0s) infinite;
 }
 
 /* ── Mic pulse ring (GPU-composited) ── */
@@ -463,6 +462,20 @@
 }
 
 /* ── Voice orb animations removed — whisper bar uses framer-motion ── */
+
+/* ── Mobile fullscreen panel override (overrides framer-motion inline width) ── */
+
+@media (max-width: 767px) {
+  .mobile-fullscreen-panel {
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100% !important;
+    z-index: 40 !important;
+  }
+  .mobile-fullscreen-panel > * {
+    width: 100% !important;
+  }
+}
 
 /* ── Theme transition ── */
 

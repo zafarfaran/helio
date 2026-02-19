@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useRef, useEffect, memo, useMemo, useCallback } from "react";
+import { useState, useRef, useEffect, memo, useMemo, useCallback, Suspense } from "react";
 import Link from "next/link";
+import { useSearchParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTheme } from "@/components/theme-provider";
 import { useChat } from "@/hooks/useChat";
@@ -41,7 +42,7 @@ import {
   IconSettings,
 } from "@/components/icons";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 /* ─── Types ─── */
 
@@ -220,15 +221,6 @@ const QUICK_PROMPTS = [
   "Run salary sacrifice calc",
 ];
 
-/* ─── Pre-computed waveform data (avoids recalc on render) ─── */
-
-const AMBIENT_BARS = Array.from({ length: 5 }, (_, i) => ({
-  i,
-  h: `${8 + i * 2}px`,
-  dur: "1.8s",
-  del: `${i * 0.15}s`,
-}));
-
 /* ─── Chat History ─── */
 
 interface HistoryThread {
@@ -334,13 +326,20 @@ function formatConversationTime(dateStr: string): string {
    ═══════════════════════════════════════════════════ */
 
 export default function ChatPage() {
+  return (
+    <Suspense>
+      <ChatPageInner />
+    </Suspense>
+  );
+}
+
+function ChatPageInner() {
   const { theme, toggle: toggleTheme } = useTheme();
+  const searchParams = useSearchParams();
+  const router = useRouter();
 
   /* ── Live data state (restored from localStorage where available) ── */
-  const [selectedClientId, setSelectedClientId] = useState<string>(() => {
-    try { return localStorage.getItem("helio:ui:selectedClient") || "client-sarah"; }
-    catch { return "client-sarah"; }
-  });
+  const [selectedClientId, setSelectedClientId] = useState<string>("client-sarah");
   const [clients, setClients] = useState<ClientSummary[]>([]);
   const [clientDetail, setClientDetail] = useState<ClientDetail | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -377,10 +376,7 @@ export default function ChatPage() {
 
   /* ── UI state ── */
   const [input, setInput] = useState("");
-  const [panelOpen, setPanelOpen] = useState(() => {
-    try { const v = localStorage.getItem("helio:ui:panelOpen"); return v !== null ? JSON.parse(v) : true; }
-    catch { return true; }
-  });
+  const [panelOpen, setPanelOpen] = useState(true);
   const [panelWidth, setPanelWidth] = useState(520);
   const [panelMode, setPanelMode] = useState<"sidebar" | "fullscreen">("sidebar");
   const panelResizing = useRef(false);
@@ -388,13 +384,7 @@ export default function ChatPage() {
   const panelMaxWidth = 900;
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historySearch, setHistorySearch] = useState("");
-  const [activeTab, setActiveTab] = useState<"overview" | "allowances" | "scenarios" | "observations" | "notes">(() => {
-    try {
-      const v = localStorage.getItem("helio:ui:activeTab");
-      if (v && ["overview", "allowances", "scenarios", "observations", "notes"].includes(v)) return v as any;
-    } catch { /* ignore */ }
-    return "overview";
-  });
+  const [activeTab, setActiveTab] = useState<"overview" | "allowances" | "scenarios" | "observations" | "notes">("overview");
   const [activeScenarioId, setActiveScenarioId] = useState<string | null>(null);
   const [inputFocused, setInputFocused] = useState(false);
   const [clientMenuOpen, setClientMenuOpen] = useState(false);
@@ -406,6 +396,32 @@ export default function ChatPage() {
   const settingsMenuRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [micContainer, setMicContainer] = useState<HTMLElement | null>(null);
+  const [isMobile, setIsMobile] = useState(false);
+  const micContainerRef = useCallback((node: HTMLDivElement | null) => {
+    setMicContainer(node);
+  }, []);
+
+  // Track mobile breakpoint for voice mode floating behavior
+  useEffect(() => {
+    const mql = window.matchMedia("(max-width: 767px)");
+    setIsMobile(mql.matches);
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mql.addEventListener("change", handler);
+    return () => mql.removeEventListener("change", handler);
+  }, []);
+
+  // Hydrate UI preferences from localStorage after mount (avoids SSR mismatch)
+  useEffect(() => {
+    try {
+      const savedClient = localStorage.getItem("helio:ui:selectedClient");
+      if (savedClient) setSelectedClientId(savedClient);
+      const savedTab = localStorage.getItem("helio:ui:activeTab");
+      if (savedTab) setActiveTab(savedTab as typeof activeTab);
+      const savedPanel = localStorage.getItem("helio:ui:panelOpen");
+      if (savedPanel !== null) setPanelOpen(JSON.parse(savedPanel));
+    } catch { /* SSR or quota — ignore */ }
+  }, []);
 
   // Auto-select the latest scenario when a new one arrives
   useEffect(() => {
@@ -620,10 +636,20 @@ export default function ChatPage() {
     }
   }, [selectedClientId, clearMessages, loadConversations]);
 
+  /* ── Auto-start new chat when arriving from landing page ── */
+  useEffect(() => {
+    if (searchParams.get("new") === "1" && selectedClientId) {
+      handleNewChat();
+      router.replace("/chat", { scroll: false });
+    }
+  }, [searchParams, selectedClientId, handleNewChat, router]);
+
   /* ── Select conversation handler ── */
   const handleSelectConversation = useCallback((convId: string) => {
     setActiveConversationId(convId);
     loadMessages(convId);
+    // Auto-close history on mobile
+    if (window.innerWidth < 768) setHistoryOpen(false);
   }, [loadMessages]);
 
   /* ── Delete conversation handler ── */
@@ -883,13 +909,13 @@ export default function ChatPage() {
   return (
     <div className="h-screen flex flex-col bg-[#fafbfc] dark:bg-[#0a0a0c]">
       {/* ═══ Top Bar ═══ */}
-      <header className="h-13 border-b border-slate-200/70 dark:border-zinc-800/70 flex items-center justify-between px-4 flex-shrink-0 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-xl z-30">
-        <div className="flex items-center gap-4">
+      <header className="h-13 border-b border-slate-200/70 dark:border-zinc-800/70 flex items-center justify-between px-3 md:px-4 flex-shrink-0 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-xl z-30">
+        <div className="flex items-center gap-2 md:gap-4">
           <Link href="/" className="text-slate-900 dark:text-white">
-            <HelioLogo className="h-7" />
+            <HelioLogo className="h-5 md:h-7" />
           </Link>
 
-          <div className="h-4 w-px bg-slate-200 dark:bg-zinc-800" />
+          <div className="h-4 w-px bg-slate-200 dark:bg-zinc-800 hidden md:block" />
 
           {/* History toggle */}
           <button
@@ -902,7 +928,7 @@ export default function ChatPage() {
             title={historyOpen ? "Close history" : "Chat history"}
           >
             <IconClock className="w-3.5 h-3.5" />
-            <span>History</span>
+            <span className="hidden md:inline">History</span>
             {conversations.filter((c) => c.unread).length > 0 && (
               <span className="w-1.5 h-1.5 rounded-full bg-brand-500 animate-pulse" />
             )}
@@ -926,7 +952,7 @@ export default function ChatPage() {
               </div>
               <div className="text-left">
                 <div className="text-[12px] font-medium text-slate-900 dark:text-white leading-tight">{clientName}</div>
-                <div className="text-[10px] font-light text-slate-400 dark:text-zinc-500 leading-tight">{clientDetail?.tax_profile ? `${clientDetail.tax_profile.effective_rate ?? ''}%` : ''} &middot; Active</div>
+                <div className="hidden md:block text-[10px] font-light text-slate-400 dark:text-zinc-500 leading-tight">{clientDetail?.tax_profile ? `${clientDetail.tax_profile.effective_rate ?? ''}%` : ''} &middot; Active</div>
               </div>
               <motion.div animate={{ rotate: clientMenuOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
                 <IconChevronDown className="w-3 h-3 text-slate-300 dark:text-zinc-600 group-hover:text-slate-500 dark:group-hover:text-zinc-400 transition-colors" />
@@ -1224,6 +1250,19 @@ export default function ChatPage() {
       <div className="flex-1 flex min-h-0 relative">
 
         {/* ═══ Chat History Panel ═══ */}
+        {/* Mobile backdrop */}
+        <AnimatePresence>
+          {historyOpen && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="fixed inset-0 bg-black/40 z-30 md:hidden"
+              onClick={() => setHistoryOpen(false)}
+            />
+          )}
+        </AnimatePresence>
         <AnimatePresence>
           {historyOpen && (
             <motion.aside
@@ -1231,13 +1270,20 @@ export default function ChatPage() {
               animate={{ width: 300, opacity: 1 }}
               exit={{ width: 0, opacity: 0 }}
               transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-              className="flex-shrink-0 overflow-hidden border-r border-slate-200/70 dark:border-zinc-800/70 bg-white/60 dark:bg-zinc-950/60 backdrop-blur-sm"
+              className="mobile-fullscreen-panel md:relative md:z-auto flex-shrink-0 overflow-hidden border-r border-slate-200/70 dark:border-zinc-800/70 bg-white dark:bg-zinc-950 md:bg-white/60 md:dark:bg-zinc-950/60 backdrop-blur-sm"
             >
-              <div className="w-[300px] h-full flex flex-col">
+              <div className="w-full md:w-[300px] h-full flex flex-col">
                 {/* History header */}
                 <div className="flex-shrink-0 px-4 pt-4 pb-3">
                   <div className="flex items-center justify-between mb-3">
                     <span className="text-[13px] font-medium text-slate-900 dark:text-white">History</span>
+                    {/* Mobile close button */}
+                    <button
+                      onClick={() => setHistoryOpen(false)}
+                      className="md:hidden w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 dark:text-zinc-500 hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors"
+                    >
+                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12" /></svg>
+                    </button>
                     <button
                       onClick={handleNewChat}
                       className="flex items-center gap-1.5 text-[11px] font-medium text-brand-500 dark:text-brand-400 hover:text-brand-600 dark:hover:text-brand-300 px-2 py-1 rounded-lg hover:bg-brand-50 dark:hover:bg-brand-950/30 transition-all"
@@ -1295,8 +1341,8 @@ export default function ChatPage() {
         <div className="flex-1 flex flex-col min-w-0 relative">
 
           {/* ── Context ribbon ── */}
-          <div className="flex-shrink-0 px-5 py-2.5 border-b border-slate-100 dark:border-zinc-800/50 bg-white/50 dark:bg-zinc-950/50 backdrop-blur-sm">
-            <div className="flex items-center gap-6">
+          <div className="flex-shrink-0 px-3 md:px-5 py-2.5 border-b border-slate-100 dark:border-zinc-800/50 bg-white/50 dark:bg-zinc-950/50 backdrop-blur-sm">
+            <div className="flex items-center gap-3 md:gap-6 overflow-x-auto scrollbar-hide">
               <ContextChip label="Gross" value={clientTotalIncome != null ? `\u00A3${clientTotalIncome.toLocaleString()}` : "\u2014"} />
               <ContextChip label="Tax" value={clientTotalTax != null ? `\u00A3${clientTotalTax.toLocaleString()}` : "\u2014"} accent="red" />
               <ContextChip label="Effective" value={clientEffectiveRate != null ? `${clientEffectiveRate}%` : "\u2014"} />
@@ -1347,7 +1393,7 @@ export default function ChatPage() {
 
           {/* ── Messages ── */}
           <div className="flex-1 overflow-y-auto">
-            <div className="max-w-3xl mx-auto px-5 py-6 space-y-1">
+            <div className="max-w-3xl mx-auto px-3 py-4 md:px-5 md:py-6 space-y-1">
               {messages.map((msg, i) => (
                 <motion.div
                   key={msg.id}
@@ -1370,7 +1416,7 @@ export default function ChatPage() {
 
           {/* ── Input area ── */}
           <div className="flex-shrink-0 bg-gradient-to-t from-[#fafbfc] via-[#fafbfc] to-transparent dark:from-[#0a0a0c] dark:via-[#0a0a0c] dark:to-transparent">
-            <div className="max-w-3xl mx-auto px-5 pb-5 pt-2">
+            <div className="max-w-3xl mx-auto px-3 pb-4 pt-2 md:px-5 md:pb-5">
               {/* Quick prompts — only visible when input is empty and not listening */}
               <AnimatePresence>
                 {!input.trim() && (
@@ -1435,7 +1481,10 @@ export default function ChatPage() {
                     />
 
                     {/* Action buttons */}
-                    <div className="flex items-center gap-1.5 pr-3 pb-3">
+                    <div className="flex items-center gap-1 pr-3 pb-3">
+                      {/* Mic trigger portal target — VoiceMode renders its button here */}
+                      <div ref={micContainerRef} className="flex items-center" />
+
                       <motion.button
                         whileTap={{ scale: 0.92 }}
                         animate={input.trim() ? { scale: 1 } : { scale: 0.95 }}
@@ -1452,18 +1501,6 @@ export default function ChatPage() {
                   </div>
 
 
-                  {/* Ambient waveform — pure CSS */}
-                  {!input.trim() && !inputFocused && (
-                    <div className="absolute left-5 top-1/2 -translate-y-1/2 flex items-center gap-[2px] pointer-events-none">
-                      {AMBIENT_BARS.map((bar) => (
-                        <div
-                          key={bar.i}
-                          className="wave-bar-ambient w-[2.5px] rounded-full bg-slate-300/50 dark:bg-zinc-600/40"
-                          style={{ height: bar.h, ["--wave-dur" as string]: bar.dur, ["--wave-del" as string]: bar.del }}
-                        />
-                      ))}
-                    </div>
-                  )}
                 </div>
               </div>
 
@@ -1472,9 +1509,14 @@ export default function ChatPage() {
                 <p className="text-[10px] font-light text-slate-400/50 dark:text-zinc-600/50">
                   Helio may make mistakes. Verify independently.
                 </p>
-                <kbd className="text-[9px] font-mono text-slate-400/40 dark:text-zinc-600/40 px-1.5 py-0.5 rounded border border-slate-200/30 dark:border-zinc-800/30">
-                  &#9166; send
-                </kbd>
+                <div className="hidden md:flex items-center gap-2">
+                  <kbd className="text-[9px] font-mono text-slate-400/40 dark:text-zinc-600/40 px-1.5 py-0.5 rounded border border-slate-200/30 dark:border-zinc-800/30">
+                    V voice
+                  </kbd>
+                  <kbd className="text-[9px] font-mono text-slate-400/40 dark:text-zinc-600/40 px-1.5 py-0.5 rounded border border-slate-200/30 dark:border-zinc-800/30">
+                    &#9166; send
+                  </kbd>
+                </div>
               </div>
             </div>
           </div>
@@ -1485,10 +1527,24 @@ export default function ChatPage() {
             status={status}
             statusMessage={statusMessage}
             isStreaming={isStreaming}
+            triggerContainer={isMobile && panelOpen ? null : micContainer}
           />
         </div>
 
         {/* ═══ Intelligence Panel (slide-over / fullscreen) ═══ */}
+        {/* Mobile backdrop */}
+        <AnimatePresence>
+          {panelOpen && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="fixed inset-0 bg-black/40 z-30 md:hidden"
+              onClick={() => setPanelOpen(false)}
+            />
+          )}
+        </AnimatePresence>
         <AnimatePresence>
           {panelOpen && (
             <motion.aside
@@ -1496,23 +1552,23 @@ export default function ChatPage() {
               animate={{ width: panelMode === "fullscreen" ? "100%" : panelWidth, opacity: 1 }}
               exit={{ width: 0, opacity: 0 }}
               transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-              className={`flex-shrink-0 overflow-hidden border-l border-slate-200/70 dark:border-zinc-800/70 bg-white dark:bg-zinc-950 ${
-                panelMode === "fullscreen" ? "absolute inset-0 z-20 border-l-0" : "relative"
+              className={`mobile-fullscreen-panel md:relative md:z-auto flex-shrink-0 overflow-hidden border-l border-slate-200/70 dark:border-zinc-800/70 bg-white dark:bg-zinc-950 ${
+                panelMode === "fullscreen" ? "md:absolute md:inset-0 md:z-20 border-l-0" : ""
               }`}
               style={panelMode === "sidebar" ? { willChange: "width" } : undefined}
             >
-              {/* Resize drag handle (sidebar mode only) */}
+              {/* Resize drag handle (sidebar mode only, hidden on mobile) */}
               {panelMode === "sidebar" && (
                 <div
                   onMouseDown={handlePanelResizeStart}
-                  className="absolute left-0 top-0 bottom-0 w-[5px] z-30 cursor-col-resize group"
+                  className="absolute left-0 top-0 bottom-0 w-[5px] z-30 cursor-col-resize group hidden md:block"
                 >
                   <div className="absolute left-0 top-0 bottom-0 w-[1px] bg-transparent group-hover:bg-brand-400/50 group-active:bg-brand-500 transition-colors duration-150" />
                 </div>
               )}
               <div style={{ width: panelMode === "fullscreen" ? "100%" : panelWidth }} className="h-full flex flex-col relative">
                 {/* Panel header */}
-                <div className={`flex-shrink-0 pt-5 pb-4 relative z-10 ${panelMode === "fullscreen" ? "px-10 max-w-5xl mx-auto w-full" : "px-5"}`}>
+                <div className={`flex-shrink-0 pt-5 pb-4 relative z-10 ${panelMode === "fullscreen" ? "px-3 md:px-10 max-w-5xl mx-auto w-full" : "px-3 md:px-5"}`}>
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-2">
                       <div className={`w-6 h-6 rounded-md bg-gradient-to-br from-brand-400 to-violet-500 flex items-center justify-center transition-shadow duration-500 ${isDashboardGenerating ? "shadow-md shadow-brand-500/30 dark:shadow-brand-400/20" : ""}`}>
@@ -1543,13 +1599,13 @@ export default function ChatPage() {
                       <button
                         onClick={handleExport}
                         disabled={isExporting || !dashboardData}
-                        className="text-[11px] font-light text-brand-500 hover:text-brand-600 dark:text-brand-400 dark:hover:text-brand-300 flex items-center gap-1 transition-colors disabled:opacity-40"
+                        className="hidden md:flex text-[11px] font-light text-brand-500 hover:text-brand-600 dark:text-brand-400 dark:hover:text-brand-300 items-center gap-1 transition-colors disabled:opacity-40"
                       >
                         {isExporting ? "Exporting..." : "Export"} <IconArrowRight className="w-2.5 h-2.5" />
                       </button>
                       <button
                         onClick={() => setPanelMode(panelMode === "fullscreen" ? "sidebar" : "fullscreen")}
-                        className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 dark:text-zinc-500 hover:text-brand-500 dark:hover:text-brand-400 hover:bg-brand-50/50 dark:hover:bg-brand-950/30 transition-all"
+                        className="hidden md:flex w-7 h-7 rounded-lg items-center justify-center text-slate-400 dark:text-zinc-500 hover:text-brand-500 dark:hover:text-brand-400 hover:bg-brand-50/50 dark:hover:bg-brand-950/30 transition-all"
                         title={panelMode === "fullscreen" ? "Exit fullscreen" : "Fullscreen"}
                       >
                         {panelMode === "fullscreen" ? (
@@ -1558,11 +1614,18 @@ export default function ChatPage() {
                           <IconMaximize className="w-3.5 h-3.5" />
                         )}
                       </button>
+                      {/* Mobile close button */}
+                      <button
+                        onClick={() => setPanelOpen(false)}
+                        className="md:hidden w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 dark:text-zinc-500 hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors"
+                      >
+                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12" /></svg>
+                      </button>
                     </div>
                   </div>
 
                   {/* Stat cards */}
-                  <div className={`grid gap-2 ${panelMode === "fullscreen" ? "grid-cols-6" : "grid-cols-3"}`}>
+                  <div className={`grid gap-2 ${panelMode === "fullscreen" ? "grid-cols-2 sm:grid-cols-3 md:grid-cols-6" : "grid-cols-2 md:grid-cols-3"}`}>
                     <MiniStat icon={<IconCalculator className="w-3.5 h-3.5" />} label="Gross income" value={totalIncome != null ? `\u00A3${totalIncome.toLocaleString()}` : "\u2014"} />
                     <MiniStat icon={<IconPieChart className="w-3.5 h-3.5" />} label="Tax liability" value={totalTax != null ? `\u00A3${totalTax.toLocaleString()}` : "\u2014"} accent />
                     <MiniStat icon={<IconWallet className="w-3.5 h-3.5" />} label="Net income" value={netIncome != null ? `\u00A3${netIncome.toLocaleString()}` : "\u2014"} />
@@ -1721,13 +1784,13 @@ export default function ChatPage() {
                 ) : (
                   <>
                     {/* Tabs — underline style */}
-                    <div className={`flex-shrink-0 pb-4 relative z-10 ${panelMode === "fullscreen" ? "px-10 max-w-5xl mx-auto w-full" : "px-5"}`}>
-                      <div className="flex gap-1 border-b border-slate-100 dark:border-zinc-800/50">
+                    <div className={`flex-shrink-0 pb-4 relative z-10 ${panelMode === "fullscreen" ? "px-3 md:px-10 max-w-5xl mx-auto w-full" : "px-3 md:px-5"}`}>
+                      <div className="flex gap-1 border-b border-slate-100 dark:border-zinc-800/50 overflow-x-auto scrollbar-hide">
                         {(["overview", "allowances", "scenarios", "observations", "notes"] as const).map((tab) => (
                           <button
                             key={tab}
                             onClick={() => setActiveTab(tab)}
-                            className={`relative px-3 pb-2.5 text-[11px] font-medium transition-colors ${
+                            className={`relative flex-shrink-0 px-3 pb-2.5 text-[11px] font-medium transition-colors ${
                               activeTab === tab
                                 ? "text-slate-900 dark:text-white"
                                 : "text-slate-400 dark:text-zinc-500 hover:text-slate-600 dark:hover:text-zinc-300"
@@ -1747,7 +1810,7 @@ export default function ChatPage() {
                     </div>
 
                     {/* Tab content — relative container for overlay */}
-                    <div className={`flex-1 overflow-y-auto pb-5 relative ${panelMode === "fullscreen" ? "px-10" : "px-5"}`}>
+                    <div className={`flex-1 overflow-y-auto pb-5 relative ${panelMode === "fullscreen" ? "px-3 md:px-10" : "px-3 md:px-5"}`}>
                       {/* Dot-matrix background texture */}
                       <div
                         className="absolute inset-0 pointer-events-none opacity-[0.025] dark:opacity-[0.04]"
@@ -1980,7 +2043,7 @@ const ChatMessage = memo(function ChatMessage({ message }: { message: Message })
   if (isUser) {
     return (
       <div className="flex justify-end py-3">
-        <div className="max-w-[75%]">
+        <div className="max-w-[90%] md:max-w-[75%]">
           <div className="bg-brand-500 text-white rounded-2xl rounded-br-md px-4 py-3 shadow-sm shadow-brand-500/10">
             <p className="text-[13px] font-light leading-relaxed whitespace-pre-line">
               {message.content}
@@ -2376,9 +2439,9 @@ function ScenarioComparison({ scenario }: { scenario: ScenarioData }) {
         {/* Header */}
         <div className="grid grid-cols-[1fr,auto,auto,auto] gap-0 border-b border-slate-200/30 dark:border-zinc-800/20 bg-slate-50/50 dark:bg-zinc-800/20 px-3 py-2">
           <span className="text-[8px] uppercase tracking-widest font-semibold text-slate-400 dark:text-zinc-500"></span>
-          <span className="text-[8px] uppercase tracking-widest font-semibold text-slate-400 dark:text-zinc-500 text-right w-[80px]">Current</span>
-          <span className="text-[8px] uppercase tracking-widest font-semibold text-brand-500 dark:text-brand-400 text-right w-[80px]">Proposed</span>
-          <span className="text-[8px] uppercase tracking-widest font-semibold text-slate-400 dark:text-zinc-500 text-right w-[70px]">Delta</span>
+          <span className="text-[8px] uppercase tracking-widest font-semibold text-slate-400 dark:text-zinc-500 text-right w-[60px] md:w-[80px]">Current</span>
+          <span className="text-[8px] uppercase tracking-widest font-semibold text-brand-500 dark:text-brand-400 text-right w-[60px] md:w-[80px]">Proposed</span>
+          <span className="text-[8px] uppercase tracking-widest font-semibold text-slate-400 dark:text-zinc-500 text-right w-[50px] md:w-[70px]">Delta</span>
         </div>
         {/* Rows */}
         {rows.map((row, i) => {
@@ -2399,9 +2462,9 @@ function ScenarioComparison({ scenario }: { scenario: ScenarioData }) {
               } ${row.label === "Total Tax" ? "border-t border-slate-200/30 dark:border-zinc-800/20 font-semibold" : ""}`}
             >
               <span className="text-[10px] text-slate-600 dark:text-zinc-300">{row.label}</span>
-              <span className="text-[10px] font-mono text-slate-500 dark:text-zinc-400 text-right w-[80px] tabular-nums">{fmt(row.current)}</span>
-              <span className="text-[10px] font-mono text-slate-800 dark:text-zinc-100 text-right w-[80px] tabular-nums">{fmt(row.proposed)}</span>
-              <span className={`text-[10px] font-mono text-right w-[70px] tabular-nums ${deltaColor}`}>
+              <span className="text-[10px] font-mono text-slate-500 dark:text-zinc-400 text-right w-[60px] md:w-[80px] tabular-nums">{fmt(row.current)}</span>
+              <span className="text-[10px] font-mono text-slate-800 dark:text-zinc-100 text-right w-[60px] md:w-[80px] tabular-nums">{fmt(row.proposed)}</span>
+              <span className={`text-[10px] font-mono text-right w-[50px] md:w-[70px] tabular-nums ${deltaColor}`}>
                 {delta === 0 ? "—" : fmtSigned(row.invert ? -delta : delta)}
               </span>
             </div>
@@ -2552,9 +2615,9 @@ function ScenarioGeneratingSkeleton() {
         {/* Header */}
         <div className="grid grid-cols-[1fr,auto,auto,auto] gap-0 border-b border-slate-200/30 dark:border-zinc-800/20 bg-slate-50/50 dark:bg-zinc-800/20 px-3 py-2">
           <span className="text-[8px] uppercase tracking-widest font-semibold text-slate-400 dark:text-zinc-500"></span>
-          <span className="text-[8px] uppercase tracking-widest font-semibold text-slate-400 dark:text-zinc-500 text-right w-[80px]">Current</span>
-          <span className="text-[8px] uppercase tracking-widest font-semibold text-slate-400/40 dark:text-zinc-600/40 text-right w-[80px]">Proposed</span>
-          <span className="text-[8px] uppercase tracking-widest font-semibold text-slate-400/40 dark:text-zinc-600/40 text-right w-[70px]">Delta</span>
+          <span className="text-[8px] uppercase tracking-widest font-semibold text-slate-400 dark:text-zinc-500 text-right w-[60px] md:w-[80px]">Current</span>
+          <span className="text-[8px] uppercase tracking-widest font-semibold text-slate-400/40 dark:text-zinc-600/40 text-right w-[60px] md:w-[80px]">Proposed</span>
+          <span className="text-[8px] uppercase tracking-widest font-semibold text-slate-400/40 dark:text-zinc-600/40 text-right w-[50px] md:w-[70px]">Delta</span>
         </div>
 
         {/* Skeleton rows */}
@@ -2570,21 +2633,21 @@ function ScenarioGeneratingSkeleton() {
           >
             <span className="text-[10px] text-slate-600 dark:text-zinc-300">{label}</span>
             {/* Current — shows as "known" */}
-            <span className="text-right w-[80px]">
+            <span className="text-right w-[60px] md:w-[80px]">
               <span
                 className="inline-block h-3 rounded dash-shimmer-bar"
                 style={{ width: `${40 + ((i * 17) % 25)}px`, animationDelay: `${i * 0.1}s` }}
               />
             </span>
             {/* Proposed — "resolving" */}
-            <span className="text-right w-[80px]">
+            <span className="text-right w-[60px] md:w-[80px]">
               <span
                 className="inline-block h-3 rounded dash-shimmer-bar"
                 style={{ width: `${35 + ((i * 13) % 30)}px`, animationDelay: `${0.3 + i * 0.1}s` }}
               />
             </span>
             {/* Delta — blank */}
-            <span className="text-right w-[70px]">
+            <span className="text-right w-[50px] md:w-[70px]">
               <span
                 className="inline-block h-3 rounded dash-shimmer-bar"
                 style={{ width: `${20 + ((i * 11) % 20)}px`, animationDelay: `${0.6 + i * 0.1}s` }}

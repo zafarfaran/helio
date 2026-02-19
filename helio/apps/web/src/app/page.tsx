@@ -72,7 +72,7 @@ function Navbar() {
             Sign in
           </a>
           <Link
-            href="/chat"
+            href="/chat?new=1"
             className="text-[13px] font-normal bg-slate-900 dark:bg-white text-white dark:text-zinc-900 px-4 py-2 rounded-lg hover:bg-slate-800 dark:hover:bg-zinc-100 transition-colors"
           >
             Get started
@@ -231,7 +231,7 @@ function Hero() {
             >
               <MagneticButton>
                 <Link
-                  href="/chat"
+                  href="/chat?new=1"
                   className="group relative inline-flex items-center gap-2.5 bg-slate-900 dark:bg-white text-white dark:text-zinc-900 text-[13px] font-normal px-6 py-3 rounded-lg transition-all hover:bg-slate-800 dark:hover:bg-zinc-100 overflow-hidden"
                 >
                   {/* Subtle shimmer on hover */}
@@ -1927,7 +1927,7 @@ function CTA() {
           <div className="mt-10 flex items-center justify-center gap-4">
             <MagneticButton>
               <Link
-                href="/chat"
+                href="/chat?new=1"
                 className="group inline-flex items-center gap-2 bg-white text-slate-900 text-sm font-normal px-6 py-3 rounded-lg hover:bg-slate-100 transition-colors"
               >
                 Start free trial

@@ -141,7 +141,11 @@ async def list_households(
     session: AsyncSession = Depends(get_db_session),
     logger: BoundLogger = Depends(get_request_logger),
 ):
-    """List all households with members and aggregated tax data."""
+    """List all households with members and aggregated tax data.
+
+    NOTE: Uses N+1 query pattern (1 + H + C queries) consistent with list_clients.
+    Acceptable for demo dataset; use eager loading / subqueries at scale.
+    """
     user_id = "demo-user"
 
     logger.info("Listing households", user_id=user_id)

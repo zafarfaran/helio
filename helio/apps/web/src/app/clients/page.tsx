@@ -34,7 +34,7 @@ import {
   IconTrash,
 } from "@/components/icons";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 /* ─── Types ─── */
 
@@ -674,10 +674,10 @@ function Skeleton() {
           <div className="h-3 w-36 rounded bg-[var(--surface)]" />
         </div>
       </div>
-      <div className="grid grid-cols-4 gap-5">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-5">
         {[...Array(4)].map((_, i) => <div key={i} className="h-[120px] rounded-xl bg-[var(--surface)]" />)}
       </div>
-      <div className="grid grid-cols-2 gap-5">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-5">
         {[...Array(2)].map((_, i) => <div key={i} className="h-[200px] rounded-xl bg-[var(--surface)]" />)}
       </div>
       <div className="h-[260px] rounded-xl bg-[var(--surface)]" />
@@ -710,7 +710,7 @@ function HouseholdDetail({
       </div>
 
       {/* Combined stats */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
         {[
           { label: "Total Income", value: `£${household.total_income.toLocaleString("en-GB", { maximumFractionDigits: 0 })}` },
           { label: "Total Tax", value: `£${household.total_tax.toLocaleString("en-GB", { maximumFractionDigits: 0 })}` },
@@ -726,7 +726,7 @@ function HouseholdDetail({
       {/* Members */}
       <div>
         <h2 className="text-[13px] font-semibold text-slate-900 dark:text-white mb-3">Members</h2>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           {household.members.map((member) => {
             const [g1, g2] = avatarGradient(`${member.first_name} ${member.last_name}`);
             return (
@@ -804,6 +804,7 @@ export default function ClientsPage() {
   const [households, setHouseholds] = useState<HouseholdSummary[]>([]);
   const [selectedHouseholdId, setSelectedHouseholdId] = useState<string | null>(null);
   const [householdsLoading, setHouseholdsLoading] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const handleClientAdded = (newClient: ClientSummary) => {
     setClients((prev) => [newClient, ...prev]);
@@ -833,6 +834,8 @@ export default function ClientsPage() {
           fetch(`${API_BASE}/api/clients`),
           fetch(`${API_BASE}/api/households`),
         ]);
+        if (!clientsRes.ok) throw new Error(`Clients: ${clientsRes.status}`);
+        if (!householdsRes.ok) throw new Error(`Households: ${householdsRes.status}`);
         const clientsData = await clientsRes.json();
         const householdsData = await householdsRes.json();
 
@@ -876,13 +879,19 @@ export default function ClientsPage() {
       if (tag === "INPUT" || tag === "TEXTAREA") return;
       if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
       e.preventDefault();
-      const idx = clients.findIndex((c) => c.id === selectedId);
-      const next = e.key === "ArrowDown" ? Math.min(idx + 1, clients.length - 1) : Math.max(idx - 1, 0);
-      if (clients[next]) setSelectedId(clients[next].id);
+      if (sidebarMode === "households") {
+        const hhIdx = households.findIndex((h) => h.id === selectedHouseholdId);
+        const nextHh = e.key === "ArrowDown" ? Math.min(hhIdx + 1, households.length - 1) : Math.max(hhIdx - 1, 0);
+        if (households[nextHh]) setSelectedHouseholdId(households[nextHh].id);
+      } else {
+        const idx = clients.findIndex((c) => c.id === selectedId);
+        const next = e.key === "ArrowDown" ? Math.min(idx + 1, clients.length - 1) : Math.max(idx - 1, 0);
+        if (clients[next]) setSelectedId(clients[next].id);
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [clients, selectedId]);
+  }, [clients, selectedId, sidebarMode, households, selectedHouseholdId]);
 
   /* Search filter */
   const filtered = useMemo(() => {
@@ -947,14 +956,34 @@ export default function ClientsPage() {
   return (
     <div className="h-screen flex bg-[var(--background)]">
       {/* ═══════════ SIDEBAR ═══════════ */}
-      <aside className="w-[264px] flex-shrink-0 refined-sidebar flex flex-col relative z-10">
+      {/* Mobile backdrop */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/40 z-40 md:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+      <aside className={`
+        fixed inset-y-0 left-0 z-50 w-[280px] transform transition-transform duration-200 ease-in-out
+        ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}
+        md:relative md:translate-x-0 md:w-[264px] md:z-10
+        flex-shrink-0 refined-sidebar flex flex-col
+      `}>
 
         {/* Brand bar */}
         <div className="h-14 flex items-center justify-between px-5 border-b border-slate-200/70 dark:border-zinc-800/70">
           <Link href="/" className="text-[var(--foreground)] hover:text-[var(--accent)] transition-colors">
             <HelioLogo className="h-[18px]" />
           </Link>
-          <ThemeToggle />
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <button
+              onClick={() => setSidebarOpen(false)}
+              className="md:hidden w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 dark:text-zinc-500 hover:text-slate-700 dark:hover:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800 transition-all"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12" /></svg>
+            </button>
+          </div>
         </div>
 
         {/* Search + Add */}
@@ -1007,7 +1036,7 @@ export default function ClientsPage() {
                 <p className="text-center text-[12px] text-slate-400 dark:text-zinc-500 font-light py-8">No clients found</p>
               ) : (
                 filtered.map((c) => (
-                  <ClientRow key={c.id} client={c} active={c.id === selectedId} onSelect={() => setSelectedId(c.id)} />
+                  <ClientRow key={c.id} client={c} active={c.id === selectedId} onSelect={() => { setSelectedId(c.id); setSidebarOpen(false); }} />
                 ))
               )}
             </>
@@ -1021,7 +1050,7 @@ export default function ClientsPage() {
                 <p className="text-center text-[12px] text-slate-400 dark:text-zinc-500 font-light py-8">No households found</p>
               ) : (
                 filteredHouseholds.map((h) => (
-                  <HouseholdRow key={h.id} household={h} active={h.id === selectedHouseholdId} onSelect={() => setSelectedHouseholdId(h.id)} />
+                  <HouseholdRow key={h.id} household={h} active={h.id === selectedHouseholdId} onSelect={() => { setSelectedHouseholdId(h.id); setSidebarOpen(false); }} />
                 ))
               )}
             </>
@@ -1038,7 +1067,29 @@ export default function ClientsPage() {
 
       {/* ═══════════ MAIN ═══════════ */}
       <main className="flex-1 overflow-y-auto relative z-10">
-        <div className="max-w-[860px] mx-auto px-10 py-10">
+        {/* Mobile top bar */}
+        <div className="md:hidden flex items-center gap-3 px-4 py-3 border-b border-slate-200/70 dark:border-zinc-800/70 bg-[var(--background)] sticky top-0 z-30">
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="w-8 h-8 rounded-lg bg-white dark:bg-zinc-900 border border-slate-200/60 dark:border-zinc-800/60 flex items-center justify-center text-slate-500 dark:text-zinc-400"
+          >
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3 12h18M3 6h18M3 18h18" /></svg>
+          </button>
+          <Link href="/" className="text-[var(--foreground)] hover:text-[var(--accent)] transition-colors">
+            <HelioLogo className="h-[16px]" />
+          </Link>
+          {detail && sidebarMode === "clients" && (
+            <span className="text-[13px] font-medium text-[var(--foreground)] truncate ml-auto">
+              {detail.first_name} {detail.last_name}
+            </span>
+          )}
+          {selectedHousehold && sidebarMode === "households" && (
+            <span className="text-[13px] font-medium text-[var(--foreground)] truncate ml-auto">
+              {selectedHousehold.name}
+            </span>
+          )}
+        </div>
+        <div className="max-w-[860px] mx-auto px-4 py-6 md:px-10 md:py-10">
           {sidebarMode === "clients" ? (
             <AnimatePresence mode="wait">
               {detailLoading || !detail ? (
@@ -1055,16 +1106,16 @@ export default function ClientsPage() {
                 >
 
                   {/* ── Header ── */}
-                  <div className="flex items-start justify-between mb-10">
-                    <div className="flex items-center gap-5">
+                  <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between mb-8 md:mb-10">
+                    <div className="flex items-center gap-4 md:gap-5">
                       <div
-                        className="w-[52px] h-[52px] rounded-2xl flex items-center justify-center text-white text-lg font-semibold shadow-sm shadow-brand-500/20"
+                        className="w-10 h-10 md:w-[52px] md:h-[52px] rounded-2xl flex items-center justify-center text-white text-base md:text-lg font-semibold shadow-sm shadow-brand-500/20"
                         style={{ background: `linear-gradient(135deg, ${avatarGradient(name)[0]}, ${avatarGradient(name)[1]})` }}
                       >
                         {detail.first_name[0]}{detail.last_name[0]}
                       </div>
                       <div>
-                        <h1 className="text-[24px] font-semibold text-[var(--foreground)] tracking-[-0.025em] leading-none">{name}</h1>
+                        <h1 className="text-[20px] md:text-[24px] font-semibold text-[var(--foreground)] tracking-[-0.025em] leading-none">{name}</h1>
                         <div className="flex items-center gap-2 mt-2">
                           {detail.employment_status && (
                             <span className="text-[10px] font-semibold uppercase tracking-wider px-2.5 py-[3px] rounded-lg bg-brand-50 dark:bg-brand-950/30 text-brand-600 dark:text-brand-400 border border-brand-200/40 dark:border-brand-800/30">
@@ -1143,7 +1194,9 @@ export default function ClientsPage() {
                   {/* ── Tabs ── */}
                   {!showTaxForm && (
                     <>
-                      <TabBar active={activeTab} onChange={setActiveTab} />
+                      <div className="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
+                        <TabBar active={activeTab} onChange={setActiveTab} />
+                      </div>
 
                       <AnimatePresence mode="wait">
                         {/* ══ PROFILE TAB ══ */}
@@ -1157,7 +1210,7 @@ export default function ClientsPage() {
                           >
                             <div className="space-y-5">
                               {/* Personal Information + Address */}
-                              <div className="grid grid-cols-2 gap-5">
+                              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-5">
                                 <Card title="Personal Information" icon={IconUser}>
                                   <KV label="Full Name" value={name} />
                                   <KV label="Date of Birth" value={dobStr} />
@@ -1178,7 +1231,7 @@ export default function ClientsPage() {
                               </div>
 
                               {/* Spouse + Family */}
-                              <div className="grid grid-cols-2 gap-5">
+                              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-5">
                                 {detail.spouse && (
                                   <Card title="Spouse / Partner" icon={IconUser}>
                                     <KV label="Name" value={`${detail.spouse.first_name} ${detail.spouse.last_name}`} />
@@ -1205,7 +1258,7 @@ export default function ClientsPage() {
 
                               {/* Professional */}
                               <Card title="Professional" icon={IconTrendingUp}>
-                                <div className="grid grid-cols-2 gap-x-8">
+                                <div className="grid grid-cols-1 md:grid-cols-2 md:gap-x-8">
                                   <div>
                                     <KV label="Employment Status" value={detail.employment_status ? detail.employment_status.charAt(0).toUpperCase() + detail.employment_status.slice(1) : undefined} />
                                     <KV label="Employer" value={detail.employer_name} />
@@ -1238,7 +1291,7 @@ export default function ClientsPage() {
                           >
                             <div className="space-y-5">
                               {/* Metric cards */}
-                              <div className="grid grid-cols-4 gap-5">
+                              <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-5">
                                 <Metric label="Total Income" value={fmt(tp.total_income)} sub={sources.length > 1 ? `${sources.length} income sources` : undefined} icon={IconWallet} />
                                 <Metric label="Total Tax" value={fmtFull(tp.total_tax)} sub={`Income tax ${fmt(tp.income_tax)}`} icon={IconCalculator} />
                                 <Metric label="Effective Rate" value={fmtPct(tp.effective_rate)} sub="Overall tax burden" icon={IconChart} />
@@ -1254,7 +1307,7 @@ export default function ClientsPage() {
                               />
 
                               {/* Charts row: Donut + Waterfall */}
-                              <div className="grid grid-cols-2 gap-5">
+                              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-5">
                                 <Card title="Tax Composition" icon={IconChart}>
                                   <TaxDonutChart
                                     incomeTax={tp.income_tax}
@@ -1325,7 +1378,7 @@ export default function ClientsPage() {
 
                               {/* NI + Allowances */}
                               {((ni && ni.total > 0) || allowances.length > 0) && (
-                                <div className="grid grid-cols-2 gap-5">
+                                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-5">
                                   {ni && ni.total > 0 && (
                                     <Card title="National Insurance" icon={IconShield}>
                                       <NIDonutChart class1={ni.class1} class2={ni.class2} class4={ni.class4} total={ni.total} />
@@ -1342,7 +1395,7 @@ export default function ClientsPage() {
                               {/* HICBC */}
                               {(tp.hicbc_applies || tp.hicbc?.applies) && tp.hicbc && (
                                 <Card title="High Income Child Benefit Charge" icon={IconAlertCircle}>
-                                  <div className="grid grid-cols-3 gap-5">
+                                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-5">
                                     {[
                                       { label: "Child Benefit", value: fmtFull(hicbcBenefit(tp.hicbc)), color: "" },
                                       { label: "Clawback", value: `${hicbcClawback(tp.hicbc)}%`, color: "text-amber-600 dark:text-amber-400" },

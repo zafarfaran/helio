@@ -140,11 +140,15 @@ def build_system_prompt(
     # Always include engine tool instructions so Claude never computes tax itself
     prompt += _TOOL_INSTRUCTIONS
 
-    logger.debug(
+    has_household = bool(client_context and "household_members" in client_context)
+    logger.info(
         "System prompt built",
         has_client=client_context is not None,
         tax_plan_mode=tax_plan_mode,
+        has_household_members=has_household,
+        household_member_count=len(client_context.get("household_members", [])) if client_context else 0,
         length=len(prompt),
+        context_keys=list(client_context.keys()) if client_context else [],
     )
     return prompt
 
@@ -201,6 +205,8 @@ def _format_client_context(ctx: dict) -> str:
             if member.get("number_of_children", 0) > 0:
                 cb = "yes" if member.get("claims_child_benefit") else "no"
                 lines.append(f"- Children: {member['number_of_children']} (claims CB: {cb})")
+            if member.get("notes"):
+                lines.append(f"- Notes: {member['notes']}")
             if "tax_profile" in member:
                 tp = member["tax_profile"]
                 lines.append(f"- Total Income: £{tp.get('total_income', 0):,.2f}")

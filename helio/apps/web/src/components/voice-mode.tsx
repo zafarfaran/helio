@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import type { StatusPhase } from "@/hooks/useChat";
 
@@ -11,6 +12,8 @@ interface VoiceModeProps {
   status: StatusPhase;
   statusMessage: string;
   isStreaming: boolean;
+  /** When provided, the dormant mic trigger is portaled into this element (inline in input bar). */
+  triggerContainer?: HTMLElement | null;
 }
 
 type VoiceState =
@@ -84,9 +87,10 @@ const SLIDE_TRANSITION = {
   mass: 0.8,
 };
 
+
 /* ─── Ghost Whisper Voice Bar ─── */
 
-export function VoiceMode({ onSend, status, statusMessage, isStreaming }: VoiceModeProps) {
+export function VoiceMode({ onSend, status, statusMessage, isStreaming, triggerContainer }: VoiceModeProps) {
   const [voiceState, setVoiceState] = useState<VoiceState>("dormant");
   const [transcript, setTranscript] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
@@ -505,39 +509,50 @@ export function VoiceMode({ onSend, status, statusMessage, isStreaming }: VoiceM
 
   return (
     <>
-      {/* ── Mic toggle button (always visible when dormant) ── */}
-      {voiceState === "dormant" && !isStreaming && (
-        <motion.button
-          initial={{ opacity: 0, scale: 0.8 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.8 }}
-          transition={{ duration: 0.2 }}
-          onClick={handleToggle}
-          className="fixed bottom-5 right-6 z-50 w-10 h-10 rounded-full bg-slate-900/80 dark:bg-white/10 backdrop-blur-xl border border-white/[0.08] dark:border-white/[0.06] shadow-lg shadow-black/20 flex items-center justify-center text-white/60 hover:text-white hover:bg-slate-800/90 dark:hover:bg-white/15 transition-all group"
-          title="Click to speak or hold V"
-        >
-          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="9" y="1" width="6" height="12" rx="3" />
-            <path d="M5 10a7 7 0 0 0 14 0" />
-            <line x1="12" y1="17" x2="12" y2="21" />
-            <line x1="8" y1="21" x2="16" y2="21" />
-          </svg>
-          <span className="absolute -top-8 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-md bg-slate-900 dark:bg-zinc-800 text-[9px] font-mono text-white/70 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-            Hold V or click
-          </span>
-        </motion.button>
-      )}
+      {/* ── Dormant mic trigger ── */}
+      {voiceState === "dormant" && !isStreaming && (() => {
+        const trigger = (
+          <motion.button
+            key="mic-trigger"
+            initial={{ opacity: 0, scale: 0.92 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.92 }}
+            transition={{ duration: 0.15 }}
+            whileTap={{ scale: 0.92 }}
+            onClick={handleToggle}
+            className="relative w-9 h-9 rounded-xl flex items-center justify-center bg-transparent text-slate-400 dark:text-zinc-500 hover:text-brand-500 dark:hover:text-brand-400 hover:bg-slate-50 dark:hover:bg-zinc-800 transition-all duration-200 group/mic"
+            title="Click to speak or hold V"
+          >
+            {/* Mic icon */}
+            <svg className="w-[15px] h-[15px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="9" y="1" width="6" height="12" rx="3" />
+              <path d="M5 10a7 7 0 0 0 14 0" />
+              <line x1="12" y1="17" x2="12" y2="21" />
+              <line x1="8" y1="21" x2="16" y2="21" />
+            </svg>
+
+            {/* "V" shortcut badge — top-right corner, hidden on mobile (no keyboard) */}
+            <span className="hidden md:flex absolute -top-1 -right-1 items-center justify-center w-[14px] h-[14px] rounded-[4px] bg-slate-200/80 dark:bg-zinc-700/80 text-[8px] font-semibold leading-none text-slate-500 dark:text-zinc-400 group-hover/mic:bg-brand-100 dark:group-hover/mic:bg-brand-900/50 group-hover/mic:text-brand-600 dark:group-hover/mic:text-brand-400 transition-colors duration-200">
+              V
+            </span>
+          </motion.button>
+        );
+        return triggerContainer ? createPortal(trigger, triggerContainer) : (
+          <div className="fixed bottom-5 right-6 z-50">{trigger}</div>
+        );
+      })()}
 
       {/* ── Whisper bar ── */}
       <AnimatePresence>
         {isVisible && (
+          <div className="fixed bottom-5 left-0 right-0 z-50 flex justify-center pointer-events-none">
           <motion.div
             key="whisper-bar"
             initial={{ y: 20, opacity: 0, scale: 0.96 }}
             animate={{ y: 0, opacity: 1, scale: barScale }}
             exit={{ y: 12, opacity: 0, scale: 0.98 }}
             transition={SLIDE_TRANSITION}
-            className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50"
+            className="pointer-events-auto"
           >
             <div
               className={`
@@ -688,6 +703,7 @@ export function VoiceMode({ onSend, status, statusMessage, isStreaming }: VoiceM
               )}
             </div>
           </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </>

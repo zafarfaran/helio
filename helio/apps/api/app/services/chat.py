@@ -344,6 +344,14 @@ class ChatService:
             logger.warning("Client not found for context", client_id=client_id)
             return None
 
+        logger.info(
+            "Client loaded for context",
+            client_id=client_id,
+            client_name=f"{client.first_name} {client.last_name}",
+            household_id=client.household_id,
+            spouse_id=client.spouse_id,
+        )
+
         # Load latest tax profile (most recent by created_at)
         result = await self.session.execute(
             select(TaxProfile)
@@ -373,12 +381,24 @@ class ChatService:
         # Load household members (other clients in the same household)
         household_members = []
         if client.household_id:
+            logger.info(
+                "Loading household members",
+                household_id=client.household_id,
+                client_id=client_id,
+            )
             result = await self.session.execute(
                 select(Client)
                 .where(Client.household_id == client.household_id)
                 .where(Client.id != client_id)
             )
             other_members = list(result.scalars().all())
+            logger.info(
+                "Household members found",
+                household_id=client.household_id,
+                member_count=len(other_members),
+                member_ids=[m.id for m in other_members],
+                member_names=[f"{m.first_name} {m.last_name}" for m in other_members],
+            )
 
             for member in other_members:
                 # Load their latest tax profile
@@ -399,6 +419,7 @@ class ChatService:
                     "is_spouse": member.id == client.spouse_id,
                     "number_of_children": member.number_of_children,
                     "claims_child_benefit": member.claims_child_benefit,
+                    "notes": member.notes,
                 }
                 if member_tax_profile:
                     member_info["tax_profile"] = {
@@ -467,12 +488,15 @@ class ChatService:
                 for note in meeting_notes
             ]
 
-        logger.debug(
+        logger.info(
             "Client context loaded",
             client_id=client_id,
             has_tax_profile=tax_profile is not None,
             observation_count=len(observations),
             meeting_note_count=len(meeting_notes),
+            household_member_count=len(household_members),
+            has_household_members="household_members" in context,
+            has_notes=bool(client.notes),
         )
         return context
 
