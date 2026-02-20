@@ -34,6 +34,11 @@ def _compute_sarah_position():
         region="england",
         number_of_children=2,
         claims_child_benefit=True,
+        pension_contributions_by_year={
+            "2022/23": 18_000,   # 12k personal + 6k employer
+            "2023/24": 22_500,   # 15k personal + 7.5k employer
+            "2024/25": 26_000,   # 18k personal + 8k employer
+        },
     )
 
 
@@ -160,6 +165,11 @@ async def seed_if_empty(session: AsyncSession) -> None:
             "contributions": 18_000,
             "aa_remaining": pos.pension_aa_result.remaining if pos.pension_aa_result else 42_000,
             "annual_allowance": pos.pension_aa_result.annual_allowance if pos.pension_aa_result else 60_000,
+            "contributions_history": {
+                "2022/23": {"personal": 12_000, "employer": 6_000},
+                "2023/24": {"personal": 15_000, "employer": 7_500},
+                "2024/25": {"personal": 18_000, "employer": 8_000},
+            },
         },
         allowances=[
             {

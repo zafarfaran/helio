@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { ThemeToggle } from "@/components/theme-provider";
@@ -1049,6 +1049,25 @@ export default function ClientsPage() {
   const netIncome = tp ? tp.total_income - tp.total_tax : 0;
   const hicbcChargeAmt = tp?.hicbc ? (tp.hicbc.hicbc_charge ?? tp.hicbc.charge ?? 0) : 0;
 
+  // Pension carry forward rows for the read-only profile card
+  const cfRows = useMemo(() => {
+    const pd = tp?.pension_data as Record<string, unknown> | undefined;
+    const hist = pd?.contributions_history as Record<string, Record<string, number>> | undefined;
+    if (!hist) return [] as { yr: string; aa: number; total: number; unused: number }[];
+    const AA_BY_YEAR: Record<string, number> = { "2022/23": 40_000, "2023/24": 60_000, "2024/25": 60_000 };
+    return Object.entries(hist)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([yr, data]) => {
+        const personal = data.personal ?? 0;
+        const employer = data.employer ?? 0;
+        const total = personal + employer;
+        const aa = AA_BY_YEAR[yr] ?? 60_000;
+        return { yr, aa, total, unused: Math.max(aa - total, 0) };
+      });
+  }, [tp?.pension_data]);
+
+  const cfTotalUnused = useMemo(() => cfRows.reduce((s, r) => s + r.unused, 0), [cfRows]);
+
   const curIdx = clients.findIndex((c) => c.id === selectedId);
 
   return (
@@ -1400,6 +1419,39 @@ export default function ClientsPage() {
                                   </div>
                                 </div>
                               </Card>
+
+                              {/* Pension Carry Forward */}
+                              {cfRows.length > 0 && (
+                                <Card title="Pension Carry Forward" icon={IconCalculator}>
+                                  <div className="space-y-2">
+                                    <div className="grid grid-cols-[auto_1fr_1fr_1fr_1fr] gap-x-3 gap-y-1.5 items-center">
+                                      <span className="text-[9px] font-semibold text-[var(--muted)] uppercase tracking-wider">Year</span>
+                                      <span className="text-[9px] font-semibold text-[var(--muted)] uppercase tracking-wider text-right">AA</span>
+                                      <span className="text-[9px] font-semibold text-[var(--muted)] uppercase tracking-wider text-right">Contributed</span>
+                                      <span className="text-[9px] font-semibold text-[var(--muted)] uppercase tracking-wider text-right">Unused</span>
+                                      <span className="text-[9px] font-semibold text-[var(--muted)] uppercase tracking-wider text-right">% Used</span>
+                                      {cfRows.map((r) => {
+                                        const pct = r.aa > 0 ? Math.round((r.total / r.aa) * 100) : 0;
+                                        return (
+                                          <React.Fragment key={r.yr}>
+                                            <span className="text-[11px] font-mono text-[var(--foreground)]">{r.yr}</span>
+                                            <span className="text-[11px] font-mono text-[var(--muted)] text-right tabular-nums">{fmt(r.aa)}</span>
+                                            <span className="text-[11px] font-mono text-[var(--foreground)] text-right tabular-nums">{fmt(r.total)}</span>
+                                            <span className={`text-[11px] font-mono text-right tabular-nums ${r.unused > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-[var(--muted)]"}`}>
+                                              {fmt(r.unused)}
+                                            </span>
+                                            <span className="text-[11px] font-mono text-[var(--muted)]/60 text-right tabular-nums">{pct}%</span>
+                                          </React.Fragment>
+                                        );
+                                      })}
+                                    </div>
+                                    <div className="pt-2 mt-1 border-t border-dashed border-[var(--border-subtle)] flex items-center justify-between">
+                                      <span className="text-[11px] font-medium text-[var(--foreground)]/70">Total carry forward available</span>
+                                      <span className="text-[12px] font-mono font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums">{fmt(cfTotalUnused)}</span>
+                                    </div>
+                                  </div>
+                                </Card>
+                              )}
 
                               {/* Notes */}
                               {detail.notes && (
