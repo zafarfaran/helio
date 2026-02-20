@@ -7,6 +7,7 @@ Calls compute_full_tax_position twice (current vs proposed) and diffs.
 
 import structlog
 
+from app.tax.constants import get_tax_year_constants
 from app.tax.engine import compute_full_tax_position
 from app.tax.rounding import round_currency
 from app.tax.types import IncomeSource, IncomeType, TaxPosition
@@ -105,6 +106,46 @@ def analyse_salary_sacrifice(
     monthly_benefit = round_currency(total_annual_benefit / 12) if total_annual_benefit > 0 else 0.0
     monthly_take_home_drop = round_currency(take_home_reduction / 12) if take_home_reduction > 0 else 0.0
 
+    # -- Pension AA warning ----------------------------------------------------
+    c = get_tax_year_constants("2025/26")
+    aa_limit = c["pension"]["annual_allowance"]
+    total_pension = sacrifice_amount
+    pension_aa_warning = None
+    if pension_contributions_by_year:
+        from app.tax.pension_aa import calculate_pension_aa
+        aa_check = calculate_pension_aa(
+            adjusted_income=0, threshold_income=0,
+            current_year_contributions=total_pension,
+            contributions_by_year=pension_contributions_by_year,
+        )
+        if aa_check.remaining < 0:
+            pension_aa_warning = (
+                f"Proposed salary sacrifice (\u00a3{total_pension:,.0f}) exceeds available "
+                f"allowance including carry forward (\u00a3{aa_check.total_available:,.0f})."
+            )
+    elif total_pension > aa_limit:
+        pension_aa_warning = (
+            f"Proposed salary sacrifice (\u00a3{total_pension:,.0f}) "
+            f"exceeds the annual allowance (\u00a3{aa_limit:,.0f}). "
+            f"Check carry-forward availability."
+        )
+
+    # -- AA headroom -------------------------------------------------------
+    aa_headroom = None
+    pa = proposed.pension_aa_result
+    if pa:
+        aa_headroom = {
+            "annual_allowance": pa.annual_allowance,
+            "total_available": pa.total_available,
+            "used": pa.current_year_contributions,
+            "remaining": pa.remaining,
+            "is_tapered": pa.is_tapered,
+            "carry_forward": [
+                {"tax_year": cf.tax_year, "allowance": cf.annual_allowance, "contributions": cf.contributions, "unused": cf.unused}
+                for cf in pa.carry_forward
+            ],
+        }
+
     logger.info(
         "Salary sacrifice analysed",
         it_saving=it_saving,
@@ -145,6 +186,8 @@ def analyse_salary_sacrifice(
             "restored": round_currency(proposed.personal_allowance - current.personal_allowance),
         },
         "extra_into_pension": extra_pension,
+        "pension_aa_warning": pension_aa_warning,
+        "aa_headroom": aa_headroom,
         "net_benefit": {
             "gross_into_pension": round_currency(additional_sacrifice),
             "income_tax_saved": it_saving,

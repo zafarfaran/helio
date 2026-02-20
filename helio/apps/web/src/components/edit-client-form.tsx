@@ -78,6 +78,14 @@ const EMPLOYMENT: { value: string; label: string }[] = [
   { value: "other", label: "Other" },
 ];
 
+const PENSION_AA_LIMITS: Record<string, number> = {
+  "2022/23": 40_000,
+  "2023/24": 60_000,
+  "2024/25": 60_000,
+};
+
+const CURRENT_YEAR_AA = 60_000;
+
 const MARITAL: { value: string; label: string }[] = [
   { value: "", label: "Not specified" },
   { value: "single", label: "Single" },
@@ -159,6 +167,20 @@ export function EditClientForm({ client, allClients, onSaved, onCancel }: EditCl
     "2024/25": { personal: 0, employer: 0 },
   });
 
+  // Compute carry forward summary from pension history
+  const carryForwardSummary = useMemo(() => {
+    const years = (["2022/23", "2023/24", "2024/25"] as const).map((year) => {
+      const vals = pensionHistory[year] || { personal: 0, employer: 0 };
+      const total = vals.personal + vals.employer;
+      const aa = PENSION_AA_LIMITS[year] || CURRENT_YEAR_AA;
+      const unused = Math.max(0, aa - total);
+      return { year, total, aa, unused };
+    });
+    const totalCarryForward = years.reduce((sum, y) => sum + y.unused, 0);
+    const totalAvailable = CURRENT_YEAR_AA + totalCarryForward;
+    return { years, totalCarryForward, totalAvailable };
+  }, [pensionHistory]);
+
   // Fetch pension history on mount
   useEffect(() => {
     fetch(`${API_BASE}/api/clients/${client.id}/pension-history`)
@@ -236,26 +258,23 @@ export function EditClientForm({ client, allClients, onSaved, onCancel }: EditCl
       patch.spouse_id = selectedSpouseId; // "" means unlink, otherwise new id
     }
 
-    if (Object.keys(patch).length === 0) {
-      onSaved();
-      return;
-    }
-
     setSubmitting(true);
 
     try {
-      const res = await fetch(`${API_BASE}/api/clients/${client.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(patch),
-      });
+      if (Object.keys(patch).length > 0) {
+        const res = await fetch(`${API_BASE}/api/clients/${client.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(patch),
+        });
 
-      if (!res.ok) {
-        const body = await res.json().catch(() => null);
-        throw new Error(body?.detail || `Failed to update client (${res.status})`);
+        if (!res.ok) {
+          const body = await res.json().catch(() => null);
+          throw new Error(body?.detail || `Failed to update client (${res.status})`);
+        }
       }
 
-      // Save pension history
+      // Save pension history (always, even if no other fields changed)
       try {
         await fetch(`${API_BASE}/api/clients/${client.id}/pension-history`, {
           method: "PUT",
@@ -670,11 +689,12 @@ export function EditClientForm({ client, allClients, onSaved, onCancel }: EditCl
             <span className="text-[10px] text-[var(--muted)] ml-auto">For carry forward calculation</span>
           </div>
           <div className="px-5 py-4 space-y-3">
-            <div className="grid grid-cols-[auto_1fr_1fr] gap-x-3 gap-y-2 items-center">
+            <div className="grid grid-cols-[auto_1fr_1fr_auto] gap-x-3 gap-y-2 items-center">
               <span className="text-[10px] font-medium text-[var(--muted)] uppercase tracking-wider">Year</span>
               <span className="text-[10px] font-medium text-[var(--muted)] uppercase tracking-wider">Personal (&pound;)</span>
               <span className="text-[10px] font-medium text-[var(--muted)] uppercase tracking-wider">Employer (&pound;)</span>
-              {(["2022/23", "2023/24", "2024/25"] as const).map((year) => (
+              <span className="text-[10px] font-medium text-[var(--muted)] uppercase tracking-wider text-right">Unused</span>
+              {carryForwardSummary.years.map(({ year, unused }) => (
                 <React.Fragment key={year}>
                   <span className="text-[12px] font-mono text-[var(--foreground)]">{year}</span>
                   <input
@@ -703,8 +723,25 @@ export function EditClientForm({ client, allClients, onSaved, onCancel }: EditCl
                     }
                     className={inputClass + " font-mono"}
                   />
+                  <span className="text-[12px] font-mono text-emerald-600 dark:text-emerald-400 text-right">
+                    &pound;{unused.toLocaleString()}
+                  </span>
                 </React.Fragment>
               ))}
+            </div>
+            <div className="rounded-lg bg-[var(--surface)] border border-[var(--border-subtle)] px-4 py-3 space-y-1">
+              <div className="flex justify-between text-[11px]">
+                <span className="text-[var(--muted)]">Current year AA (2025/26)</span>
+                <span className="font-mono font-medium text-[var(--foreground)]">&pound;{CURRENT_YEAR_AA.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between text-[11px]">
+                <span className="text-[var(--muted)]">Carry forward from prior years</span>
+                <span className="font-mono font-medium text-emerald-600 dark:text-emerald-400">&pound;{carryForwardSummary.totalCarryForward.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between text-[11px] pt-1 border-t border-[var(--border-subtle)]">
+                <span className="font-medium text-[var(--foreground)]">Total AA available</span>
+                <span className="font-mono font-semibold text-[var(--foreground)]">&pound;{carryForwardSummary.totalAvailable.toLocaleString()}</span>
+              </div>
             </div>
             <p className="text-[10px] text-[var(--muted)]/60 mt-1">
               Enter total pension contributions for each tax year. Unused allowance carries forward for up to 3 years.

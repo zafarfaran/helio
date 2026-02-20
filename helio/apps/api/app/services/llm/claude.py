@@ -22,7 +22,7 @@ from app.services.tools import execute_tool
 
 logger = get_logger(__name__)
 
-MAX_TOOL_ROUNDS = 20
+MAX_TOOL_ROUNDS = 35
 
 BASE_TOOLS = [
     {

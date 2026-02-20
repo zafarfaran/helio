@@ -283,8 +283,10 @@ export function useChat(clientId: string, taxPlanMode: boolean = false, onObserv
                     savings: result.savings,
                     pa_change: result.pa_change,
                     extra_into_pension: result.extra_into_pension,
+                    pension_aa_warning: result.pension_aa_warning,
                     net_benefit: result.net_benefit,
                     total_benefit: result.total_benefit,
+                    aa_headroom: result.aa_headroom,
                   };
                   setScenarios((prev) => [...prev, newScenario]);
                   setIsScenarioGenerating(false);
@@ -307,6 +309,7 @@ export function useChat(clientId: string, taxPlanMode: boolean = false, onObserv
                     total_effective_relief_rate: result.total_effective_relief_rate,
                     net_benefit: result.net_benefit,
                     total_benefit: result.total_benefit,
+                    aa_headroom: result.aa_headroom,
                   };
                   setScenarios((prev) => [...prev, newScenario]);
                   setIsScenarioGenerating(false);

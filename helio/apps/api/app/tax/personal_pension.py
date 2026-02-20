@@ -139,6 +139,22 @@ def analyse_personal_pension(
             f"Check carry-forward availability."
         )
 
+    # -- AA headroom -------------------------------------------------------
+    aa_headroom = None
+    pa = proposed.pension_aa_result
+    if pa:
+        aa_headroom = {
+            "annual_allowance": pa.annual_allowance,
+            "total_available": pa.total_available,
+            "used": pa.current_year_contributions,
+            "remaining": pa.remaining,
+            "is_tapered": pa.is_tapered,
+            "carry_forward": [
+                {"tax_year": cf.tax_year, "allowance": cf.annual_allowance, "contributions": cf.contributions, "unused": cf.unused}
+                for cf in pa.carry_forward
+            ],
+        }
+
     logger.info(
         "Personal pension analysed",
         it_saving=it_saving,
@@ -182,6 +198,7 @@ def analyse_personal_pension(
         "effective_relief_rate": effective_relief,
         "thresholds": thresholds,
         "pension_aa_warning": pension_aa_warning,
+        "aa_headroom": aa_headroom,
         "total_effective_relief_rate": total_effective_relief,
         "net_benefit": {
             "gross_contribution": round_currency(additional_contribution),

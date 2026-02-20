@@ -15,6 +15,8 @@ from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import cm, mm
+from reportlab.graphics.shapes import Drawing, String, Rect
+from reportlab.graphics.charts.barcharts import VerticalBarChart
 from reportlab.platypus import (
     BaseDocTemplate,
     Frame,
@@ -357,6 +359,198 @@ def _observation_card(
         ("ROUNDEDCORNERS", [4, 4, 4, 4]),
     ]))
     return card
+
+
+# ---------------------------------------------------------------------------
+# Metric box for hero grids
+# ---------------------------------------------------------------------------
+
+def _metric_box(
+    label: str,
+    value: str,
+    styles: dict[str, ParagraphStyle],
+    *,
+    value_color: colors.Color = BRAND_DARK,
+) -> Table:
+    """Render a single metric (label + value) as a compact boxed cell."""
+    val_style = ParagraphStyle(
+        "MetricValue",
+        fontName="Helvetica-Bold",
+        fontSize=12,
+        leading=15,
+        textColor=value_color,
+        alignment=TA_CENTER,
+    )
+    lbl_style = ParagraphStyle(
+        "MetricLabel",
+        fontName="Helvetica",
+        fontSize=7,
+        leading=9,
+        textColor=colors.HexColor("#495057"),
+        alignment=TA_CENTER,
+    )
+    inner = Table(
+        [[Paragraph(value, val_style)], [Paragraph(label, lbl_style)]],
+        colWidths=[(PAGE_W - 2 * MARGIN - 24) / 3],
+    )
+    inner.setStyle(TableStyle([
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+        ("LEFTPADDING", (0, 0), (-1, -1), 4),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("BACKGROUND", (0, 0), (-1, -1), WHITE),
+        ("ROUNDEDCORNERS", [3, 3, 3, 3]),
+    ]))
+    return inner
+
+
+# ---------------------------------------------------------------------------
+# Total Benefit Hero box
+# ---------------------------------------------------------------------------
+
+def _total_benefit_hero(
+    sc: dict,
+    styles: dict[str, ParagraphStyle],
+) -> Table:
+    """Render the total benefit hero summary box for a scenario."""
+    tb = sc.get("total_benefit", {})
+    nb = sc.get("net_benefit", {})
+    is_pension = "basic_rate_relief" in tb or "basic_rate_relief" in nb
+
+    total_annual = tb.get("total_annual_benefit", 0)
+    into_pension = tb.get("into_pension", nb.get("gross_contribution", nb.get("gross_into_pension", 0)))
+    monthly_benefit = tb.get("monthly_benefit", round(total_annual / 12) if total_annual else 0)
+
+    cost_per_pound = nb.get("effective_cost_per_pound_in_pension")
+    cost_str = f"{cost_per_pound:.0f}p per £1" if cost_per_pound is not None else "—"
+
+    available = PAGE_W - 2 * MARGIN
+
+    if is_pension:
+        client_pays = tb.get("client_out_of_pocket", nb.get("net_cost_to_client", 0))
+        monthly_cost = tb.get("monthly_cost", round(client_pays / 12) if client_pays else 0)
+        metrics = [
+            [
+                _metric_box("Total Annual Benefit", _fmt(total_annual, decimals=0), styles, value_color=COLOR_GREEN),
+                _metric_box("Monthly Benefit", _fmt(monthly_benefit, decimals=0), styles),
+                _metric_box("Into Pension", _fmt(into_pension, decimals=0), styles),
+            ],
+            [
+                _metric_box("You Pay (Net Cost)", _fmt(client_pays, decimals=0), styles, value_color=COLOR_AMBER),
+                _metric_box("Monthly Cost", _fmt(monthly_cost, decimals=0), styles, value_color=COLOR_AMBER),
+                _metric_box("Cost Per £1 in Pension", cost_str, styles),
+            ],
+        ]
+    else:
+        take_home_reduction = tb.get("take_home_reduction", nb.get("take_home_reduction", 0))
+        monthly_drop = tb.get("monthly_take_home_drop", round(take_home_reduction / 12) if take_home_reduction else 0)
+        metrics = [
+            [
+                _metric_box("Total Annual Benefit", _fmt(total_annual, decimals=0), styles, value_color=COLOR_GREEN),
+                _metric_box("Monthly Benefit", _fmt(monthly_benefit, decimals=0), styles),
+                _metric_box("Into Pension", _fmt(into_pension, decimals=0), styles),
+            ],
+            [
+                _metric_box("Take-Home Reduction", _fmt(take_home_reduction, decimals=0), styles, value_color=COLOR_AMBER),
+                _metric_box("Monthly Drop", _fmt(monthly_drop, decimals=0), styles, value_color=COLOR_AMBER),
+                _metric_box("Cost Per £1 in Pension", cost_str, styles),
+            ],
+        ]
+
+    col_w = (available - 24) / 3
+    grid = Table(metrics, colWidths=[col_w, col_w, col_w])
+    grid.setStyle(TableStyle([
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("LEFTPADDING", (0, 0), (-1, -1), 4),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+    ]))
+
+    # Wrap in a light-blue container
+    container = Table([[grid]], colWidths=[available])
+    container.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#EDF2FF")),
+        ("ROUNDEDCORNERS", [6, 6, 6, 6]),
+        ("TOPPADDING", (0, 0), (-1, -1), 8),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+        ("LEFTPADDING", (0, 0), (-1, -1), 8),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+    ]))
+    return container
+
+
+# ---------------------------------------------------------------------------
+# Scenario bar chart (current vs proposed)
+# ---------------------------------------------------------------------------
+
+def _scenario_bar_chart(
+    current: dict,
+    proposed: dict,
+    styles: dict[str, ParagraphStyle],
+) -> Drawing:
+    """Return a Drawing with a grouped bar chart: Current (grey) vs Proposed (blue)."""
+    categories = []
+    cur_vals: list[float] = []
+    prop_vals: list[float] = []
+
+    for label, key in [
+        ("Income Tax", "income_tax"),
+        ("NI", "national_insurance"),
+        ("HICBC", "hicbc"),
+        ("Total Tax", "total_tax"),
+    ]:
+        c = float(current.get(key, 0) or 0)
+        p = float(proposed.get(key, 0) or 0)
+        if c > 0 or p > 0:
+            categories.append(label)
+            cur_vals.append(c)
+            prop_vals.append(p)
+
+    if not categories:
+        return Drawing(1, 1)  # empty
+
+    chart_w = PAGE_W - 2 * MARGIN
+    chart_h = 160
+    d = Drawing(float(chart_w), chart_h + 30)
+
+    bc = VerticalBarChart()
+    bc.x = 50
+    bc.y = 30
+    bc.width = float(chart_w) - 80
+    bc.height = chart_h - 20
+    bc.data = [cur_vals, prop_vals]
+    bc.categoryAxis.categoryNames = categories
+    bc.categoryAxis.labels.fontName = "Helvetica"
+    bc.categoryAxis.labels.fontSize = 8
+    bc.valueAxis.labels.fontName = "Helvetica"
+    bc.valueAxis.labels.fontSize = 7
+    bc.valueAxis.valueMin = 0
+    bc.valueAxis.labelTextFormat = "£%s"
+    bc.bars[0].fillColor = colors.HexColor("#ADB5BD")  # grey for current
+    bc.bars[1].fillColor = BRAND_PRIMARY  # blue for proposed
+    bc.barSpacing = 2
+    bc.groupSpacing = 12
+    bc.barWidth = 18
+
+    # Value labels on bars
+    bc.barLabelFormat = "£%.0f"
+    bc.barLabels.fontName = "Helvetica"
+    bc.barLabels.fontSize = 6
+    bc.barLabels.nudge = 6
+
+    d.add(bc)
+
+    # Legend
+    d.add(String(float(chart_w) - 120, chart_h + 12, "Current", fontName="Helvetica", fontSize=7, fillColor=colors.HexColor("#ADB5BD")))
+    d.add(Rect(float(chart_w) - 132, chart_h + 12, 8, 8, fillColor=colors.HexColor("#ADB5BD"), strokeColor=None))
+    d.add(String(float(chart_w) - 55, chart_h + 12, "Proposed", fontName="Helvetica", fontSize=7, fillColor=BRAND_PRIMARY))
+    d.add(Rect(float(chart_w) - 67, chart_h + 12, 8, 8, fillColor=BRAND_PRIMARY, strokeColor=None))
+
+    return d
 
 
 # ---------------------------------------------------------------------------
@@ -850,22 +1044,43 @@ def generate_tax_report(
 
         available = PAGE_W - 2 * MARGIN
 
-        for sc in scenarios:
+        for sc_idx, sc in enumerate(scenarios):
+            # Page break between scenarios
+            if sc_idx > 0:
+                story.append(PageBreak())
+
+            tb = sc.get("total_benefit", {})
+            nb = sc.get("net_benefit", {})
+            is_pension = "basic_rate_relief" in tb or "basic_rate_relief" in nb
+
+            # --- 12a. Scenario name + description ---
             sc_name = sc.get("name", "Scenario")
             sc_desc = sc.get("description", "")
             story.append(Paragraph(f"<b>{sc_name}</b>", st["body_bold"]))
             if sc_desc:
                 story.append(Spacer(1, 1 * mm))
                 story.append(Paragraph(sc_desc, st["card_body"]))
-            story.append(Spacer(1, 3 * mm))
+            story.append(Spacer(1, 4 * mm))
 
+            # --- 12b. Total Benefit Hero box ---
+            if tb.get("total_annual_benefit", 0) and float(tb.get("total_annual_benefit", 0)) > 0:
+                story.append(_total_benefit_hero(sc, st))
+                story.append(Spacer(1, 5 * mm))
+
+            # --- 12c. Bar chart (before/after) ---
             current = sc.get("current", {})
             proposed = sc.get("proposed", {})
             savings = sc.get("savings", {})
 
-            # Main comparison table — Current vs Proposed vs Saving
+            chart = _scenario_bar_chart(current, proposed, st)
+            if chart.width > 1:
+                story.append(chart)
+                story.append(Spacer(1, 5 * mm))
+
+            # --- 12d. Comparison table (existing logic) ---
             comparison_fields = [
                 ("Gross Salary", "gross_salary", None),
+                ("Pension Contribution", "pension_contribution", None),
                 ("Salary Sacrifice", "sacrifice", None),
                 ("Income Tax", "income_tax", "income_tax"),
                 ("National Insurance", "national_insurance", "national_insurance"),
@@ -883,12 +1098,10 @@ def generate_tax_report(
                 cur_num = float(cur_val or 0)
                 prop_num = float(prop_val or 0)
 
-                # Use the savings object for the saving column when available
                 if sav_key and savings.get(sav_key) is not None:
                     sav_num = float(savings[sav_key])
                     sav_str = _fmt(sav_num) if sav_num > 0 else ""
                 elif key == "personal_allowance":
-                    # PA goes up when sacrifice increases — show the increase
                     diff = prop_num - cur_num
                     sav_str = f"+{_fmt(diff, decimals=0)}" if diff > 0 else ""
                 else:
@@ -941,28 +1154,186 @@ def generate_tax_report(
                 ]))
                 story.append(saving_box)
 
-            # Savings breakdown (individual components)
-            saving_details: list[str] = []
-            if float(savings.get("income_tax", 0)) > 0:
-                saving_details.append(
-                    f"Income Tax: {_fmt(savings['income_tax'])}"
-                )
-            if float(savings.get("national_insurance", 0)) > 0:
-                saving_details.append(
-                    f"National Insurance: {_fmt(savings['national_insurance'])}"
-                )
-            if float(savings.get("hicbc_avoided", 0)) > 0:
-                saving_details.append(
-                    f"HICBC Avoided: {_fmt(savings['hicbc_avoided'])}"
-                )
-            if saving_details:
-                story.append(Spacer(1, 2 * mm))
-                story.append(Paragraph(
-                    "Savings breakdown: " + " &nbsp;|&nbsp; ".join(saving_details),
-                    st["card_body"],
-                ))
+            story.append(Spacer(1, 5 * mm))
 
-            # Personal allowance change
+            # --- 12e. Net Benefit Breakdown table ---
+            if nb:
+                story.append(Paragraph("<b>Net Benefit Breakdown</b>", st["body_bold"]))
+                story.append(Spacer(1, 2 * mm))
+
+                if is_pension:
+                    nb_rows: list[tuple[str, str]] = [
+                        ("Gross Contribution", _fmt(nb.get("gross_contribution", 0))),
+                        ("Net Cost (you pay)", _fmt(nb.get("net_cost_to_client", 0))),
+                        ("Basic Rate Relief (auto)", _fmt(nb.get("basic_rate_relief", 0))),
+                        ("Higher Rate Relief (SA)", _fmt(nb.get("higher_rate_relief", 0))),
+                        ("HICBC Avoided", _fmt(nb.get("hicbc_avoided", 0))),
+                        ("Total Tax Relief", _fmt(nb.get("total_tax_relief", 0))),
+                        ("Net Cost After Relief", _fmt(nb.get("net_cost_after_relief", 0))),
+                    ]
+                    cpp = nb.get("effective_cost_per_pound_in_pension")
+                    nb_rows.append(("Effective Cost", f"{cpp:.0f}p per £1" if cpp is not None else "—"))
+                else:
+                    nb_rows = [
+                        ("Gross Into Pension", _fmt(nb.get("gross_into_pension", 0))),
+                        ("Income Tax Saved", _fmt(nb.get("income_tax_saved", 0))),
+                        ("NI Saved", _fmt(nb.get("ni_saved", 0))),
+                        ("HICBC Avoided", _fmt(nb.get("hicbc_avoided", 0))),
+                        ("Total Saving", _fmt(nb.get("total_saving", 0))),
+                        ("Take-Home Reduction", _fmt(nb.get("take_home_reduction", 0))),
+                    ]
+                    cpp = nb.get("effective_cost_per_pound_in_pension")
+                    nb_rows.append(("Effective Cost", f"{cpp:.0f}p per £1" if cpp is not None else "—"))
+
+                story.append(_kv_table(nb_rows, st, bold_last=True))
+                story.append(Spacer(1, 5 * mm))
+
+            # --- 12f. Employer NI Savings (salary sacrifice only) ---
+            if not is_pension:
+                employer_ni = float(savings.get("employer_ni", 0))
+                if employer_ni > 0:
+                    eni_para = Paragraph(
+                        f"<b>Employer NI Saving: {_fmt(employer_ni)}</b> — this could be added to the pension pot",
+                        ParagraphStyle(
+                            "EmployerNI",
+                            fontName="Helvetica-Bold",
+                            fontSize=10,
+                            leading=14,
+                            textColor=COLOR_GREEN,
+                            alignment=TA_CENTER,
+                        ),
+                    )
+                    eni_box = Table([[eni_para]], colWidths=[available])
+                    eni_box.setStyle(TableStyle([
+                        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#EBFBEE")),
+                        ("ROUNDEDCORNERS", [4, 4, 4, 4]),
+                        ("TOPPADDING", (0, 0), (-1, -1), 8),
+                        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+                        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                    ]))
+                    story.append(eni_box)
+                    story.append(Spacer(1, 5 * mm))
+
+            # --- 12g. Effective Relief Rate callout (personal pension only) ---
+            if is_pension:
+                eff_rate = sc.get("total_effective_relief_rate")
+                if eff_rate is not None:
+                    rate_para = Paragraph(
+                        f"<b>Total Effective Relief Rate: {_pct(eff_rate)}</b>",
+                        ParagraphStyle(
+                            "ReliefRate",
+                            fontName="Helvetica-Bold",
+                            fontSize=11,
+                            leading=14,
+                            textColor=BRAND_DARK,
+                            alignment=TA_CENTER,
+                        ),
+                    )
+                    rate_box = Table([[rate_para]], colWidths=[available])
+                    rate_box.setStyle(TableStyle([
+                        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#EDF2FF")),
+                        ("ROUNDEDCORNERS", [4, 4, 4, 4]),
+                        ("TOPPADDING", (0, 0), (-1, -1), 8),
+                        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+                        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                    ]))
+                    story.append(rate_box)
+                    story.append(Spacer(1, 5 * mm))
+
+            # --- 12h. Optimal Thresholds table (personal pension only) ---
+            if is_pension:
+                thresholds = sc.get("thresholds", [])
+                if thresholds:
+                    story.append(Paragraph("<b>Optimal Contribution Thresholds</b>", st["body_bold"]))
+                    story.append(Spacer(1, 2 * mm))
+
+                    thr_rows = []
+                    for t in thresholds:
+                        feasible = t.get("feasible", True)
+                        feasible_str = "Yes" if feasible else "Exceeds AA"
+                        thr_rows.append([
+                            t.get("name", ""),
+                            _fmt(t.get("contribution_needed", 0), decimals=0),
+                            _fmt(t.get("annual_saving", 0), decimals=0),
+                            _pct(t.get("effective_relief", 0)),
+                            feasible_str,
+                        ])
+
+                    story.append(_data_table(
+                        ["Threshold", "Contribution", "Annual Saving", "Relief Rate", "Feasible"],
+                        thr_rows,
+                        st,
+                        col_widths=[
+                            available * 0.24,
+                            available * 0.20,
+                            available * 0.20,
+                            available * 0.18,
+                            available * 0.18,
+                        ],
+                    ))
+                    story.append(Spacer(1, 5 * mm))
+
+            # --- 12i. AA Warning ---
+            aa_warning = sc.get("pension_aa_warning")
+            if aa_warning:
+                story.append(_observation_card(
+                    {"title": "Annual Allowance Warning", "description": aa_warning, "severity": "warning"},
+                    st,
+                ))
+                story.append(Spacer(1, 5 * mm))
+
+            # --- 12j. AA Headroom section ---
+            aa_hr = sc.get("aa_headroom")
+            if aa_hr:
+                story.append(Paragraph("<b>Annual Allowance Headroom</b>", st["body_bold"]))
+                story.append(Spacer(1, 2 * mm))
+
+                aa_label = "Annual Allowance"
+                if aa_hr.get("is_tapered"):
+                    aa_label += " (tapered)"
+
+                remaining = float(aa_hr.get("remaining", 0))
+                remaining_str = _fmt(remaining, decimals=0)
+
+                hr_rows: list[tuple[str, str]] = [
+                    (aa_label, _fmt(aa_hr.get("annual_allowance", 0), decimals=0)),
+                    ("Total Available (incl. carry forward)", _fmt(aa_hr.get("total_available", 0), decimals=0)),
+                    ("Used This Year", _fmt(aa_hr.get("used", 0), decimals=0)),
+                    ("Remaining", remaining_str),
+                ]
+                story.append(_kv_table(hr_rows, st, bold_last=True))
+                story.append(Spacer(1, 3 * mm))
+
+                # Carry forward detail table
+                cf_list = aa_hr.get("carry_forward", [])
+                if cf_list:
+                    story.append(Paragraph("Carry Forward Detail", st["body_bold"]))
+                    story.append(Spacer(1, 2 * mm))
+
+                    cf_rows = []
+                    for cf in cf_list:
+                        cf_rows.append([
+                            cf.get("tax_year", ""),
+                            _fmt(cf.get("allowance", 0), decimals=0),
+                            _fmt(cf.get("contributions", 0), decimals=0),
+                            _fmt(cf.get("unused", 0), decimals=0),
+                        ])
+
+                    story.append(_data_table(
+                        ["Tax Year", "Allowance", "Contributed", "Unused"],
+                        cf_rows,
+                        st,
+                        col_widths=[
+                            available * 0.25,
+                            available * 0.25,
+                            available * 0.25,
+                            available * 0.25,
+                        ],
+                        green_col=3,
+                    ))
+                story.append(Spacer(1, 5 * mm))
+
+            # --- 12k. Personal allowance change (existing) ---
             pa_change = sc.get("pa_change", {})
             pa_restored = float(pa_change.get("restored", 0))
             if pa_restored > 0:
@@ -974,7 +1345,7 @@ def generate_tax_report(
                     st["body"],
                 ))
 
-            # Extra into pension
+            # --- 12l. Extra into pension (existing) ---
             extra_pension = sc.get("extra_into_pension", 0)
             if extra_pension and float(extra_pension) > 0:
                 story.append(Spacer(1, 2 * mm))

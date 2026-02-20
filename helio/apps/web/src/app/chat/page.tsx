@@ -147,6 +147,14 @@ interface ScenarioData {
     feasible: boolean;
   }[];
   pension_aa_warning?: string | null;
+  aa_headroom?: {
+    annual_allowance: number;
+    total_available: number;
+    used: number;
+    remaining: number;
+    is_tapered: boolean;
+    carry_forward: { tax_year: string; allowance: number; contributions: number; unused: number }[];
+  } | null;
   total_effective_relief_rate?: number;
   net_benefit?: {
     // Personal pension fields
@@ -2478,12 +2486,14 @@ function ScenarioComparison({ scenario }: { scenario: ScenarioData }) {
       transition={{ duration: 0.4 }}
       className="space-y-3"
     >
-      {/* 0. Total Benefit Hero */}
+      {/* 0. Scenario Summary (merged hero + net benefit) */}
       {s.total_benefit && (
         <TotalBenefitHero
           totalBenefit={s.total_benefit}
+          netBenefit={s.net_benefit}
           isPension={isPension}
           paChange={s.pa_change}
+          totalEffectiveReliefRate={s.total_effective_relief_rate}
         />
       )}
 
@@ -2495,15 +2505,17 @@ function ScenarioComparison({ scenario }: { scenario: ScenarioData }) {
         isPension={isPension}
       />
 
-      {/* 2. Net Benefit Card */}
-      <NetBenefitCard
-        netBenefit={s.net_benefit}
-        isPension={isPension}
-        totalEffectiveReliefRate={s.total_effective_relief_rate}
-        savings={s.savings}
-        paChange={s.pa_change}
-        extraIntoPension={s.extra_into_pension}
-      />
+      {/* 2. Net Benefit Card (legacy fallback only) */}
+      {!s.total_benefit && (
+        <NetBenefitCard
+          netBenefit={s.net_benefit}
+          isPension={isPension}
+          totalEffectiveReliefRate={s.total_effective_relief_rate}
+          savings={s.savings}
+          paChange={s.pa_change}
+          extraIntoPension={s.extra_into_pension}
+        />
+      )}
 
       {/* 3. Collapsible detail table */}
       <div className="rounded-xl border border-slate-200/40 dark:border-zinc-800/30 bg-white/50 dark:bg-zinc-900/30 backdrop-blur-sm overflow-hidden">
@@ -2590,10 +2602,55 @@ function ScenarioComparison({ scenario }: { scenario: ScenarioData }) {
         </div>
       )}
 
-      {/* 5. AA Warning — UNCHANGED */}
-      {isPension && s.pension_aa_warning && (
+      {/* 5. AA Warning */}
+      {s.pension_aa_warning && (
         <div className="rounded-xl border border-amber-200/40 dark:border-amber-800/20 bg-amber-50/30 dark:bg-amber-900/10 backdrop-blur-sm p-3">
           <p className="text-[10px] text-amber-700 dark:text-amber-300">{s.pension_aa_warning}</p>
+        </div>
+      )}
+
+      {/* 6. AA Headroom */}
+      {s.aa_headroom && (
+        <div className="rounded-xl border border-slate-200/40 dark:border-zinc-800/30 bg-white/50 dark:bg-zinc-900/30 backdrop-blur-sm p-4 space-y-3">
+          <p className="text-[8px] uppercase tracking-widest font-semibold text-slate-500 dark:text-zinc-400">Annual Allowance Headroom</p>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <p className="text-[9px] text-slate-400 dark:text-zinc-500">Annual Allowance</p>
+              <p className="text-[12px] font-mono font-medium text-slate-700 dark:text-zinc-200">
+                {fmt(s.aa_headroom.annual_allowance)}{s.aa_headroom.is_tapered ? " (tapered)" : ""}
+              </p>
+            </div>
+            <div>
+              <p className="text-[9px] text-slate-400 dark:text-zinc-500">Total Available</p>
+              <p className="text-[12px] font-mono font-medium text-slate-700 dark:text-zinc-200">{fmt(s.aa_headroom.total_available)}</p>
+            </div>
+            <div>
+              <p className="text-[9px] text-slate-400 dark:text-zinc-500">Used This Year</p>
+              <p className="text-[12px] font-mono font-medium text-slate-700 dark:text-zinc-200">{fmt(s.aa_headroom.used)}</p>
+            </div>
+            <div>
+              <p className="text-[9px] text-slate-400 dark:text-zinc-500">Remaining</p>
+              <p className={`text-[12px] font-mono font-medium ${s.aa_headroom.remaining >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
+                {s.aa_headroom.remaining >= 0 ? fmt(s.aa_headroom.remaining) : `-${fmt(s.aa_headroom.remaining)}`}
+              </p>
+            </div>
+          </div>
+          {s.aa_headroom.carry_forward.length > 0 && (
+            <div className="border-t border-slate-200/30 dark:border-zinc-800/20 pt-2">
+              <p className="text-[8px] uppercase tracking-widest font-semibold text-slate-400 dark:text-zinc-500 mb-1.5">Carry Forward</p>
+              {s.aa_headroom.carry_forward.map((cf) => (
+                <div key={cf.tax_year} className="flex justify-between items-center py-0.5">
+                  <span className="text-[10px] font-mono text-slate-500 dark:text-zinc-400">{cf.tax_year}</span>
+                  <span className="text-[10px] text-slate-500 dark:text-zinc-400">
+                    {fmt(cf.contributions)} of {fmt(cf.allowance)} used
+                  </span>
+                  <span className="text-[10px] font-mono font-medium text-emerald-600 dark:text-emerald-400">
+                    {fmt(cf.unused)} unused
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </motion.div>
