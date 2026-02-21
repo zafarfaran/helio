@@ -60,16 +60,24 @@ async def chat_stream(
     service = ChatService(session)
 
     async def event_generator():
-        async for event in service.stream_message(
-            conversation_id=body.conversation_id,
-            user_id=user_id,
-            client_id=body.client_id,
-            content=body.message,
-            tax_plan_mode=body.tax_plan_mode,
-            context_snippet_ids=body.context_snippet_ids,
-        ):
-            data = json.dumps(asdict(event))
-            yield f"event: {event.type}\ndata: {data}\n\n"
+        try:
+            async for event in service.stream_message(
+                conversation_id=body.conversation_id,
+                user_id=user_id,
+                client_id=body.client_id,
+                content=body.message,
+                tax_plan_mode=body.tax_plan_mode,
+                context_snippet_ids=body.context_snippet_ids,
+            ):
+                data = json.dumps(asdict(event))
+                yield f"event: {event.type}\ndata: {data}\n\n"
+        except Exception as exc:
+            import traceback
+
+            tb = traceback.format_exc()
+            logger.error("Stream generator error", error=str(exc), traceback=tb)
+            error_data = json.dumps({"type": "error", "error": str(exc), "code": "STREAM_ERROR", "traceback": tb})
+            yield f"event: error\ndata: {error_data}\n\n"
 
     return StreamingResponse(
         event_generator(),

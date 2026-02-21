@@ -27,9 +27,9 @@ def _load_base_prompt() -> str:
     global _BASE_PROMPT
     if _BASE_PROMPT is None:
         # Try multiple paths (handles different working directories)
+        base = Path(__file__).resolve()
         paths = [
-            Path(__file__).resolve().parents[5] / "docs" / "system_prompt.md",
-            Path(__file__).resolve().parents[4] / "docs" / "system_prompt.md",
+            *(base.parents[i] / "docs" / "system_prompt.md" for i in range(len(base.parents))),
             Path("docs/system_prompt.md"),
         ]
         for p in paths:
