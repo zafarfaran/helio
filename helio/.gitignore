@@ -20,6 +20,7 @@ __pycache__/
 .venv/
 venv/
 *.whl
+*.db
 
 # Environment
 .env

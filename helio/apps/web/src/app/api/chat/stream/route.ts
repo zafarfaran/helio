@@ -2,7 +2,7 @@
  * SSE streaming proxy — forwards the chat stream from the Python API
  * without buffering, so tokens arrive in real-time through ngrok / proxies.
  */
-const BACKEND = process.env.BACKEND_URL || "http://localhost:8000";
+const BACKEND = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
